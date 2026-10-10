@@ -1,6 +1,6 @@
 (function () {
   const { groups, KANA, LESSONS, SMALL_TSU, ids, main } = window.HIRAGANA;
-  const { clipPath, merge } = window.HiraSync;
+  const { clipPath, imagePath, merge } = window.HiraSync;
   const backend = window.HIRA_BACKEND;
   // Worksheets and sentences arrive from the private bucket after sign-in [empty until then, or when offline].
   let SHEETS = [];
@@ -128,21 +128,26 @@
   }
   // Tofugu's recordings, one per kana plus the small-tsu words; anything else falls back to the browser voice [a whole sentence].
   const CLIPS = new Set([...KANA.map((k) => k.kana), ...SMALL_TSU.flat()]);
+  // Tofugu drew a mnemonic for each main kana and nothing else [none for が or きゃ].
+  const ART = new Set(KANA.filter((k) => k.kind === "main").map((k) => k.kana));
   const player = new Audio();
-  let clipUrls = new Map();
-  let clipUrlsAt = 0;
-  async function loadClipUrls() {
-    clipUrls = await backend.audioUrls([...CLIPS].map(clipPath));
-    clipUrlsAt = Date.now();
-    document.body.classList.toggle("has-clips", clipUrls.size > 0);
+  let mediaUrls = new Map();
+  let mediaUrlsAt = 0;
+  async function loadMediaUrls() {
+    mediaUrls = await backend.signedUrls([...[...CLIPS].map(clipPath), ...[...ART].map(imagePath)]);
+    mediaUrlsAt = Date.now();
+    document.body.classList.toggle("has-media", mediaUrls.size > 0);
+  }
+  // Signed links last 12 hours, so a tab left open overnight asks for fresh ones [checked at 11].
+  async function mediaUrl(key) {
+    if (Date.now() - mediaUrlsAt > 11 * 3600e3) await loadMediaUrls().catch(() => {});
+    return mediaUrls.get(key);
   }
   async function say(text) {
     window.speechSynthesis?.cancel();
     player.pause();
     if (CLIPS.has(text)) {
-      // Signed links last 12 hours, so a tab left open overnight asks for fresh ones [checked at 11].
-      if (Date.now() - clipUrlsAt > 11 * 3600e3) await loadClipUrls().catch(() => {});
-      const url = clipUrls.get(clipPath(text));
+      const url = await mediaUrl(clipPath(text));
       if (url) { player.src = url; player.play().catch(() => {}); }
       return;
     }
@@ -152,6 +157,22 @@
     speechSynthesis.speak(u);
   }
   const speakBtn = (text) => `<button class="speak${CLIPS.has(text) ? " clip" : ""}" data-say="${esc(text)}" title="Listen">🔊</button>`;
+  // A drawing loads only when its button is pressed [each is 1600x800, about 165 KB].
+  const artBtn = (kana) => (ART.has(kana)
+    ? `<div class="art-slot" data-art="${esc(kana)}"><button class="ghost art-toggle" type="button">Show illustration</button></div>`
+    : "");
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest(".art-toggle");
+    if (!b) return;
+    b.blur();
+    const slot = b.closest(".art-slot");
+    const shown = slot.querySelector("img");
+    if (shown) { shown.remove(); b.textContent = "Show illustration"; return; }
+    const url = await mediaUrl(imagePath(slot.dataset.art));
+    if (!url) return;
+    slot.insertAdjacentHTML("beforeend", `<img class="art" src="${esc(url)}" alt="Mnemonic drawing for ${esc(slot.dataset.art)}">`);
+    b.textContent = "Hide illustration";
+  });
   document.addEventListener("click", (e) => {
     const b = e.target.closest("[data-say]");
     if (b) say(b.dataset.say);
@@ -208,6 +229,7 @@
       ${k.accept.length > 1 ? `<div class="muted small">also accepted: ${esc(k.accept.slice(1).join(", "))}</div>` : ""}
       <p>${esc(k.mnemonic)}</p>
       ${k.lookalike ? `<p class="muted small">Look-alike: ${esc(k.lookalike)}</p>` : ""}
+      ${artBtn(k.kana)}
       <p class="muted small">${p ? `${p.right} right · ${p.wrong} wrong` : "Not practised yet"}</p>`);
   }
 
@@ -274,6 +296,7 @@
             <div><div class="rom">${esc(k.romaji)} ${speakBtn(k.kana)}</div>
               <div>${esc(k.mnemonic)}</div>
               ${k.lookalike ? `<div class="look">Look-alike: ${esc(k.lookalike)}</div>` : ""}</div>
+            ${artBtn(k.kana)}
           </div>`).join("")}</div>`
       : lessonGroups.map((g) => `
           <h2 class="jp">${g.kana.map((k) => esc(k.kana)).join(" ")}</h2>
@@ -364,6 +387,7 @@
             <button class="bad" id="again" disabled>Again <span class="kbd">1</span></button>
             <button class="good" id="got" disabled>Got it <span class="kbd">2</span></button>
           </div>
+          <div class="card-art">${artBtn(k.kana)}</div>
         </div>`;
       app.querySelector("#card").addEventListener("click", (e) => { if (!e.target.closest("[data-say]")) flip(); });
       app.querySelector("#again").addEventListener("click", () => answer(false));
@@ -372,6 +396,7 @@
     function flip() {
       flipped = !flipped;
       app.querySelector("#card").classList.toggle("flipped", flipped);
+      app.querySelector(".stage").classList.toggle("flipped", flipped);
       app.querySelectorAll("#again, #got").forEach((b) => { b.disabled = false; });
     }
     function answer(ok) {
@@ -480,6 +505,7 @@
       app.querySelector("#bad").textContent = wrong;
       input.classList.add("wrong"); input.readOnly = true;
       fb.innerHTML = `<div class="ans">${esc(k.romaji)} ${speakBtn(k.kana)}</div><div class="muted">${esc(k.mnemonic)}</div>
+        ${artBtn(k.kana)}
         <button class="ghost" id="next" style="margin-top:.5rem">Continue <span class="kbd">Enter</span></button>`;
       fb.querySelector("#next").addEventListener("click", show);
       queue.splice(idx + 3 + Math.floor(Math.random() * 4), 0, k);
@@ -500,6 +526,8 @@
       const k = queue[idx];
       k.accept.includes(norm(input.value)) ? correct(k) : miss(k);
     });
+    // Enter still continues once focus has left the answer box [after pressing Show illustration].
+    onKey((e) => { if (waiting && e.key === "Enter" && e.target !== input && !e.target.closest("button")) show(); });
     function finish() {
       const ms = Date.now() - start;
       const acc = Math.round((right / (right + wrong)) * 100);
@@ -696,7 +724,7 @@
         <div class="dots">${list.map((_, j) => `<button class="dot ${done.has(`${sheet}-${j}`) ? "done" : ""} ${j === i ? "here" : ""}" data-j="${j}">${j + 1}</button>`).join("")}</div>
         <div class="panel" style="margin-top:1rem">
           <div class="sentence ${showAll ? "show-all" : ""}" id="sent">${tokens(text).map((t) =>
-            /[ぁ-ゟ]/.test(t) ? `<span class="tok" data-r="${esc(toRomaji(t))}">${esc(t)}</span>` : esc(t)).join("")}</div>
+            /[\u3041-\u309f]/.test(t) ? `<span class="tok" data-r="${esc(toRomaji(t))}">${esc(t)}</span>` : esc(t)).join("")}</div>
           ${showAll ? `<div class="romaji-line">${esc(toRomaji(text))}</div>` : ""}
           <p class="muted small">Romaji here is letter by letter: as particles, は is said <b>wa</b>, へ is said <b>e</b> and を is said <b>o</b>.</p>
         </div>
@@ -852,7 +880,7 @@
       backend.isAllowed().then((ok) => { store.set("sync.allowed", ok); return ok; },
         () => store.get("sync.allowed", null)),
       loadContent(),
-      loadClipUrls().catch(() => {}),
+      loadMediaUrls().catch(() => {}),
     ]);
     if (allowed === null) return blockedScreen("Can't reach the server to check your account. Try again once you're online.");
     if (!allowed) return blockedScreen(`<b>${esc(user.email)}</b> isn't on the list for this site.`);

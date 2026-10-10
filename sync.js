@@ -1,7 +1,10 @@
 // Pure helpers shared by the browser and node: clip names and the progress merge.
 (function (root) {
   // Storage key for a kana's clip, ASCII because the bucket rejects kana names [かっこ = audio/304b-3063-3053.mp3].
-  const clipPath = (text) => `audio/${[...text].map((c) => c.codePointAt(0).toString(16)).join("-")}.mp3`;
+  const hex = (text) => [...text].map((c) => c.codePointAt(0).toString(16)).join("-");
+  const clipPath = (text) => `audio/${hex(text)}.mp3`;
+  // Mnemonic illustration, png or jpg, typed at upload so the key needs no extension [か = img/304b].
+  const imagePath = (kana) => `img/${hex(kana)}`;
 
   const better = (a, b) => (a.acc !== b.acc ? (a.acc > b.acc ? a : b) : a.ms <= b.ms ? a : b);
   const seen = (p) => (p ? p.right + p.wrong : -1);
@@ -33,7 +36,7 @@
     return out;
   }
 
-  const api = { clipPath, merge };
+  const api = { clipPath, imagePath, merge };
   if (typeof module !== "undefined") module.exports = api;
   else root.HiraSync = api;
 })(this);

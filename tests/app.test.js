@@ -21,7 +21,9 @@ test.before(async () => {
       if (req.url.split("?")[0] === "/") return fs.createReadStream(path.join(root, "index.html")).pipe(res);
       res.writeHead(404); return res.end();
     }
-    res.writeHead(200, { "content-type": types[path.extname(file)] || "application/octet-stream" });
+    const head = fs.readFileSync(file).subarray(0, 2);
+    const sniffed = head[0] === 0x89 ? "image/png" : head[0] === 0xff && head[1] === 0xd8 ? "image/jpeg" : "application/octet-stream";
+    res.writeHead(200, { "content-type": types[path.extname(file)] || sniffed });
     fs.createReadStream(file).pipe(res);
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
@@ -54,7 +56,7 @@ async function open(cfg, hash = "") {
       signOut: async () => { log.push("signOut"); localStorage.setItem("__out", "1"); },
       isAllowed: async () => { down(); return cfg.allowed; },
       content: async () => { listed(); log.push("content"); return (await fetch("content/worksheets.json")).json(); },
-      audioUrls: async (paths) => { listed(); return new Map(paths.map((p) => [p, "content/" + p])); },
+      signedUrls: async (paths) => { listed(); return new Map(paths.map((p) => [p, "content/" + p])); },
       loadProgress: async () => { down(); return JSON.parse(localStorage.getItem("__remote")) ?? cfg.remote ?? null; },
       saveProgress: async (id, data) => { down(); log.push({ save: structuredClone(data) }); localStorage.setItem("__remote", JSON.stringify(data)); },
     };
@@ -143,5 +145,51 @@ test("signing out clears this device's copy of the account", async () => {
   await page.waitForSelector("#google");
   const left = await page.evaluate(() => Object.keys(localStorage).filter((k) => /^hira\.(progress|quiz|sheets|reading|sync)/.test(k)));
   assert.deepEqual(left, []);
+  await page.close();
+});
+
+test("a lesson card reveals Tofugu's drawing on request, and hides it again", async () => {
+  const page = await open({ user: me, allowed: true }, "#learn/2");
+  assert.equal(await page.locator(".kana-card .art").count(), 0);
+  await page.locator(".kana-card").first().locator(".art-toggle").click();
+  const img = page.locator(".kana-card").first().locator("img.art");
+  await img.waitFor();
+  assert.match(await img.getAttribute("src"), /content\/img\/304b$/);
+  assert.ok(await img.evaluate((i) => i.complete && i.naturalWidth > 0), "the drawing actually decodes");
+  await page.locator(".kana-card").first().locator(".art-toggle").click();
+  assert.equal(await page.locator(".kana-card .art").count(), 0);
+  await page.goto(base + "#chart");
+  await page.click("td[data-kana='が']");
+  assert.equal(await page.locator(".modal .art-toggle").count(), 0, "dakuten have no drawings");
+  await page.click("[data-close]");
+  await page.click("td[data-kana='か']");
+  assert.equal(await page.locator(".modal .art-toggle").count(), 1);
+  await page.close();
+});
+
+test("a flashcard keeps its drawing hidden until the card is flipped", async () => {
+  const page = await open({ user: me, allowed: true }, "#cards/a");
+  const slot = page.locator(".card-art");
+  assert.equal(await slot.evaluate((e) => getComputedStyle(e).visibility), "hidden");
+  await page.click("#card");
+  assert.equal(await slot.evaluate((e) => getComputedStyle(e).visibility), "visible");
+  await page.close();
+});
+
+test("after a quiz miss the drawing can be opened and Enter still moves on", async () => {
+  const page = await open({ user: me, allowed: true }, "#quiz/a/1");
+  const first = await page.textContent("#kana");
+  await page.fill("#in", "zz");
+  await page.press("#in", "Enter");
+  await page.click("#fb .art-toggle");
+  await page.locator("#fb img.art").waitFor();
+  await page.keyboard.press("Enter");
+  assert.notEqual(await page.textContent("#kana"), first);
+  await page.close();
+});
+
+test("without signed links there is no illustration button", async () => {
+  const page = await open({ user: me, allowed: true, offline: true, local: { "sync.allowed": true } }, "#learn/1");
+  assert.equal(await page.locator(".art-toggle").first().isVisible(), false);
   await page.close();
 });

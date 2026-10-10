@@ -5,6 +5,7 @@
 # Tofugu's worksheets and audio, which belong in the private Supabase bucket rather than in a public repo.
 _research/
 audio/
+images/
 content/
 worksheets.js
 

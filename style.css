@@ -207,7 +207,7 @@ button.bad { background: var(--bad); border-color: var(--bad); }
   .chart td .kana { font-size: 1.4rem; }
 }
 .speak { display: none; }
-body.has-voice .speak, body.has-clips .speak.clip { display: inline-block; }
+body.has-voice .speak, body.has-media .speak.clip { display: inline-block; }
 nav .short, .touch-only { display: none; }
 button, .btn, .chip, .flash, .tok, .cell, .dot, td[data-kana] { touch-action: manipulation; }
 select { font: inherit; padding: .3rem; border-radius: 8px; }
@@ -239,3 +239,14 @@ body.gated nav, body.gated #font-toggle, body.gated #account { display: none; }
 .gate-logo { font-family: var(--jp); font-size: 3rem; width: 5rem; height: 5rem; line-height: 5rem; margin: 0 auto .5rem; border-radius: 18px; background: var(--accent); color: #fff; }
 .gate-error { background: var(--bad-soft); color: var(--bad); border-radius: 10px; padding: .5rem .8rem; }
 #account { margin-bottom: .3rem; }
+
+/* Mnemonic illustrations, revealed on request */
+.art-slot { display: none; margin-top: .6rem; }
+body.has-media .art-slot { display: block; }
+.art-toggle { font-size: .85rem; padding: .3rem .75rem; }
+.art { display: block; width: 100%; max-width: 480px; height: auto; margin: .5rem auto 0; border-radius: 10px; border: 1px solid var(--line); }
+.kana-card { flex-wrap: wrap; }
+.kana-card .art-slot { flex-basis: 100%; }
+/* The drawing gives the answer away, so on a flashcard it waits for the flip [あ's drawing shows a capital A]. */
+.stage .card-art { visibility: hidden; width: min(420px, 100%); text-align: center; }
+.stage.flipped .card-art { visibility: visible; }
