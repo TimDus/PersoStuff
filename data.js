@@ -199,9 +199,18 @@
   }
 
   const KANA = [];
+  const romajiOf = new Map();
+  // A dakuten kana past the first in its column, spelled from its plain kana [ぎ = "き (ki) + ゛ = ぎ (gi)."; ぴ is ひ + ゜, two code points up].
+  const marked = (g, kana, romaji, i) => {
+    if (g.kind !== "dakuten" || i === 0) return "";
+    const hand = /han-dakuten/.test(g.name);
+    const base = String.fromCodePoint(kana.codePointAt(0) - (hand ? 2 : 1));
+    return `${base} (${romajiOf.get(base)}) + ${hand ? "゜" : "゛"} = ${kana} (${romaji}).`;
+  };
   for (const g of groups) {
-    g.kana = g.kana.map(([kana, romaji, alts = [], mnemonic = "", lookalike = ""]) => {
-      const k = { kana, romaji, accept: [romaji, ...alts], mnemonic: mnemonic || g.note || "", lookalike,
+    g.kana = g.kana.map(([kana, romaji, alts = [], mnemonic = "", lookalike = ""], i) => {
+      romajiOf.set(kana, romaji);
+      const k = { kana, romaji, accept: [romaji, ...alts], mnemonic: mnemonic || marked(g, kana, romaji, i) || g.note || "", lookalike,
         group: g.id, kind: g.kind, script: g.script };
       KANA.push(k);
       return k;

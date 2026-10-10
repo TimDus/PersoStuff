@@ -410,3 +410,15 @@ test("the picker's main-kana chips are the Learn steps, step 7 included", async 
   assert.match(decodeURIComponent(page.url()), /#quiz\/m,y\/1$/);
   await page.close();
 });
+
+// Every dakuten kana showed its column's story, so ぎ read "the car (ka) crashes into the guard rail (ga)".
+test("a dakuten kana past the first in its column explains itself, not the column's story", async () => {
+  const page = await open(listed, "#chart");
+  await page.click("td[data-kana='ぎ']");
+  assert.match(await page.textContent(".modal"), /き \(ki\) \+ ゛ = ぎ \(gi\)/);
+  assert.doesNotMatch(await page.textContent(".modal"), /car/);
+  await page.click("[data-close]");
+  await page.click("td[data-kana='ピ']");
+  assert.match(await page.textContent(".modal"), /ヒ \(hi\) \+ ゜ = ピ \(pi\)/);
+  await page.close();
+});
