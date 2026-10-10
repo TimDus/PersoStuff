@@ -585,8 +585,7 @@
     input.addEventListener("input", () => {
       if (waiting || input.readOnly) return;
       const k = queue[idx], v = norm(input.value);
-      // A spelling that starts a longer accepted one waits for Enter [n could still become nn].
-      if (k.accept.includes(v) && !k.accept.some((a) => a !== v && a.startsWith(v))) correct(k);
+      if (k.accept.includes(v)) correct(k);
     });
     input.addEventListener("keydown", (e) => {
       if (e.key !== "Enter") return;

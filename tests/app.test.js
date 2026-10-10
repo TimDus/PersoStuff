@@ -438,3 +438,15 @@ test("each dakuten column is its own step of full cards, no popup needed", async
   assert.equal(await page.locator(".kana-card").count(), 5);
   await page.close();
 });
+
+// ん waited for Enter on "n" in case "nn" followed, the only kana that didn't move on by itself.
+test("typing n for ん moves on by itself like every other kana", async () => {
+  const page = await open(listed, "#quiz/w,k-w/1");
+  for (let n = 0; n < 6; n++) {
+    const kana = await page.textContent("#kana");
+    await page.type("#in", kana === "ん" || kana === "ン" ? "n" : await romajiOf(page, kana));
+    await page.waitForTimeout(250);
+  }
+  assert.match(await page.textContent("main"), /100%accuracy/);
+  await page.close();
+});
