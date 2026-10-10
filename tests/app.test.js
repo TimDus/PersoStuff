@@ -35,7 +35,7 @@ test.after(async () => {
   server?.close();
 });
 
-// A page wired to a fake backend [cfg.offline makes every call fail like a dead network].
+// A page wired to a fake backend [cfg.offline, or localStorage.__offline set mid-test, fails every call like a dead network].
 async function open(cfg, hash = "") {
   const page = await browser.newPage();
   await page.route("**/cdn.jsdelivr.net/**", (r) => r.abort());
@@ -45,7 +45,7 @@ async function open(cfg, hash = "") {
       localStorage.setItem("__seeded", "1");
     }
     const log = (window.__log = []);
-    const down = () => { if (cfg.offline) throw new TypeError("Failed to fetch"); };
+    const down = () => { if (cfg.offline || localStorage.getItem("__offline")) throw new TypeError("Failed to fetch"); };
     const listed = () => { down(); if (!cfg.allowed) throw new Error("Object not found"); };
     window.__played = [];
     const play = HTMLMediaElement.prototype.play;
@@ -303,3 +303,95 @@ test("pressing Again on a finished quiz leaves one timer running", async () => {
   await page.close();
 });
 
+
+// Progress belongs to one account and survives a bad connection; each case is a way answers were lost or misfiled.
+const answerOne = async (page) => page.type("#in", await romajiOf(page, await page.textContent("#kana")));
+
+test("signing out with answers the server never got asks first, and keeps them on Cancel", async () => {
+  const page = await open(listed, "#quiz/k/1");
+  await page.evaluate(() => localStorage.setItem("__offline", "1"));
+  await answerOne(page);
+  await page.waitForFunction(() => /Offline/.test(document.querySelector("#sync-note").textContent), null, { timeout: 5000 });
+  const asked = [];
+  page.once("dialog", (d) => { asked.push(d.message()); d.dismiss(); });
+  await page.click("#signout");
+  await page.waitForTimeout(300);
+  assert.match(asked[0] || "", /haven't reached the server/);
+  assert.equal(Object.keys(await page.evaluate(() => JSON.parse(localStorage.getItem("hira.progress")))).length, 1);
+  assert.equal(await page.locator("#google").count(), 0, "still signed in");
+  await page.close();
+});
+
+test("another account signing in on this browser doesn't inherit the last one's progress", async () => {
+  const page = await open({
+    user: me, allowed: true,
+    remote: { progress: { さ: { box: 2, right: 1, wrong: 0 } }, "quiz.best": {}, "sheets.done": {}, "reading.done": [], savedAt: 50, resetAt: 0 },
+    local: { progress: { か: { box: 5, right: 20, wrong: 0 } }, "sheets.done": { k: 95 }, "sync.user": "someone-else" },
+  }, "#chart");
+  const remote = await page.evaluate(() => JSON.parse(localStorage.getItem("__remote")));
+  assert.equal(remote?.progress?.か, undefined, "nothing of the other account's reached this row");
+  assert.deepEqual(Object.keys(await page.evaluate(() => JSON.parse(localStorage.getItem("hira.progress")))), ["さ"]);
+  assert.equal(await page.getAttribute("td[data-kana='か']", "class"), "box-0");
+  await page.close();
+});
+
+test("a boot with nothing new doesn't write the row again", async () => {
+  const row = { progress: { か: { box: 4, right: 6, wrong: 0 } }, "quiz.best": {}, "sheets.done": {}, "reading.done": [], resetAt: 0, savedAt: 50 };
+  const page = await open({ user: me, allowed: true, remote: row, local: { progress: row.progress, "sync.savedAt": 50 } }, "#learn");
+  assert.equal(await page.locator(".lesson-card").count(), 13 + 10);
+  assert.deepEqual(await saves(page), []);
+  await page.close();
+});
+
+test("a reset outranks the last one even when this device's clock is behind", async () => {
+  const later = Date.now() + 1e9;
+  const page = await open({
+    user: me, allowed: true,
+    remote: { progress: { か: { box: 5, right: 20, wrong: 0 } }, "quiz.best": {}, "sheets.done": {}, "reading.done": [], savedAt: later, resetAt: later },
+    local: { "sync.resetAt": later },
+  }, "#chart");
+  page.once("dialog", (d) => d.accept());
+  await page.click("#reset");
+  await page.waitForFunction((t) => window.__log.some((l) => l.save?.resetAt > t), later, { timeout: 5000 });
+  assert.deepEqual((await saves(page)).at(-1).progress, {});
+  await page.close();
+});
+
+test("leaving a quiz right after the last answer stays on the page you went to", async () => {
+  const page = await open(listed, "#quiz/a/1");
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  for (let n = 0; n < 4; n++) { await answerOne(page); await page.waitForTimeout(250); }
+  const romaji = await romajiOf(page, await page.textContent("#kana"));
+  await page.evaluate((r) => {
+    const input = document.querySelector("#in");
+    input.value = r;
+    input.dispatchEvent(new Event("input"));
+    location.hash = "#chart";
+  }, romaji);
+  await page.waitForTimeout(500);
+  assert.equal(await page.textContent("main h1"), "Kana chart");
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test("a quiz link naming no known kana opens the picker, not a 0-kana run", async () => {
+  const page = await open(listed, "#quiz/zz/1");
+  assert.equal(await page.locator("#go").count(), 1);
+  assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("hira.quiz.best"))), {});
+  await page.close();
+});
+
+test("the last worksheet of each script leads to that script's reading", async () => {
+  const page = await open(listed, "#learn");
+  for (const [id, reading] of [["youon", "#reading/0/0"], ["k-rwn", "#reading/2/0"]]) {
+    await page.goto(base + "#sheets/" + id);
+    while (await page.locator("#check").count()) {
+      await page.click("#check");
+      if (await page.locator("#fin").count()) { await page.click("#fin"); break; }
+      await page.click("#skip");
+    }
+    assert.equal(await page.locator("a.btn", { hasText: "Reading practice" }).getAttribute("href"), reading, id);
+  }
+  await page.close();
+});

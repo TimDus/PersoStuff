@@ -14,27 +14,24 @@ const meta = [["vowels", "Vowels"], ["k", "K-column"], ["s", "S-column"], ["t", 
   ["my", "M & Y-columns"], ["rwn", "R, W & N-columns"], ["dakuten", "Dakuten & Han-dakuten"], ["youon", "Combination kana"]];
 const read = (key) => fs.readFileSync(path.join(srcDir, `${key}.txt`), "utf8").replace(/^\uFEFF/, "");
 
-const sheets = meta.map(([id, title]) => {
-  const text = read(id);
-  const rounds = text.split(/Take a \d+ minute break/)
+// One worksheet from its text file [tab-indented lines are cells, "Take a 5 minute break" starts the next round].
+const parseSheet = (id, title, text) => ({
+  id, title, instructions: text.split(/\r?\n/)[0].trim(),
+  rounds: text.split(/Take a \d+ minute break/)
     .map((part) => part.split(/\r?\n/).filter((l) => l.startsWith("\t") && l.trim()).map((l) => l.trim()))
-    .filter((cells) => cells.length);
-  return { id, title, instructions: text.split(/\r?\n/)[0].trim(), rounds };
+    .filter((cells) => cells.length),
 });
-const reading = ["p1", "p2"].map((key) => read(key).split(/\r?\n/).map((l) => l.trim())
-  .filter((l) => l && /[\u3040-\u309f]/.test(l) && !/[A-Za-z]/.test(l)));
+// Sentence lines of a reading sheet, told apart from the English by their script [hiragana is 0x3040 to 0x309f].
+const sentences = (text, lo, hi) => text.split(/\r?\n/).map((l) => l.trim())
+  .filter((l) => l && [...l].some((c) => c.codePointAt(0) >= lo && c.codePointAt(0) <= hi) && !/[A-Za-z]/.test(l));
+
+const sheets = meta.map(([id, title]) => parseSheet(id, title, read(id)));
+const reading = ["p1", "p2"].map((key) => sentences(read(key), 0x3040, 0x309f));
 
 // Katakana sheets in guide order, the ten-kana steps [k-ak drills ア to コ].
 const kataMeta = [["k-ak", "ア–コ: vowels & K"], ["k-st", "サ–ト: S & T"], ["k-nh", "ナ–ホ: N & H"], ["k-my", "マ–ヨ: M & Y"], ["k-rwn", "ラ–ン: R, W & N"]];
-const kataSheets = kataMeta.map(([id, title]) => {
-  const text = read(path.join("katakana", id));
-  const rounds = text.split(/Take a \d+ minute break/)
-    .map((part) => part.split(/\r?\n/).filter((l) => l.startsWith("\t") && l.trim()).map((l) => l.trim()))
-    .filter((cells) => cells.length);
-  return { id, title, instructions: text.split(/\r?\n/)[0].trim(), rounds };
-});
-const kataReading = read(path.join("katakana", "k-reading")).split(/\r?\n/).map((l) => l.trim())
-  .filter((l) => l && [...l].some((c) => c.codePointAt(0) >= 0x30a1 && c.codePointAt(0) <= 0x30ff) && !/[A-Za-z]/.test(l));
+const kataSheets = kataMeta.map(([id, title]) => parseSheet(id, title, read(path.join("katakana", id))));
+const kataReading = sentences(read(path.join("katakana", "k-reading")), 0x30a1, 0x30ff);
 
 fs.mkdirSync(path.join(outDir, "audio"), { recursive: true });
 fs.mkdirSync(path.join(outDir, "img"), { recursive: true });

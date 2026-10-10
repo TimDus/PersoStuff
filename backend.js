@@ -24,7 +24,7 @@
       async content() {
         return JSON.parse(await must(await bucket().download("worksheets.json")).text());
       },
-      // Signed links for many files in one request [112 clips and 46 drawings, valid 12 hours].
+      // Signed links for many files in one request [135 clips and 92 drawings, valid 12 hours].
       async signedUrls(paths) {
         const rows = must(await bucket().createSignedUrls(paths, 12 * 3600));
         return new Map(rows.filter((r) => r.signedUrl).map((r) => [r.path, r.signedUrl]));

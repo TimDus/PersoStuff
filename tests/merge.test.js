@@ -3,7 +3,7 @@
 // and "Reset my progress" would come straight back from whichever device synced next.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { merge, clipPath } = require("../sync.js");
+const { merge, clipPath, same } = require("../sync.js");
 
 const side = (over) => ({ progress: {}, "quiz.best": {}, "sheets.done": {}, "reading.done": [], savedAt: 100, resetAt: 0, ...over });
 
@@ -39,12 +39,20 @@ test("a first sync against an empty account keeps everything local", () => {
   assert.deepEqual(merge(local, null), local);
 });
 
-test("a device that last saved before a reset can't bring old progress back", () => {
+test("a device that hasn't seen a reset can't bring old progress back", () => {
   const resetPc = side({ savedAt: 1000, resetAt: 1000 });
   const stalePhone = side({ progress: { か: { box: 5, right: 20, wrong: 0 } }, savedAt: 900 });
   assert.deepEqual(merge(resetPc, stalePhone).progress, {});
-  const phoneAfter = side({ progress: { き: { box: 2, right: 1, wrong: 0 } }, savedAt: 1100 });
-  assert.deepEqual(Object.keys(merge(resetPc, phoneAfter).progress), ["き"]);
+  const answeredSince = side({ progress: { か: { box: 5, right: 21, wrong: 0 } }, "quiz.best": { "a/1": { ms: 9000, acc: 100 } }, savedAt: 1100 });
+  const m = merge(resetPc, answeredSince);
+  assert.deepEqual([m.progress, m["quiz.best"]], [{}, {}]);
+  const slowClockAfter = side({ progress: { き: { box: 2, right: 1, wrong: 0 } }, savedAt: 990, resetAt: 1000 });
+  assert.deepEqual(Object.keys(merge(resetPc, slowClockAfter).progress), ["き"]);
+});
+
+test("a row read back with its keys reordered still counts as the same", () => {
+  assert.ok(same({ b: 1, a: { d: [1, 2], c: 2 } }, { a: { c: 2, d: [1, 2] }, b: 1 }));
+  assert.ok(!same({ a: [1, 2] }, { a: [2, 1] }));
 });
 
 test("clip names are the kana's code points in hex", () => {

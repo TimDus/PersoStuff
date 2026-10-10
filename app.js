@@ -1,6 +1,6 @@
 (function () {
   const { groups, KANA, LESSONS, KATA_LESSONS, SMALL_TSU, LONG_VOWELS, ids, main } = window.HIRAGANA;
-  const { clipPath, imagePath, merge } = window.HiraSync;
+  const { clipPath, imagePath, merge, same } = window.HiraSync;
   const backend = window.HIRA_BACKEND;
   // Worksheets and sentences arrive from the private bucket after sign-in [empty until then, or when offline].
   let SHEETS = [];
@@ -72,6 +72,7 @@
     "sheets.done": store.get("sheets.done", {}), "reading.done": store.get("reading.done", []),
     savedAt: store.get("sync.savedAt", 0), resetAt: store.get("sync.resetAt", 0),
   });
+  const blank = () => ({ progress: {}, "quiz.best": {}, "sheets.done": {}, "reading.done": [], savedAt: 0, resetAt: 0 });
   function applySnapshot(s) {
     SYNCED.forEach((k) => localStorage.setItem("hira." + k, JSON.stringify(s[k])));
     localStorage.setItem("hira.sync.savedAt", s.savedAt);
@@ -82,17 +83,20 @@
     const el = document.getElementById("sync-note");
     if (el) el.textContent = text;
   }
+  // Answers this device holds that the server doesn't [savedAt 1200, last pushed 1000 = one quiz since the last sync].
+  const unsynced = () => store.get("sync.savedAt", 0) > store.get("sync.pushedAt", 0);
   // Pull, merge, push; the local snapshot is read after the pull so an answer given meanwhile is kept [no await between merge and apply].
-  function sync() {
+  function sync(pulled) {
     clearTimeout(syncTimer);
     syncTimer = null;
     syncChain = syncChain.then(async () => {
       if (!user || !backend) return;
       try {
-        const remote = await backend.loadProgress();
+        const remote = await (pulled || backend.loadProgress());
         const merged = merge(snapshot(), remote);
         applySnapshot(merged);
-        await backend.saveProgress(user.id, merged);
+        if (!same(merged, remote)) await backend.saveProgress(user.id, merged);
+        localStorage.setItem("hira.sync.pushedAt", merged.savedAt);
         setSyncNote(`Synced ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
       } catch {
         setSyncNote("Offline, will sync later");
@@ -117,6 +121,10 @@
   const every = (ms, fn) => {
     const t = setInterval(fn, ms);
     teardown.push(() => clearInterval(t));
+  };
+  const after = (ms, fn) => {
+    const t = setTimeout(fn, ms);
+    teardown.push(() => clearTimeout(t));
   };
   const typing = (e) => e.target.matches("input, textarea, select");
 
@@ -480,7 +488,8 @@
 
   // ---------- Quiz ----------
   function viewQuiz([sel, rounds]) {
-    if (sel) return runQuiz(kanaOf(sel.split(",")), Math.max(1, +rounds || 1), `${sel}/${+rounds || 1}`);
+    // A hand-typed hash can name no known group [#quiz/zz/1 = the picker, not a 0-kana run at NaN%].
+    if (sel && kanaOf(sel.split(",")).length) return runQuiz(kanaOf(sel.split(",")), Math.max(1, +rounds || 1), `${sel}/${+rounds || 1}`);
     const selected = new Set(store.get("quiz.sel", main));
     let r = store.get("quiz.rounds", 1);
     app.innerHTML = `
@@ -545,7 +554,7 @@
       app.querySelector("#ok").textContent = right;
       input.classList.add("right"); input.readOnly = true;
       idx++;
-      setTimeout(show, 160);
+      after(160, show);
     }
     function miss(k) {
       record(k.kana, false);
@@ -740,14 +749,15 @@
       done[sheet.id] = Math.max(done[sheet.id] || 0, pct);
       store.set("sheets.done", done);
       const idx = SHEETS.indexOf(sheet);
-      const next = SHEETS[idx + 1];
+      // The next worksheet in the same script, then that script's reading [k-rwn leads to #reading/2/0].
+      const next = SHEETS[idx + 1]?.script === sheet.script ? SHEETS[idx + 1] : null;
       app.innerHTML = `
         <div class="panel" style="text-align:center;max-width:520px;margin:2rem auto">
           <h1>${sheet.id === "youon" ? "You did it! Party time! 🎉" : "Worksheet done!"}</h1>
           <div class="big-number">${pct}%</div><p class="muted">${rightTotal} of ${countTotal} right over ${sheet.rounds.length} round${sheet.rounds.length > 1 ? "s" : ""}</p>
           <div class="row" style="justify-content:center">
             <a class="btn ghost" href="#sheets">All worksheets</a>
-            ${next ? `<a class="btn" href="#sheets/${next.id}">Next: ${esc(next.title)}</a>` : `<a class="btn" href="#reading">Reading practice</a>`}
+            ${next ? `<a class="btn" href="#sheets/${next.id}">Next: ${esc(next.title)}</a>` : `<a class="btn" href="${TRACKS[sheet.script].reading}">Reading practice</a>`}
           </div></div>`;
     }
     drawRound();
@@ -867,7 +877,8 @@
     app.querySelector("#reset").addEventListener("click", () => {
       if (!confirm("Forget all progress, quiz bests and worksheet scores on every device?")) return;
       const now = Date.now();
-      applySnapshot({ progress: {}, "quiz.best": {}, "sheets.done": {}, "reading.done": [], savedAt: now, resetAt: now });
+      // Newer than any reset this device has seen, whatever its clock says [last reset 1000, clock reads 900 = 1001].
+      applySnapshot({ ...blank(), savedAt: now, resetAt: Math.max(now, store.get("sync.resetAt", 0) + 1) });
       sync();
       viewChart();
     });
@@ -924,8 +935,9 @@
   }
   async function signOut() {
     await sync();
+    if (unsynced() && !confirm("Your latest answers haven't reached the server yet. Sign out and lose them?")) return;
     await backend.signOut();
-    ["sync.allowed", "sync.savedAt", "sync.resetAt", ...SYNCED].forEach((k) => localStorage.removeItem("hira." + k));
+    ["sync.allowed", "sync.savedAt", "sync.resetAt", "sync.pushedAt", "sync.user", ...SYNCED].forEach((k) => localStorage.removeItem("hira." + k));
     location.replace(location.pathname);
   }
   function blockedScreen(message) {
@@ -944,6 +956,8 @@
     if (!user) return signInScreen(authError);
 
     // One round trip for everything; content and clips fail by themselves when the account isn't listed.
+    const pulled = backend.loadProgress();
+    pulled.catch(() => {});
     const [allowed] = await Promise.all([
       backend.isAllowed().then((ok) => { store.set("sync.allowed", ok); return ok; },
         () => store.get("sync.allowed", null)),
@@ -958,7 +972,10 @@
       `${esc(user.email)} · <span id="sync-note">Syncing…</span> · <button class="linkish" id="signout">Sign out</button>`;
     document.getElementById("signout").addEventListener("click", signOut);
     addEventListener("hashchange", route);
-    await sync();
+    // This device's copy belongs to the account that made it [A's session expires, B signs in = A's answers stay out of B's row].
+    if (store.get("sync.user", user.id) !== user.id) applySnapshot(blank());
+    store.set("sync.user", user.id);
+    await sync(pulled);
     route();
   }
   boot();

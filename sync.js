@@ -10,10 +10,10 @@
   const seen = (p) => (p ? p.right + p.wrong : -1);
 
   // Two devices' snapshots into one, nothing lost [phone knows か, PC knows き = both know both].
-  // A side last saved before the newest reset is dropped [reset on PC at 10:00, phone idle since 9:00 = phone's copy ignored].
+  // A side that hasn't seen the newest reset is dropped, answers since included [phone on reset 0 meets PC's reset 1000 = phone's copy ignored].
   function merge(a, b) {
     const resetAt = Math.max(a?.resetAt || 0, b?.resetAt || 0);
-    const sides = [a, b].filter((s) => s && (s.savedAt || 0) >= resetAt);
+    const sides = [a, b].filter((s) => s && (s.resetAt || 0) >= resetAt);
     const out = { progress: {}, "quiz.best": {}, "sheets.done": {}, "reading.done": [], resetAt,
       savedAt: Math.max(0, ...sides.map((s) => s.savedAt || 0)) };
     const reading = new Set();
@@ -36,7 +36,12 @@
     return out;
   }
 
-  const api = { clipPath, imagePath, merge };
+  // Same content whatever the key order [jsonb hands a row back with its keys sorted].
+  const canon = (v) => (Array.isArray(v) ? v.map(canon)
+    : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])])) : v);
+  const same = (a, b) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
+
+  const api = { clipPath, imagePath, merge, same };
   if (typeof module !== "undefined") module.exports = api;
   else root.HiraSync = api;
 })(this);

@@ -1,4 +1,4 @@
-// Uploads content/ to the private bucket with the owner key from .env, never printed [159 files, overwrites in place].
+// Uploads content/ to the private bucket with the owner key from .env, never printed [228 files, overwrites in place].
 // Usage: npm run build-content && node tools/upload-content.js
 const fs = require("fs");
 const path = require("path");

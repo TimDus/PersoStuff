@@ -1,4 +1,4 @@
-// Kana, mnemonics and lesson order after Tofugu's Learn Hiragana guide [104 kana in 12 steps].
+// Kana, mnemonics and lesson order after Tofugu's hiragana and katakana guides [234 kana in 21 steps].
 (function () {
   // Each row is [kana, romaji, other accepted spellings, mnemonic, look-alike note].
   const groups = [
