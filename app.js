@@ -345,16 +345,22 @@
     const { lessons, prefix, reading } = TRACKS[script];
     const l = lessons[i];
     const lessonGroups = l.groups.map((id) => groupById.get(id));
-    const single = lessonGroups.every((g) => g.kind === "main");
-    const kanaCards = single
-      ? `<div class="kana-list">${lessonGroups.flatMap((g) => g.kana).map((k) => `
+    const card = (k) => `
           <div class="panel kana-card">
             <div class="big">${esc(k.kana)}</div>
             <div><div class="rom">${esc(k.romaji)} ${speakBtn(k.kana)}</div>
               <div>${esc(k.mnemonic)}</div>
               ${k.lookalike ? `<div class="look">Look-alike: ${esc(k.lookalike)}</div>` : ""}</div>
             ${artBtn(k.kana)}
-          </div>`).join("")}</div>`
+          </div>`;
+    const kind = lessonGroups[0]?.kind;
+    // Dakuten get full cards per column, the column's story on its first card [が carries the car crash, ぎ reads き + ゛].
+    const kanaCards = kind === "main"
+      ? `<div class="kana-list">${lessonGroups.flatMap((g) => g.kana).map(card).join("")}</div>`
+      : kind === "dakuten"
+      ? lessonGroups.map((g) => `
+          <h2 class="jp">${g.kana.map((k) => esc(k.kana)).join(" ")}</h2>
+          <div class="kana-list">${g.kana.map(card).join("")}</div>`).join("")
       : lessonGroups.map((g) => `
           <h2 class="jp">${g.kana.map((k) => esc(k.kana)).join(" ")}</h2>
           <p class="muted">${esc(g.note)}</p>

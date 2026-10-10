@@ -422,3 +422,15 @@ test("a dakuten kana past the first in its column explains itself, not the colum
   assert.match(await page.textContent(".modal"), /ヒ \(hi\) \+ ゜ = ピ \(pi\)/);
   await page.close();
 });
+
+// Dakuten lessons showed bare cells that needed a click per kana; they show full cards like the main kana now.
+test("a dakuten lesson shows each kana's card on the page, no popup needed", async () => {
+  const page = await open(listed, "#learn/10");
+  assert.equal(await page.locator(".kana-card").count(), 25);
+  const gi = page.locator(".kana-card", { has: page.locator(".big", { hasText: /^ぎ$/ }) });
+  assert.match(await gi.textContent(), /き \(ki\) \+ ゛ = ぎ \(gi\)/);
+  assert.equal(await page.locator(".kana-card .art-toggle").count(), 0, "Tofugu drew no dakuten");
+  await page.goto(base + "#learn/k6");
+  assert.equal(await page.locator(".kana-card").count(), 25);
+  await page.close();
+});
