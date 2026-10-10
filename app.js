@@ -257,22 +257,33 @@
   // Column chooser shared by flashcards and quiz, hiragana above katakana [all of Main = 46 kana].
   const SCRIPTS = [["hiragana", "Hiragana", ["main", "dakuten", "youon"]], ["katakana", "Katakana", ["main", "dakuten", "youon", "extended"]]];
   const KIND_NAMES = { main: "Main kana", dakuten: "Dakuten", youon: "Combinations", extended: "Extended sounds" };
+  // Group ids per chip: one Learn step for main kana, one column otherwise [hiragana step 7 = m,y; katakana step 1 = k-a,k-k].
+  const chipsOf = (script, kind) => (kind === "main"
+    ? { hiragana: LESSONS, katakana: KATA_LESSONS }[script].map((l) => l.groups).filter((g) => g.length && groupById.get(g[0]).kind === "main")
+    : groups.filter((g) => g.kind === kind && g.script === script).map((g) => [g.id]));
   function picker(selected, onChange) {
     const el = document.createElement("div");
+    const chip = (gids) => {
+      const gs = gids.map((id) => groupById.get(id));
+      return `<span class="chip ${gids.every((id) => selected.has(id)) ? "on" : ""}" data-g="${gids.join(",")}" role="button"
+        title="${esc(gs.map((g) => g.name).join(" & "))}">${gs.flatMap((g) => g.kana).map((k) => esc(k.kana)).join("")}</span>`;
+    };
     const draw = () => {
       el.innerHTML = SCRIPTS.map(([script, title, kinds]) => `<h3 class="picker-script">${title}</h3>` + kinds.map((kind) => `
         <div class="picker-head"><strong>${KIND_NAMES[kind]}</strong>
           <button class="linkish" data-all="${script}:${kind}">all</button><button class="linkish" data-none="${script}:${kind}">none</button></div>
-        <div class="picker">${groups.filter((g) => g.kind === kind && g.script === script).map((g) =>
-          `<span class="chip ${selected.has(g.id) ? "on" : ""}" data-g="${g.id}" role="button" title="${esc(g.name)}">${g.kana.map((k) => esc(k.kana)).join("")}</span>`).join("")}
+        <div class="picker">${chipsOf(script, kind).map(chip).join("")}
         </div>`).join("")).join("");
     };
     el.addEventListener("click", (e) => {
-      const chip = e.target.closest("[data-g]");
+      const hit = e.target.closest("[data-g]");
       const all = e.target.closest("[data-all]");
       const none = e.target.closest("[data-none]");
-      if (chip) selected.has(chip.dataset.g) ? selected.delete(chip.dataset.g) : selected.add(chip.dataset.g);
-      else if (all) ids(...all.dataset.all.split(":").reverse()).forEach((id) => selected.add(id));
+      if (hit) {
+        const gids = hit.dataset.g.split(",");
+        const on = gids.every((id) => selected.has(id));
+        gids.forEach((id) => (on ? selected.delete(id) : selected.add(id)));
+      } else if (all) ids(...all.dataset.all.split(":").reverse()).forEach((id) => selected.add(id));
       else if (none) ids(...none.dataset.none.split(":").reverse()).forEach((id) => selected.delete(id));
       else return;
       draw();

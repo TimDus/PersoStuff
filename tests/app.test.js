@@ -417,3 +417,18 @@ test("quiz and flashcards ask kana in Learn order, whatever order the link lists
   assert.deepEqual(flipped, learn);
   await page.close();
 });
+
+// The picker split step 7 into まみむめも and やゆよ, so its chips no longer lined up with the Learn steps.
+test("the picker's main-kana chips are the Learn steps, step 7 included", async () => {
+  const page = await open(listed, "#quiz");
+  const steps = await page.evaluate(() => [...HIRAGANA.LESSONS, ...HIRAGANA.KATA_LESSONS].slice(0, 9).concat(HIRAGANA.KATA_LESSONS.slice(0, 5))
+    .map((l) => l.title.replace(/ /g, "")));
+  const chips = await page.$$eval(".picker", (ps) => [ps[0], ps[3]].flatMap((p) => [...p.querySelectorAll(".chip")].map((c) => c.textContent)));
+  assert.deepEqual(chips, steps);
+  await page.click("[data-none='hiragana:main']");
+  await page.click(".chip >> text=まみむめもやゆよ");
+  assert.equal(await page.textContent("#count"), "8 kana × 1");
+  await page.click("#go");
+  assert.match(decodeURIComponent(page.url()), /#quiz\/m,y\/1$/);
+  await page.close();
+});
