@@ -7,9 +7,6 @@
   let READING = [];
   let contentError = "";
   const byKana = new Map(KANA.map((k) => [k.kana, k]));
-  // Kana in the order the Learn steps teach them [わ from step 9 after ら from step 8, katakana after all hiragana].
-  const learnIndex = new Map(KANA.map((k, i) => [k, i]));
-  const inLearnOrder = (list) => [...list].sort((a, b) => learnIndex.get(a) - learnIndex.get(b));
   const groupById = new Map(groups.map((g) => [g.id, g]));
   const app = document.getElementById("app");
 
@@ -28,6 +25,13 @@
   const docUrl = (id) => `https://docs.google.com/document/d/${DOCS[id]}/edit`;
 
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const shuffle = (a) => {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
   const norm = (s) => s.trim().toLowerCase().replace(/\s+/g, "");
   const kanaOf = (groupIds) => groupIds.flatMap((id) => groupById.get(id)?.kana || []);
   const fmtTime = (ms) => {
@@ -423,7 +427,8 @@
 
   function runCards(deck, reverse, sel) {
     cleanup();
-    let queue = inLearnOrder(deck);
+    // Weakest first, shuffled within a box [every box-1 card before any box-3 card].
+    let queue = shuffle([...deck]).sort((a, b) => boxOf(a.kana) - boxOf(b.kana));
     const missed = new Set();
     let done = 0;
     let flipped = false;
@@ -526,7 +531,7 @@
   function runQuiz(list, rounds, bestKey) {
     cleanup();
     const queue = [];
-    for (let i = 0; i < rounds; i++) queue.push(...inLearnOrder(list));
+    for (let i = 0; i < rounds; i++) queue.push(...shuffle([...list]));
     const total = queue.length;
     const misses = new Map();
     let idx = 0, right = 0, wrong = 0, waiting = false;
@@ -623,7 +628,7 @@
             <a class="btn ghost" href="#quiz">Other kana</a>
           </div></div>`;
       app.querySelector("#re").addEventListener("click", () => runQuiz(list, rounds, bestKey));
-      app.querySelector("#miss")?.addEventListener("click", () => runQuiz([...misses.keys()], 3, null));
+      app.querySelector("#miss")?.addEventListener("click", () => runQuiz(sorted.map(([k]) => k), 3, null));
     }
     show();
   }
