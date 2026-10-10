@@ -95,7 +95,7 @@ test("an account that isn't listed is stopped at the door", async () => {
 
 test("a listed account gets the worksheets and Tofugu's audio", async () => {
   const page = await open({ user: me, allowed: true }, "#sheets");
-  assert.equal(await page.locator("main .grid h2").count(), 9);
+  assert.equal(await page.locator("main .grid h2").count(), 9 + 5);
   await page.goto(base + "#learn/1");
   await page.locator(".speak.clip").first().click();
   assert.match((await page.evaluate(() => window.__played))[0], /content\/audio\/3042\.mp3$/);
@@ -126,7 +126,7 @@ test("progress from another device merges in, and new answers sync back", async 
 test("offline after a past sign-in: lessons work, worksheets explain why not", async () => {
   const page = await open({ user: me, allowed: true, offline: true, local: { "sync.allowed": true } }, "#learn");
   assert.equal(await page.locator("nav").isVisible(), true);
-  assert.equal(await page.locator(".lesson-card").count(), 13);
+  assert.equal(await page.locator(".lesson-card").count(), 13 + 10);
   assert.match(await page.textContent("#sync-note"), /Offline/);
   await page.goto(base + "#sheets");
   assert.match(await page.textContent("main"), /Can't load the worksheets/);
@@ -191,5 +191,99 @@ test("after a quiz miss the drawing can be opened and Enter still moves on", asy
 test("without signed links there is no illustration button", async () => {
   const page = await open({ user: me, allowed: true, offline: true, local: { "sync.allowed": true } }, "#learn/1");
   assert.equal(await page.locator(".art-toggle").first().isVisible(), false);
+  await page.close();
+});
+
+// Katakana was added below hiragana; these guard the order, the borrowed sounds and the katakana-only parts.
+const listed = { user: me, allowed: true };
+const romajiOf = (page, kana) => page.evaluate((k) => HIRAGANA.KANA.find((x) => x.kana === k).romaji, kana);
+
+test("katakana comes after hiragana on the Learn page, the picker and the chart", async () => {
+  const page = await open(listed, "#learn");
+  const hrefs = await page.$$eval(".lesson-card", (as) => as.map((a) => a.getAttribute("href")));
+  assert.equal(hrefs[0], "#learn/1");
+  assert.ok(hrefs.indexOf("#learn/k1") > hrefs.indexOf("#reading"), "katakana steps follow the hiragana reading card");
+  await page.goto(base + "#quiz");
+  assert.deepEqual(await page.$$eval(".picker-script", (h) => h.map((x) => x.textContent)), ["Hiragana", "Katakana"]);
+  await page.goto(base + "#chart");
+  assert.deepEqual(await page.$$eval("main h2", (h) => h.map((x) => x.textContent.split(" ")[0])), ["Hiragana", "Katakana"]);
+  await page.close();
+});
+
+test("a katakana lesson borrows the hiragana recording and has its own drawing", async () => {
+  const page = await open(listed, "#learn/k1");
+  assert.equal(await page.locator(".kana-card .big").first().textContent(), "ア");
+  await page.locator(".kana-card").first().locator(".speak.clip").click();
+  await page.locator(".kana-card").first().locator(".art-toggle").click();
+  await page.locator(".kana-card").first().locator("img.art").waitFor();
+  assert.match((await page.evaluate(() => window.__played)).at(-1), /content\/audio\/3042\.mp3$/, "ア plays あ");
+  assert.match(await page.locator(".kana-card img.art").first().getAttribute("src"), /content\/img\/30a2$/);
+  await page.close();
+});
+
+test("extended sounds play their own clips", async () => {
+  const page = await open(listed, "#chart");
+  await page.click("td[data-kana='ファ']");
+  await page.locator(".modal .speak.clip").click();
+  assert.match((await page.evaluate(() => window.__played)).at(-1), /content\/audio\/30d5-30a1\.mp3$/);
+  assert.equal(await page.locator(".modal .art-toggle").count(), 0, "no drawing for extended sounds");
+  await page.close();
+});
+
+test("the chart keeps every extended sound, even three that share a column", async () => {
+  const page = await open(listed, "#chart");
+  for (const k of ["シェ", "ジェ", "チェ", "ヴ", "ン", "ヂャ"]) assert.equal(await page.locator(`td[data-kana='${k}']`).count(), 1, k);
+  await page.close();
+});
+
+test("a katakana quiz accepts the romaji and the guide's typing spellings", async () => {
+  const page = await open(listed, "#quiz/k-x-t,k-x-dh/1");
+  const typed = { ティ: "thi", トゥ: "twu", ディ: "dhi", ドゥ: "du" };
+  for (let n = 0; n < 4; n++) {
+    const kana = await page.textContent("#kana");
+    await page.type("#in", typed[kana]);
+    await page.waitForTimeout(250);
+  }
+  assert.match(await page.textContent("main"), /100%accuracy/);
+  await page.close();
+});
+
+test("a katakana worksheet checks katakana answers", async () => {
+  const page = await open(listed, "#sheets");
+  assert.deepEqual(await page.$$eval("main > h2", (h) => h.map((x) => x.textContent)), ["Hiragana", "Katakana"]);
+  await page.goto(base + "#sheets/k-ak");
+  const cells = await page.$$eval(".cell .kana", (els) => els.map((e) => e.textContent));
+  const inputs = await page.$$(".cell input");
+  for (let i = 0; i < inputs.length; i++) await inputs[i].fill(await romajiOf(page, cells[i]));
+  await page.click("#check");
+  assert.match(await page.textContent("#score"), /48 \/ 48/);
+  await page.close();
+});
+
+test("katakana sentences read as romaji, long vowels and small vowels included", async () => {
+  const page = await open(listed, "#reading/2/0");
+  assert.equal(await page.locator(".row .btn").filter({ hasText: "Katakana" }).count(), 1);
+  await page.keyboard.press("r");
+  assert.equal(await page.textContent(".romaji-line"), "haroo! mai neemu izu mami. watto abauto yuu?");
+  const n = await page.evaluate(() => [...document.querySelectorAll(".dot")].length);
+  let found = false;
+  for (let j = 0; j < n && !found; j++) {
+    await page.goto(base + `#reading/2/${j}`);
+    if ((await page.textContent("#sent")).includes("ズィス")) {
+      await page.keyboard.press("r");
+      assert.match(await page.textContent(".romaji-line"), /raiku zisu\./);
+      found = true;
+    }
+  }
+  assert.ok(found, "the ズィス sentence exists");
+  await page.close();
+});
+
+test("the long-vowel step hides its Show button once the answer is out", async () => {
+  const page = await open(listed, "#learn/k9");
+  assert.equal(await page.locator("#burger").isVisible(), false);
+  await page.click("#reveal-burger");
+  assert.equal(await page.locator("#reveal-burger").isVisible(), false);
+  assert.match(await page.textContent("#burger"), /^beekonchiizubaagaa/);
   await page.close();
 });

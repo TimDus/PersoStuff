@@ -250,3 +250,7 @@ body.has-media .art-slot { display: block; }
 /* The drawing gives the answer away, so on a flashcard it waits for the flip [あ's drawing shows a capital A]. */
 .stage .card-art { visibility: hidden; width: min(420px, 100%); text-align: center; }
 .stage.flipped .card-art { visibility: visible; }
+.picker-script { margin: 1.4rem 0 0; font-size: 1.05rem; color: var(--accent); }
+.picker-script:first-child { margin-top: 0; }
+/* Author display rules beat the browser's own [hidden] rule, so restate it [the long-vowel Show button stayed visible]. */
+[hidden] { display: none !important; }

@@ -1,5 +1,5 @@
 (function () {
-  const { groups, KANA, LESSONS, SMALL_TSU, ids, main } = window.HIRAGANA;
+  const { groups, KANA, LESSONS, KATA_LESSONS, SMALL_TSU, LONG_VOWELS, ids, main } = window.HIRAGANA;
   const { clipPath, imagePath, merge } = window.HiraSync;
   const backend = window.HIRA_BACKEND;
   // Worksheets and sentences arrive from the private bucket after sign-in [empty until then, or when offline].
@@ -10,7 +10,7 @@
   const groupById = new Map(groups.map((g) => [g.id, g]));
   const app = document.getElementById("app");
 
-  // Google Doc ids of the original worksheets, for printing on paper [p0 and p1 are the sentence sheets].
+  // Google Doc ids of the original worksheets, for printing on paper [p0 to p2 are the sentence sheets, p2 in katakana].
   const DOCS = {
     vowels: "1muxTHS0NqIzKPUStedahoTRbvQRlUlQi0J3XMPi-DJE", k: "164N1iT19YGaMpmImySONvLntsi8gehmQZU0GJLHC_q8",
     s: "1Zii4XH0bGOXAoYUTRy-bAZCo1SuKbiWZIoodJbWKMDA", t: "12IIGe4lP212Twq3DSnhNzf6u8mVwYWoXLAEuG1DH1Js",
@@ -18,6 +18,9 @@
     rwn: "1fKOrg5X5UkyZ6EhOMRa0qlr2jtVwrLQSHYk1iL9-ovQ", dakuten: "1yAShOorugSANSMILnPfJjPnFOPCAKKN53usq5Jo-YuQ",
     youon: "1Sy6zrBkkr9JVCwix-dTMSPVAl4cW5Z5jHTg-peiwbv8", p0: "1_NzKK3N6l5owqEWkmOaKTRzxiRhO11MVjcharOluSW8",
     p1: "1oihMWqHCbUnMkSc3HevuxGHmktZ2QY2yTcUqnUWQ81w",
+    "k-ak": "1vq600qg-FVbMofnbCNOLFtn5tNiouXx2kTMegnzPqSU", "k-st": "1pxuEjzsey_zkqBxSzgcT1qytGRcjJdx7EEIbMR5uN7w",
+    "k-nh": "1-LJKrZ6b_vy9TA24QF1FS3P6taZMR2TdwbS6V7ixEwQ", "k-my": "1a9dtvUlN-Jyt5UAiD8tAaZWqOhmnQY8mOfBvMjqLhqQ",
+    "k-rwn": "1UGzyVHcREJAvFWmwEWfupn0GPY-tOmXXTo0fj69fEy4", p2: "1RkUw8nKTmjUhBV6ETBoVNtTH2MZrvdSYtgSy0ttonjU",
   };
   const docUrl = (id) => `https://docs.google.com/document/d/${DOCS[id]}/edit`;
 
@@ -126,9 +129,15 @@
     load();
     speechSynthesis.addEventListener?.("voiceschanged", load);
   }
-  // Tofugu's recordings, one per kana plus the small-tsu words; anything else falls back to the browser voice [a whole sentence].
-  const CLIPS = new Set([...KANA.map((k) => k.kana), ...SMALL_TSU.flat()]);
-  // Tofugu drew a mnemonic for each main kana and nothing else [none for が or きゃ].
+  // Tofugu's recordings: every hiragana, the small-tsu words, and the katakana sounds hiragana lacks [ファ, ティ, ヴ].
+  const CLIPS = new Set([
+    ...KANA.filter((k) => k.script === "hiragana" || k.kind === "extended").map((k) => k.kana), ...SMALL_TSU.flat(),
+  ]);
+  const hiraByRomaji = new Map();
+  KANA.filter((k) => k.script === "hiragana").forEach((k) => { if (!hiraByRomaji.has(k.romaji)) hiraByRomaji.set(k.romaji, k.kana); });
+  // The recording a kana plays; other katakana borrow the hiragana with their sound [ア = あ, ヂャ = じゃ].
+  const clipFor = (text) => (CLIPS.has(text) ? text : byKana.get(text)?.script === "katakana" ? hiraByRomaji.get(byKana.get(text).romaji) : undefined);
+  // Tofugu drew a mnemonic for each main kana and nothing else [none for が or キャ].
   const ART = new Set(KANA.filter((k) => k.kind === "main").map((k) => k.kana));
   const player = new Audio();
   let mediaUrls = new Map();
@@ -146,8 +155,9 @@
   async function say(text) {
     window.speechSynthesis?.cancel();
     player.pause();
-    if (CLIPS.has(text)) {
-      const url = await mediaUrl(clipPath(text));
+    const clip = clipFor(text);
+    if (clip) {
+      const url = await mediaUrl(clipPath(clip));
       if (url) { player.src = url; player.play().catch(() => {}); }
       return;
     }
@@ -156,7 +166,7 @@
     u.voice = jaVoice; u.lang = "ja-JP"; u.rate = 0.8;
     speechSynthesis.speak(u);
   }
-  const speakBtn = (text) => `<button class="speak${CLIPS.has(text) ? " clip" : ""}" data-say="${esc(text)}" title="Listen">🔊</button>`;
+  const speakBtn = (text) => `<button class="speak${clipFor(text) ? " clip" : ""}" data-say="${esc(text)}" title="Listen">🔊</button>`;
   // A drawing loads only when its button is pressed [each is 1600x800, about 165 KB].
   const artBtn = (kana) => (ART.has(kana)
     ? `<div class="art-slot" data-art="${esc(kana)}"><button class="ghost art-toggle" type="button">Show illustration</button></div>`
@@ -178,33 +188,40 @@
     if (b) say(b.dataset.say);
   });
 
-  // Letter-by-letter romaji for a hiragana string [いっしょ = issho, まっちゃ = matcha, べーこん = beekon].
-  const SMALL_Y = "ゃゅょ";
-  const PUNCT = { "、": ", ", "。": ". ", "！": "! ", "？": "? ", "「": '"', "」": '"', "　": " " };
+  // Letter-by-letter romaji for hiragana or katakana [いっしょ = issho, まっちゃ = matcha, ベーコン = beekon].
+  const SMALLS = "ゃゅょャュョァィゥェォ";
+  // A small vowel no table covers swaps the vowel before it [ズ + ィ = zi, as in ズィス].
+  const SMALL_VOWEL = { ァ: "a", ィ: "i", ゥ: "u", ェ: "e", ォ: "o" };
+  const PUNCT = { "、": ", ", "。": ". ", "！": "! ", "？": "? ", "「": '"', "」": '"', "　": " ", "・": " " };
+  const isKana = (c) => {
+    const n = c.codePointAt(0);
+    return (n >= 0x3041 && n <= 0x309f) || (n >= 0x30a1 && n <= 0x30ff);
+  };
   function toRomaji(s) {
     let out = "";
     let double = false;
     for (let i = 0; i < s.length; i++) {
       let ch = s[i];
-      if (SMALL_Y.includes(s[i + 1]) && byKana.has(ch + s[i + 1])) ch += s[++i];
-      if (ch === "っ") { double = true; continue; }
+      if (SMALLS.includes(s[i + 1]) && byKana.has(ch + s[i + 1])) ch += s[++i];
+      if (ch === "っ" || ch === "ッ") { double = true; continue; }
       if (ch === "ー") { out += (out.match(/[aeiou]$/) || [""])[0]; continue; }
+      if (SMALL_VOWEL[ch]) { out = out.replace(/[aeiou]?$/, SMALL_VOWEL[ch]); continue; }
       const k = byKana.get(ch);
       let r = k ? k.romaji : PUNCT[ch] ?? ch;
-      if (ch === "ん" && /^[aeiouy]/.test(byKana.get(s[i + 1])?.romaji || "")) r = "n'";
+      if ((ch === "ん" || ch === "ン") && /^[aeiouy]/.test(byKana.get(s[i + 1])?.romaji || "")) r = "n'";
       if (double && k) r = (r.startsWith("ch") ? "t" : r[0]) + r;
       double = false;
       out += r;
     }
     return out.replace(/\s+/g, " ").trim();
   }
-  // Reading units, small kana and ー kept with their kana [っしゅ, べー].
+  // Reading units, small kana and ー kept with their kana [っしゅ, ベー, ズィ].
   function tokens(s) {
     const out = [];
     for (let i = 0; i < s.length; i++) {
       let t = s[i];
-      if (t === "っ" && byKana.has(s[i + 1])) t += s[++i];
-      if (SMALL_Y.includes(s[i + 1])) t += s[++i];
+      if ((t === "っ" || t === "ッ") && byKana.has(s[i + 1])) t += s[++i];
+      if (SMALLS.includes(s[i + 1])) t += s[++i];
       while (s[i + 1] === "ー") t += s[++i];
       out.push(t);
     }
@@ -233,25 +250,26 @@
       <p class="muted small">${p ? `${p.right} right · ${p.wrong} wrong` : "Not practised yet"}</p>`);
   }
 
-  // Column chooser shared by flashcards and quiz [all of Main = 46 kana].
-  const SECTIONS = [["main", "Main kana"], ["dakuten", "Dakuten"], ["youon", "Combinations"]];
+  // Column chooser shared by flashcards and quiz, hiragana above katakana [all of Main = 46 kana].
+  const SCRIPTS = [["hiragana", "Hiragana", ["main", "dakuten", "youon"]], ["katakana", "Katakana", ["main", "dakuten", "youon", "extended"]]];
+  const KIND_NAMES = { main: "Main kana", dakuten: "Dakuten", youon: "Combinations", extended: "Extended sounds" };
   function picker(selected, onChange) {
     const el = document.createElement("div");
     const draw = () => {
-      el.innerHTML = SECTIONS.map(([kind, name]) => `
-        <div class="picker-head"><strong>${name}</strong>
-          <button class="linkish" data-all="${kind}">all</button><button class="linkish" data-none="${kind}">none</button></div>
-        <div class="picker">${groups.filter((g) => g.kind === kind).map((g) =>
+      el.innerHTML = SCRIPTS.map(([script, title, kinds]) => `<h3 class="picker-script">${title}</h3>` + kinds.map((kind) => `
+        <div class="picker-head"><strong>${KIND_NAMES[kind]}</strong>
+          <button class="linkish" data-all="${script}:${kind}">all</button><button class="linkish" data-none="${script}:${kind}">none</button></div>
+        <div class="picker">${groups.filter((g) => g.kind === kind && g.script === script).map((g) =>
           `<span class="chip ${selected.has(g.id) ? "on" : ""}" data-g="${g.id}" role="button" title="${esc(g.name)}">${g.kana.map((k) => esc(k.kana)).join("")}</span>`).join("")}
-        </div>`).join("");
+        </div>`).join("")).join("");
     };
     el.addEventListener("click", (e) => {
       const chip = e.target.closest("[data-g]");
       const all = e.target.closest("[data-all]");
       const none = e.target.closest("[data-none]");
       if (chip) selected.has(chip.dataset.g) ? selected.delete(chip.dataset.g) : selected.add(chip.dataset.g);
-      else if (all) ids(all.dataset.all).forEach((id) => selected.add(id));
-      else if (none) ids(none.dataset.none).forEach((id) => selected.delete(id));
+      else if (all) ids(...all.dataset.all.split(":").reverse()).forEach((id) => selected.add(id));
+      else if (none) ids(...none.dataset.none.split(":").reverse()).forEach((id) => selected.delete(id));
       else return;
       draw();
       onChange(selected);
@@ -262,31 +280,51 @@
   const orderedSel = (set) => groups.map((g) => g.id).filter((id) => set.has(id));
 
   // ---------- Learn ----------
+  // Each script's steps, in learning order [katakana steps link as #learn/k1].
+  const TRACKS = {
+    hiragana: { lessons: LESSONS, prefix: "", reading: "#reading/0/0" },
+    katakana: { lessons: KATA_LESSONS, prefix: "k", reading: "#reading/2/0" },
+  };
   function viewLearn([step]) {
-    if (step !== undefined && LESSONS[+step - 1]) return viewLesson(+step - 1);
+    const kata = /^k\d+$/.test(step || "");
+    const n = +(kata ? step.slice(1) : step);
+    const track = TRACKS[kata ? "katakana" : "hiragana"];
+    if (step && track.lessons[n - 1]) return viewLesson(n - 1, kata ? "katakana" : "hiragana");
+    const cards = ({ lessons, prefix }) => lessons.map((l, i) => {
+      const list = kanaOf(l.groups);
+      return `<a class="panel lesson-card" href="#learn/${prefix}${i + 1}">
+        <div class="step">Step ${i + 1}</div>
+        <div class="title">${esc(l.title)}</div>
+        <div class="muted">${esc(l.sub)}${list.length ? ` · ${list.length} kana` : ""}</div>
+        ${list.length ? `<div class="bar"><span style="width:${Math.round(mastery(list) * 100)}%"></span></div>` : ""}
+      </a>`;
+    }).join("");
     app.innerHTML = `
       <h1>Learn hiragana in 12 steps</h1>
       <p class="lead">Follow Tofugu's order: learn a column with its mnemonics, quiz everything so far, then do the worksheet.
         Don't practise writing yet — reading comes first.</p>
       <div class="grid">
-        ${LESSONS.map((l, i) => {
-          const list = kanaOf(l.groups);
-          return `<a class="panel lesson-card" href="#learn/${i + 1}">
-            <div class="step">Step ${i + 1}</div>
-            <div class="title">${esc(l.title)}</div>
-            <div class="muted">${esc(l.sub)}${list.length ? ` · ${list.length} kana` : ""}</div>
-            ${list.length ? `<div class="bar"><span style="width:${Math.round(mastery(list) * 100)}%"></span></div>` : ""}
-          </a>`;
-        }).join("")}
+        ${cards(TRACKS.hiragana)}
         <a class="panel lesson-card" href="#reading">
           <div class="step">Step 13</div><div class="title">よみましょう</div>
           <div class="muted">Reading practice · 24 sentences</div>
         </a>
+      </div>
+      <h1 style="margin-top:2.5rem">Then katakana in 9 steps</h1>
+      <p class="lead">Katakana spells foreign words and names with the same sounds you already know, so it goes faster.
+        Ten kana a step, then the sounds hiragana doesn't have.</p>
+      <div class="grid">
+        ${cards(TRACKS.katakana)}
+        <a class="panel lesson-card" href="${TRACKS.katakana.reading}">
+          <div class="step">Step 10</div><div class="title">リーディング</div>
+          <div class="muted">Reading practice · English in katakana</div>
+        </a>
       </div>`;
   }
 
-  function viewLesson(i) {
-    const l = LESSONS[i];
+  function viewLesson(i, script) {
+    const { lessons, prefix, reading } = TRACKS[script];
+    const l = lessons[i];
     const lessonGroups = l.groups.map((id) => groupById.get(id));
     const single = lessonGroups.every((g) => g.kind === "main");
     const kanaCards = single
@@ -310,27 +348,36 @@
       <div class="pairs">${SMALL_TSU.map(([a, b]) => `
         <div class="panel pair"><span>${esc(a)}<small>${toRomaji(a)}</small></span> ${speakBtn(a)}
           <span>→</span><span>${esc(b)}<small>${toRomaji(b)}</small></span> ${speakBtn(b)}</div>`).join("")}</div>` : "";
+    const longVowel = l.longVowel ? `
+      <p>In romaji the vowel is written twice: チーズ is <b>chiizu</b>, cheese. It sounds like one long smooth vowel, not two.</p>
+      <div class="pairs">${LONG_VOWELS.map(([a, b]) => `
+        <div class="panel pair"><span>${esc(a)}<small>${toRomaji(a)}</small></span>
+          <span>→</span><span>${esc(b)}<small>${toRomaji(b)}</small></span> ${speakBtn(b)}</div>`).join("")}</div>
+      <p style="margin-top:1rem">Now read this menu item: <span class="jp" style="font-size:1.5rem">ベーコンチーズバーガー</span>
+        <button class="ghost small" id="reveal-burger">Show</button> <b id="burger" hidden>${toRomaji("ベーコンチーズバーガー")}, a bacon cheeseburger</b></p>` : "";
     const tasks = [
       l.groups.length ? { text: `Flip through these ${kanaOf(l.groups).length} cards until they feel familiar.`, href: `#cards/${l.groups.join(",")}`, label: "Flashcards" } : null,
       ...l.tasks.map((t) => ({ text: t.text, href: `#quiz/${t.quiz.join(",")}/${t.rounds}`, label: "Start quiz" })),
-      l.sheet ? { text: `Worksheet${SHEETS.length ? `: ${SHEETS.find((s) => s.id === l.sheet).title}` : ""}. Take the breaks between rounds — recalling after a pause is the point.`, href: `#sheets/${l.sheet}`, label: "Worksheet" } : null,
-      l.smallTsu ? { text: "No exercise for this one. Move on to reading real sentences.", href: "#reading", label: "Reading practice" } : null,
+      l.sheet ? { text: `Worksheet${SHEETS.find((s) => s.id === l.sheet) ? `: ${SHEETS.find((s) => s.id === l.sheet).title}` : ""}. Take the breaks between rounds — recalling after a pause is the point.`, href: `#sheets/${l.sheet}`, label: "Worksheet" } : null,
+      l.smallTsu || l.longVowel ? { text: "No exercise for this one. Move on to reading real sentences.", href: reading, label: "Reading practice" } : null,
     ].filter(Boolean);
+    const name = script === "katakana" ? "Katakana step" : "Step";
     app.innerHTML = `
       <p><a href="#learn">← All steps</a></p>
-      <div class="muted">Step ${i + 1} · ${esc(l.sub)}</div>
+      <div class="muted">${name} ${i + 1} · ${esc(l.sub)}</div>
       <h1 class="jp">${esc(l.title)}</h1>
       <p class="lead">${esc(l.intro)}</p>
-      ${kanaCards}${tsu}
+      ${kanaCards}${tsu}${longVowel}
       <h2>Practice</h2>
       <div class="panel">${tasks.map((t) => `
         <div class="task"><div class="text">${esc(t.text)}</div><a class="btn" href="${t.href}">${t.label}</a></div>`).join("")}</div>
       <div class="row" style="margin-top:1.2rem">
-        ${i > 0 ? `<a class="btn ghost" href="#learn/${i}">← Step ${i}</a>` : ""}
+        ${i > 0 ? `<a class="btn ghost" href="#learn/${prefix}${i}">← ${name} ${i}</a>` : ""}
         <span class="spacer"></span>
-        ${i < LESSONS.length - 1 ? `<a class="btn ghost" href="#learn/${i + 2}">Step ${i + 2} →</a>` : `<a class="btn ghost" href="#reading">Reading practice →</a>`}
+        ${i < lessons.length - 1 ? `<a class="btn ghost" href="#learn/${prefix}${i + 2}">${name} ${i + 2} →</a>` : `<a class="btn ghost" href="${reading}">Reading practice →</a>`}
       </div>`;
     app.querySelectorAll("[data-kana]").forEach((el) => el.addEventListener("click", () => kanaModal(byKana.get(el.dataset.kana))));
+    app.querySelector("#reveal-burger")?.addEventListener("click", (e) => { e.target.hidden = true; app.querySelector("#burger").hidden = false; });
   }
 
   // ---------- Flashcards ----------
@@ -589,17 +636,19 @@
       <h1>Worksheets</h1>
       <p class="lead">Tofugu's worksheets, typed instead of handwritten. Each one has three rounds of 48 kana with a 5-minute and a
         10-minute break in between — the breaks make you recall from memory instead of from a few seconds ago, so take them.</p>
-      <div class="grid">${SHEETS.map((s) => `
+      ${[["hiragana", "Hiragana"], ["katakana", "Katakana"]].map(([script, title]) => `
+      <h2>${title}</h2>
+      <div class="grid">${SHEETS.filter((s) => s.script === script).map((s) => `
         <div class="panel">
           <div class="step muted small">${s.rounds.length} round${s.rounds.length > 1 ? "s" : ""} · ${s.rounds.reduce((n, r) => n + r.length, 0)} kana</div>
           <h2 style="margin:.2rem 0">${esc(s.title)}</h2>
-          <p class="muted small">${esc(s.instructions.replace(/ into the boxes:?$/, ""))}</p>
+          <p class="muted small">${esc(s.instructions.replace(/ into the boxes[.:]?/, ""))}</p>
           ${done[s.id] ? `<p class="small"><span class="badge">Best ${done[s.id]}%</span></p>` : ""}
           <div class="row"><a class="btn" href="#sheets/${s.id}">Start</a>
             <a class="small" href="${docUrl(s.id)}" target="_blank" rel="noopener">Printable original ↗</a></div>
         </div>`).join("")}
-      </div>
-      <p class="muted small" style="margin-top:1.2rem">The two sentence worksheets (Hiragana Practice #1 and #2) are under <a href="#reading">Reading</a>.</p>`;
+      </div>`).join("")}
+      <p class="muted small" style="margin-top:1.2rem">The sentence worksheets (Hiragana Practice #1 and #2, and the katakana one) are under <a href="#reading">Reading</a>.</p>`;
   }
 
   function runSheet(sheet) {
@@ -713,20 +762,23 @@
 
     function draw() {
       const text = list[i];
+      const kata = sheet === 2;
       app.innerHTML = `
         <h1>Reading practice</h1>
-        <p class="lead">Real sentences in hiragana from Tofugu's practice sheets. Don't worry about the meaning — make sure you can read
-          every kana and sound it out loud. Tap a kana to peek at its romaji and hear it.</p>
+        <p class="lead">${kata
+          ? "English, spelled out in katakana. Sound each sentence out and you'll hear what it says."
+          : "Real sentences in hiragana from Tofugu's practice sheets. Don't worry about the meaning — make sure you can read every kana and sound it out loud."}
+          Tap a kana to peek at its romaji and hear it.</p>
         <div class="row" style="margin-bottom:1rem">
-          ${READING.map((_, j) => `<a class="btn ${j === sheet ? "" : "ghost"}" href="#reading/${j}/0">Practice #${j + 1}</a>`).join("")}
+          ${READING.map((_, j) => `<a class="btn ${j === sheet ? "" : "ghost"}" href="#reading/${j}/0">${j === 2 ? "Katakana" : `Practice #${j + 1}`}</a>`).join("")}
           <span class="spacer"></span><a class="small" href="${docUrl("p" + sheet)}" target="_blank" rel="noopener">Printable original ↗</a>
         </div>
         <div class="dots">${list.map((_, j) => `<button class="dot ${done.has(`${sheet}-${j}`) ? "done" : ""} ${j === i ? "here" : ""}" data-j="${j}">${j + 1}</button>`).join("")}</div>
         <div class="panel" style="margin-top:1rem">
           <div class="sentence ${showAll ? "show-all" : ""}" id="sent">${tokens(text).map((t) =>
-            /[\u3041-\u309f]/.test(t) ? `<span class="tok" data-r="${esc(toRomaji(t))}">${esc(t)}</span>` : esc(t)).join("")}</div>
+            [...t].some(isKana) ? `<span class="tok" data-r="${esc(toRomaji(t))}">${esc(t)}</span>` : esc(t)).join("")}</div>
           ${showAll ? `<div class="romaji-line">${esc(toRomaji(text))}</div>` : ""}
-          <p class="muted small">Romaji here is letter by letter: as particles, は is said <b>wa</b>, へ is said <b>e</b> and を is said <b>o</b>.</p>
+          ${kata ? "" : `<p class="muted small">Romaji here is letter by letter: as particles, は is said <b>wa</b>, へ is said <b>e</b> and を is said <b>o</b>.</p>`}
         </div>
         <div class="row" style="margin-top:1rem">
           <button class="ghost" id="prev" ${i === 0 ? "disabled" : ""}>← Prev</button>
@@ -742,7 +794,7 @@
         const t = e.target.closest(".tok");
         if (!t) return;
         t.classList.toggle("peek");
-        if (CLIPS.has(t.textContent)) say(t.textContent);
+        if (clipFor(t.textContent)) say(t.textContent);
       });
       app.querySelectorAll(".dot").forEach((d) => d.addEventListener("click", () => go(+d.dataset.j)));
       app.querySelector("#prev").addEventListener("click", () => go(i - 1));
@@ -778,24 +830,33 @@
     const cell = (k) => k
       ? `<td class="box-${boxOf(k.kana)}" data-kana="${esc(k.kana)}"><span class="kana">${esc(k.kana)}</span><small>${esc(k.romaji)}</small></td>`
       : `<td class="empty"></td>`;
-    const table = (kinds, width, slot) => `<div class="chart-wrap"><table class="chart">${groups.filter((g) => kinds.includes(g.kind)).map((g) => {
-      const row = Array(width).fill(null);
-      const extra = [];
-      g.kana.forEach((k) => { const at = slot(k); at === null ? extra.push(k) : (row[at] = k); });
-      return `<tr>${row.map(cell).join("")}</tr>${extra.map((k) => `<tr>${cell(k)}${Array(width - 1).fill(cell(null)).join("")}</tr>`).join("")}`;
+    // One row per group; a kana whose spot is taken opens another row [シェ, ジェ and チェ all sit under e].
+    const table = (script, kind, width, slot) => `<div class="chart-wrap"><table class="chart">${groups.filter((g) => g.kind === kind && g.script === script).map((g) => {
+      const rows = [Array(width).fill(null)];
+      g.kana.forEach((k) => {
+        const at = slot(k) ?? 0;
+        const row = rows.find((r) => !r[at]) || rows[rows.push(Array(width).fill(null)) - 1];
+        row[at] = k;
+      });
+      return rows.map((r) => `<tr>${r.map(cell).join("")}</tr>`).join("");
     }).join("")}</table></div>`;
-    const bySound = (k) => (k.kana === "ん" ? null : VOWEL[k.romaji.slice(-1)]);
-    const all = KANA;
-    const mastered = all.filter((k) => boxOf(k.kana) >= 3).length;
+    const bySound = (k) => VOWEL[k.romaji.slice(-1)];
+    const byYouon = (k) => ({ a: 0, u: 1, o: 2 })[k.romaji.slice(-1)];
+    const mastered = (script) => `${KANA.filter((k) => k.script === script && boxOf(k.kana) >= 3).length} of ${KANA.filter((k) => k.script === script).length} known`;
     app.innerHTML = `
-      <h1>Hiragana chart</h1>
-      <p class="lead">Every kana, coloured by how well you know it. Click one for its mnemonic.
-        ${mastered} of ${all.length} known.</p>
+      <h1>Kana chart</h1>
+      <p class="lead">Every kana, coloured by how well you know it. Click one for its mnemonic.</p>
       <div class="legend"><span class="box-0"></span> new <span class="box-1"></span> missed lately
         <span class="box-2"></span><span class="box-3"></span><span class="box-4"></span><span class="box-5"></span> known → solid</div>
-      <h2>Main kana</h2>${table(["main"], 5, bySound)}
-      <h2>Dakuten & han-dakuten</h2>${table(["dakuten"], 5, bySound)}
-      <h2>Combinations</h2>${table(["youon"], 3, (k) => ({ a: 0, u: 1, o: 2 })[k.romaji.slice(-1)])}
+      <h2>Hiragana <span class="muted small">· ${mastered("hiragana")}</span></h2>
+      <h3>Main kana</h3>${table("hiragana", "main", 5, bySound)}
+      <h3>Dakuten & han-dakuten</h3>${table("hiragana", "dakuten", 5, bySound)}
+      <h3>Combinations</h3>${table("hiragana", "youon", 3, byYouon)}
+      <h2 style="margin-top:2.5rem">Katakana <span class="muted small">· ${mastered("katakana")}</span></h2>
+      <h3>Main kana</h3>${table("katakana", "main", 5, bySound)}
+      <h3>Dakuten & han-dakuten</h3>${table("katakana", "dakuten", 5, bySound)}
+      <h3>Combinations</h3>${table("katakana", "youon", 3, byYouon)}
+      <h3>Extended sounds</h3>${table("katakana", "extended", 5, bySound)}
       <div class="row" style="margin-top:2rem;justify-content:center">
         <a class="btn ghost" href="https://www.tofugu.com/japanese/hiragana-mnemonics-chart/" target="_blank" rel="noopener">Tofugu's illustrated mnemonic chart ↗</a>
         <button class="ghost" id="reset">Reset my progress</button>
@@ -834,8 +895,9 @@
   async function loadContent() {
     try {
       const c = await backend.content();
-      SHEETS = c.sheets;
-      READING = c.reading;
+      // Katakana sits under its own key so an older deploy still reads this file [c.katakana.sheets].
+      SHEETS = [...c.sheets.map((s) => ({ ...s, script: "hiragana" })), ...(c.katakana?.sheets || []).map((s) => ({ ...s, script: "katakana" }))];
+      READING = [...c.reading, ...(c.katakana ? [c.katakana.reading] : [])];
       contentError = "";
     } catch (e) {
       contentError = e?.message || String(e);

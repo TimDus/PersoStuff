@@ -24,9 +24,21 @@ const sheets = meta.map(([id, title]) => {
 const reading = ["p1", "p2"].map((key) => read(key).split(/\r?\n/).map((l) => l.trim())
   .filter((l) => l && /[\u3040-\u309f]/.test(l) && !/[A-Za-z]/.test(l)));
 
+// Katakana sheets in guide order, the ten-kana steps [k-ak drills ア to コ].
+const kataMeta = [["k-ak", "ア–コ: vowels & K"], ["k-st", "サ–ト: S & T"], ["k-nh", "ナ–ホ: N & H"], ["k-my", "マ–ヨ: M & Y"], ["k-rwn", "ラ–ン: R, W & N"]];
+const kataSheets = kataMeta.map(([id, title]) => {
+  const text = read(path.join("katakana", id));
+  const rounds = text.split(/Take a \d+ minute break/)
+    .map((part) => part.split(/\r?\n/).filter((l) => l.startsWith("\t") && l.trim()).map((l) => l.trim()))
+    .filter((cells) => cells.length);
+  return { id, title, instructions: text.split(/\r?\n/)[0].trim(), rounds };
+});
+const kataReading = read(path.join("katakana", "k-reading")).split(/\r?\n/).map((l) => l.trim())
+  .filter((l) => l && [...l].some((c) => c.codePointAt(0) >= 0x30a1 && c.codePointAt(0) <= 0x30ff) && !/[A-Za-z]/.test(l));
+
 fs.mkdirSync(path.join(outDir, "audio"), { recursive: true });
 fs.mkdirSync(path.join(outDir, "img"), { recursive: true });
-fs.writeFileSync(path.join(outDir, "worksheets.json"), JSON.stringify({ sheets, reading }));
+fs.writeFileSync(path.join(outDir, "worksheets.json"), JSON.stringify({ sheets, reading, katakana: { sheets: kataSheets, reading: kataReading } }));
 
 let clips = 0;
 for (const file of fs.readdirSync(audioDir).filter((f) => f.endsWith(".mp3"))) {
@@ -38,4 +50,4 @@ for (const file of fs.readdirSync(imageDir).filter((f) => /\.(png|jpg)$/.test(f)
   fs.copyFileSync(path.join(imageDir, file), path.join(outDir, imagePath(file.replace(/\.(png|jpg)$/, ""))));
   images++;
 }
-console.log(`${sheets.length} worksheets [${sheets.map((s) => s.rounds.length).join(",")} rounds], ${reading.map((r) => r.length).join("+")} sentences, ${clips} clips, ${images} images -> ${outDir}`);
+console.log(`${sheets.length} worksheets [${sheets.map((s) => s.rounds.length).join(",")} rounds], ${reading.map((r) => r.length).join("+")} sentences, ${clips} clips, ${images} images, katakana: ${kataSheets.length} worksheets, ${kataReading.length} sentences -> ${outDir}`);
