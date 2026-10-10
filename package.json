@@ -3,7 +3,9 @@
   "private": true,
   "scripts": {
     "test": "node --test \"tests/*.test.js\"",
-    "build-content": "node tools/build-content.js _research audio content"
+    "build-content": "node tools/build-content.js _research audio content",
+    "upload-content": "node tools/upload-content.js",
+    "verify-db": "bash tools/psql.sh -q -f supabase/verify.sql"
   },
   "devDependencies": {
     "playwright": "^1.56.0"
