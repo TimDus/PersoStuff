@@ -287,3 +287,19 @@ test("the long-vowel step hides its Show button once the answer is out", async (
   assert.match(await page.textContent("#burger"), /^beekonchiizubaagaa/);
   await page.close();
 });
+
+// "Again" restarts a run in place, without the cleanup a page change does; the old run's timer and keys must not survive it.
+test("pressing Again on a finished quiz leaves one timer running", async () => {
+  const page = await open(listed, "#quiz/a/1");
+  for (let n = 0; n < 5; n++) {
+    await page.type("#in", await romajiOf(page, await page.textContent("#kana")));
+    await page.waitForTimeout(250);
+  }
+  await page.waitForTimeout(3000);
+  await page.click("#re");
+  const seen = new Set();
+  for (let n = 0; n < 14; n++) { seen.add(await page.textContent("#time")); await page.waitForTimeout(100); }
+  assert.deepEqual([...seen].filter((t) => t !== "0:00" && t !== "0:01"), [], `timer showed ${[...seen].join(", ")}`);
+  await page.close();
+});
+

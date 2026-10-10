@@ -407,6 +407,7 @@
   }
 
   function runCards(deck, reverse, sel) {
+    cleanup();
     // Weakest first, shuffled within a box [every box-1 card before any box-3 card].
     let queue = shuffle([...deck]).sort((a, b) => boxOf(a.kana) - boxOf(b.kana));
     const missed = new Set();
@@ -508,6 +509,7 @@
   }
 
   function runQuiz(list, rounds, bestKey) {
+    cleanup();
     const queue = [];
     for (let i = 0; i < rounds; i++) queue.push(...shuffle([...list]));
     const total = queue.length;
@@ -882,10 +884,14 @@
   setFont(store.get("font", false));
 
   const routes = { learn: viewLearn, cards: viewCards, quiz: viewQuiz, sheets: viewSheets, reading: viewReading, chart: viewChart };
-  function route() {
+  // Stops the timers and key handlers of whatever was on screen [a finished quiz's clock].
+  function cleanup() {
     document.querySelectorAll(".modal-back").forEach((m) => m.remove());
     teardown.forEach((fn) => fn());
     teardown = [];
+  }
+  function route() {
+    cleanup();
     const [tab, ...rest] = decodeURIComponent(location.hash.slice(1)).split("/");
     const view = routes[tab] ? tab : "learn";
     document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.dataset.tab === view));
