@@ -126,7 +126,7 @@ test("progress from another device merges in, and new answers sync back", async 
 test("offline after a past sign-in: lessons work, worksheets explain why not", async () => {
   const page = await open({ user: me, allowed: true, offline: true, local: { "sync.allowed": true } }, "#learn");
   assert.equal(await page.locator("nav").isVisible(), true);
-  assert.equal(await page.locator(".lesson-card").count(), 13 + 10);
+  assert.equal(await page.locator(".lesson-card").count(), 17 + 14);
   assert.match(await page.textContent("#sync-note"), /Offline/);
   await page.goto(base + "#sheets");
   assert.match(await page.textContent("main"), /Can't load the worksheets/);
@@ -280,7 +280,7 @@ test("katakana sentences read as romaji, long vowels and small vowels included",
 });
 
 test("the long-vowel step hides its Show button once the answer is out", async () => {
-  const page = await open(listed, "#learn/k9");
+  const page = await open(listed, "#learn/k13");
   assert.equal(await page.locator("#burger").isVisible(), false);
   await page.click("#reveal-burger");
   assert.equal(await page.locator("#reveal-burger").isVisible(), false);
@@ -338,7 +338,7 @@ test("another account signing in on this browser doesn't inherit the last one's 
 test("a boot with nothing new doesn't write the row again", async () => {
   const row = { progress: { か: { box: 4, right: 6, wrong: 0 } }, "quiz.best": {}, "sheets.done": {}, "reading.done": [], resetAt: 0, savedAt: 50 };
   const page = await open({ user: me, allowed: true, remote: row, local: { progress: row.progress, "sync.savedAt": 50 } }, "#learn");
-  assert.equal(await page.locator(".lesson-card").count(), 13 + 10);
+  assert.equal(await page.locator(".lesson-card").count(), 17 + 14);
   assert.deepEqual(await saves(page), []);
   await page.close();
 });
@@ -423,14 +423,18 @@ test("a dakuten kana past the first in its column explains itself, not the colum
   await page.close();
 });
 
-// Dakuten lessons showed bare cells that needed a click per kana; they show full cards like the main kana now.
-test("a dakuten lesson shows each kana's card on the page, no popup needed", async () => {
+// Dakuten lessons showed bare cells that needed a click per kana, all 25 on one page; each column is its own step of full cards now.
+test("each dakuten column is its own step of full cards, no popup needed", async () => {
   const page = await open(listed, "#learn/10");
-  assert.equal(await page.locator(".kana-card").count(), 25);
+  assert.equal(await page.textContent("main h1"), "が ぎ ぐ げ ご");
+  assert.equal(await page.locator(".kana-card").count(), 5);
   const gi = page.locator(".kana-card", { has: page.locator(".big", { hasText: /^ぎ$/ }) });
   assert.match(await gi.textContent(), /き \(ki\) \+ ゛ = ぎ \(gi\)/);
   assert.equal(await page.locator(".kana-card .art-toggle").count(), 0, "Tofugu drew no dakuten");
+  await page.goto(base + "#learn/14");
+  assert.equal(await page.textContent("main h1"), "ぱ ぴ ぷ ぺ ぽ");
+  assert.equal(await page.locator(".task a", { hasText: "Worksheet" }).getAttribute("href"), "#sheets/dakuten");
   await page.goto(base + "#learn/k6");
-  assert.equal(await page.locator(".kana-card").count(), 25);
+  assert.equal(await page.locator(".kana-card").count(), 5);
   await page.close();
 });

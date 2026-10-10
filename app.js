@@ -319,23 +319,23 @@
       </a>`;
     }).join("");
     app.innerHTML = `
-      <h1>Learn hiragana in 12 steps</h1>
+      <h1>Learn hiragana in ${LESSONS.length} steps</h1>
       <p class="lead">Follow Tofugu's order: learn a column with its mnemonics, quiz everything so far, then do the worksheet.
         Don't practise writing yet — reading comes first.</p>
       <div class="grid">
         ${cards(TRACKS.hiragana)}
         <a class="panel lesson-card" href="#reading">
-          <div class="step">Step 13</div><div class="title">よみましょう</div>
+          <div class="step">Step ${LESSONS.length + 1}</div><div class="title">よみましょう</div>
           <div class="muted">Reading practice · 24 sentences</div>
         </a>
       </div>
-      <h1 style="margin-top:2.5rem">Then katakana in 9 steps</h1>
+      <h1 style="margin-top:2.5rem">Then katakana in ${KATA_LESSONS.length} steps</h1>
       <p class="lead">Katakana spells foreign words and names with the same sounds you already know, so it goes faster.
         Ten kana a step, then the sounds hiragana doesn't have.</p>
       <div class="grid">
         ${cards(TRACKS.katakana)}
         <a class="panel lesson-card" href="${TRACKS.katakana.reading}">
-          <div class="step">Step 10</div><div class="title">リーディング</div>
+          <div class="step">Step ${KATA_LESSONS.length + 1}</div><div class="title">リーディング</div>
           <div class="muted">Reading practice · English in katakana</div>
         </a>
       </div>`;
@@ -353,14 +353,9 @@
               ${k.lookalike ? `<div class="look">Look-alike: ${esc(k.lookalike)}</div>` : ""}</div>
             ${artBtn(k.kana)}
           </div>`;
-    const kind = lessonGroups[0]?.kind;
-    // Dakuten get full cards per column, the column's story on its first card [が carries the car crash, ぎ reads き + ゛].
-    const kanaCards = kind === "main"
+    // Main and dakuten steps get a full card per kana, the rest a cell per kana [ぎ's card reads き + ゛, きゃ opens a popup].
+    const kanaCards = ["main", "dakuten"].includes(lessonGroups[0]?.kind)
       ? `<div class="kana-list">${lessonGroups.flatMap((g) => g.kana).map(card).join("")}</div>`
-      : kind === "dakuten"
-      ? lessonGroups.map((g) => `
-          <h2 class="jp">${g.kana.map((k) => esc(k.kana)).join(" ")}</h2>
-          <div class="kana-list">${g.kana.map(card).join("")}</div>`).join("")
       : lessonGroups.map((g) => `
           <h2 class="jp">${g.kana.map((k) => esc(k.kana)).join(" ")}</h2>
           <p class="muted">${esc(g.note)}</p>
