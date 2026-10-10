@@ -1,0 +1,11 @@
+{
+  "name": "hiragana-flashcards",
+  "private": true,
+  "scripts": {
+    "test": "node --test \"tests/*.test.js\"",
+    "build-content": "node tools/build-content.js _research audio content"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.0"
+  }
+}

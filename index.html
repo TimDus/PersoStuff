@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ひらがな Flashcards</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#learn"><span class="brand-kana">ひ</span> Hiragana</a>
+    <nav>
+      <a href="#learn" data-tab="learn">Learn</a>
+      <a href="#cards" data-tab="cards"><span class="long">Flashcards</span><span class="short">Cards</span></a>
+      <a href="#quiz" data-tab="quiz">Quiz</a>
+      <a href="#sheets" data-tab="sheets"><span class="long">Worksheets</span><span class="short">Sheets</span></a>
+      <a href="#reading" data-tab="reading">Reading</a>
+      <a href="#chart" data-tab="chart">Chart</a>
+    </nav>
+    <button id="font-toggle" class="ghost" title="Switch kana font">Font: Gothic</button>
+  </header>
+  <main id="app"></main>
+  <footer>
+    <div id="account"></div>
+    Based on <a href="https://www.tofugu.com/japanese/learn-hiragana/" target="_blank" rel="noopener">Tofugu's Learn Hiragana guide</a>
+    and its worksheets.
+  </footer>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
+  <script src="config.js"></script>
+  <script src="data.js"></script>
+  <script src="sync.js"></script>
+  <script src="backend.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

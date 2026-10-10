@@ -1,0 +1,11 @@
+# Secrets [the database password lives in .env].
+.env
+.env.*
+
+# Tofugu's worksheets and audio, which belong in the private Supabase bucket rather than in a public repo.
+_research/
+audio/
+content/
+worksheets.js
+
+node_modules/

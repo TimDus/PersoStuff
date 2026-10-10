@@ -1,0 +1,53 @@
+// Progress from two devices has to combine without losing answers, and a reset has to stay reset.
+// Without these, the first sign-in on a second device would overwrite a week of phone practice with an empty PC copy,
+// and "Reset my progress" would come straight back from whichever device synced next.
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const { merge, clipPath } = require("../sync.js");
+
+const side = (over) => ({ progress: {}, "quiz.best": {}, "sheets.done": {}, "reading.done": [], savedAt: 100, resetAt: 0, ...over });
+
+test("kana known on either device end up on both", () => {
+  const m = merge(side({ progress: { か: { box: 3, right: 4, wrong: 0 } } }), side({ progress: { き: { box: 2, right: 1, wrong: 1 } } }));
+  assert.deepEqual(Object.keys(m.progress).sort(), ["か", "き"]);
+});
+
+test("the copy with more answers wins over a higher box", () => {
+  const lots = { box: 2, right: 9, wrong: 3 };
+  const few = { box: 4, right: 3, wrong: 0 };
+  assert.deepEqual(merge(side({ progress: { か: few } }), side({ progress: { か: lots } })).progress.か, lots);
+  assert.deepEqual(merge(side({ progress: { か: lots } }), side({ progress: { か: few } })).progress.か, lots);
+});
+
+test("quiz bests keep higher accuracy, then the faster time", () => {
+  const m = merge(
+    side({ "quiz.best": { "a/1": { ms: 9000, acc: 100 }, "k/1": { ms: 5000, acc: 90 } } }),
+    side({ "quiz.best": { "a/1": { ms: 4000, acc: 80 }, "k/1": { ms: 4000, acc: 90 } } }),
+  );
+  assert.deepEqual(m["quiz.best"]["a/1"], { ms: 9000, acc: 100 });
+  assert.deepEqual(m["quiz.best"]["k/1"], { ms: 4000, acc: 90 });
+});
+
+test("worksheet scores keep the best and read sentences add up", () => {
+  const m = merge(side({ "sheets.done": { k: 95 }, "reading.done": ["0-1"] }), side({ "sheets.done": { k: 80, s: 50 }, "reading.done": ["0-1", "1-4"] }));
+  assert.deepEqual(m["sheets.done"], { k: 95, s: 50 });
+  assert.deepEqual(m["reading.done"], ["0-1", "1-4"]);
+});
+
+test("a first sync against an empty account keeps everything local", () => {
+  const local = side({ progress: { か: { box: 3, right: 4, wrong: 0 } }, savedAt: 500 });
+  assert.deepEqual(merge(local, null), local);
+});
+
+test("a device that last saved before a reset can't bring old progress back", () => {
+  const resetPc = side({ savedAt: 1000, resetAt: 1000 });
+  const stalePhone = side({ progress: { か: { box: 5, right: 20, wrong: 0 } }, savedAt: 900 });
+  assert.deepEqual(merge(resetPc, stalePhone).progress, {});
+  const phoneAfter = side({ progress: { き: { box: 2, right: 1, wrong: 0 } }, savedAt: 1100 });
+  assert.deepEqual(Object.keys(merge(resetPc, phoneAfter).progress), ["き"]);
+});
+
+test("clip names are the kana's code points in hex", () => {
+  assert.equal(clipPath("あ"), "audio/3042.mp3");
+  assert.equal(clipPath("かっこ"), "audio/304b-3063-3053.mp3");
+});
