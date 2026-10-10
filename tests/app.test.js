@@ -395,3 +395,25 @@ test("the last worksheet of each script leads to that script's reading", async (
   }
   await page.close();
 });
+
+// Quiz and flashcards once shuffled, so a step 9 kana came up before a step 8 one; both follow the Learn steps now.
+test("quiz and flashcards ask kana in Learn order, whatever order the link lists them", async () => {
+  const learn = ["ら", "り", "る", "れ", "ろ", "わ", "を", "ん"];
+  const page = await open(listed, "#quiz/w,r/1");
+  const asked = [];
+  for (let n = 0; n < learn.length; n++) {
+    asked.push(await page.textContent("#kana"));
+    await answerOne(page);
+    await page.waitForTimeout(250);
+  }
+  assert.deepEqual(asked, learn);
+  await page.goto(base + "#cards/w,r");
+  const flipped = [];
+  for (let n = 0; n < learn.length; n++) {
+    flipped.push(await page.textContent("#card .front .kana"));
+    await page.click("#card");
+    await page.click("#got");
+  }
+  assert.deepEqual(flipped, learn);
+  await page.close();
+});
