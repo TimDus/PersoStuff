@@ -180,6 +180,7 @@
   const artBtn = (kana) => (ART.has(kana)
     ? `<div class="art-slot" data-art="${esc(kana)}"><button class="ghost art-toggle" type="button">Show illustration</button></div>`
     : "");
+  const strokeBtn = window.HiraStrokes.button;
   document.addEventListener("click", async (e) => {
     const b = e.target.closest(".art-toggle");
     if (!b) return;
@@ -254,7 +255,7 @@
       <div class="big-number">${esc(k.romaji)} ${speakBtn(k.kana)}</div>
       <p>${esc(k.mnemonic)}</p>
       ${k.lookalike ? `<p class="muted small">Look-alike: ${esc(k.lookalike)}</p>` : ""}
-      ${artBtn(k.kana)}
+      ${artBtn(k.kana)}${strokeBtn(k.kana)}
       <p class="muted small">${p ? `${p.right} right · ${p.wrong} wrong` : "Not practised yet"}</p>`);
   }
 
@@ -372,7 +373,7 @@
             <div><div class="rom">${esc(k.romaji)} ${speakBtn(k.kana)}</div>
               <div>${esc(k.mnemonic)}</div>
               ${k.lookalike ? `<div class="look">Look-alike: ${esc(k.lookalike)}</div>` : ""}</div>
-            ${artBtn(k.kana)}
+            ${artBtn(k.kana)}${strokeBtn(k.kana)}
           </div>`;
     // A row of cards per column where the column is the lesson [しゃ しゅ しょ side by side under "し (shi) + small ゃゅょ"].
     const row = (g) => `
@@ -474,7 +475,7 @@
             <button class="bad" id="again" disabled>Again <span class="kbd">1</span></button>
             <button class="good" id="got" disabled>Got it <span class="kbd">2</span></button>
           </div>
-          <div class="card-art">${artBtn(k.kana)}</div>
+          <div class="card-art">${artBtn(k.kana)}${strokeBtn(k.kana)}</div>
         </div>`;
       app.querySelector("#card").addEventListener("click", (e) => { if (!e.target.closest("[data-say]")) flip(); });
       app.querySelector("#again").addEventListener("click", () => answer(false));

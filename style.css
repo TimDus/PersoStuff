@@ -194,7 +194,7 @@ button.bad { background: var(--bad); border-color: var(--bad); }
 
 /* Modal */
 .modal-back { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 1rem; }
-.modal { max-width: 380px; width: 100%; text-align: center; }
+.modal { max-width: 380px; width: 100%; text-align: center; max-height: calc(100dvh - 2rem); overflow-y: auto; }
 .modal .kana { font-size: 6rem; line-height: 1.1; }
 
 .speak { background: transparent; border: 1px solid var(--line); color: var(--ink); padding: .2rem .55rem; border-radius: 8px; font-size: .9rem; }
@@ -255,6 +255,26 @@ body.has-media .art-slot { display: block; }
 /* The drawing gives the answer away, so on a flashcard it waits for the flip [あ's drawing shows a capital A]. */
 .stage .card-art { visibility: hidden; width: min(420px, 100%); text-align: center; }
 .stage.flipped .card-art { visibility: visible; }
+
+/* Stroke order, drawn one stroke after another [each 0.5s, 0.6s apart, so あ takes 1.7s].
+   The gap is twice the path so a waiting stroke shows nothing [dasharray 1 left a round-cap dot at the end of あ's 3rd stroke]. */
+.stroke-slot { margin-top: .6rem; }
+.kana-card .stroke-slot { flex-basis: 100%; margin-top: -.4rem; }
+.stroke-toggle { font-size: .85rem; padding: .3rem .75rem; }
+.strokes { display: flex; gap: .5rem; justify-content: center; margin-top: .5rem; cursor: pointer; }
+.strokes svg { width: 120px; max-width: 100%; height: auto; aspect-ratio: 1; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
+/* A combination card is a narrow column, so its slot stays in the flow and its boxes stack [102 px wide at 360]. */
+.kana-row .kana-card .stroke-slot { flex-basis: auto; margin-top: 0; width: 100%; }
+.kana-row .stroke-toggle { max-width: 100%; padding: .3rem .5rem; }
+.kana-row .strokes { flex-direction: column; align-items: center; }
+.strokes path { fill: none; stroke: var(--ink); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 1 2; stroke-dashoffset: 1; animation: stroke-draw .5s ease-out forwards; animation-delay: calc(var(--i) * .6s); }
+.strokes text { font-size: 8px; fill: var(--accent); opacity: 0; animation: stroke-num .1s forwards; animation-delay: calc(var(--i) * .6s); }
+@keyframes stroke-draw { to { stroke-dashoffset: 0; } }
+@keyframes stroke-num { to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .strokes path, .strokes text { animation: none; stroke-dashoffset: 0; opacity: 1; }
+}
 .picker-script { margin: 1.4rem 0 0; font-size: 1.05rem; color: var(--accent); }
 .picker-script:first-child { margin-top: 0; }
 /* Author display rules beat the browser's own [hidden] rule, so restate it [the long-vowel Show button stayed visible]. */

@@ -577,3 +577,135 @@ test("a finished quiz offers the missed plus the slowest quarter, and drills the
   assert.deepEqual([...new Set(seen)].sort(), [missed, ...slow].sort());
   await page.close();
 });
+
+// Stroke order opens on request and closes again [あ draws 3 numbered strokes, a second press clears them].
+test("a lesson card draws a kana's strokes in order on request, and hides them again", async () => {
+  const page = await open(listed, "#learn/1");
+  const card = page.locator(".kana-card").first();
+  assert.equal(await card.locator(".strokes").count(), 0);
+  await card.locator(".stroke-toggle").click();
+  await card.locator(".strokes path").first().waitFor();
+  assert.equal(await card.locator(".strokes path").count(), 3);
+  assert.deepEqual(await card.locator(".strokes text").allTextContents(), ["1", "2", "3"]);
+  await card.locator(".stroke-toggle").click();
+  assert.equal(await card.locator(".strokes").count(), 0);
+  await page.close();
+});
+
+test("a combination kana shows the strokes of each of its characters", async () => {
+  const page = await open(listed, "#chart");
+  await page.click("td[data-kana='キャ']");
+  await page.click(".modal .stroke-toggle");
+  await page.locator(".modal .strokes path").first().waitFor();
+  const counts = await page.locator(".modal .strokes svg").evaluateAll((svgs) => svgs.map((s) => s.querySelectorAll("path").length));
+  assert.deepEqual(counts, [3, 2]);
+  // ャ draws after キ instead of alongside it [its first stroke is the 4th, delay index 3].
+  assert.equal(await page.locator(".modal .strokes svg").nth(1).locator("path").first().evaluate((p) => p.style.getPropertyValue("--i")), "3");
+  await page.close();
+});
+
+test("a flashcard's stroke order waits behind the flip with the drawing", async () => {
+  const page = await open(listed, "#cards/a");
+  assert.equal(await page.locator(".card-art .stroke-toggle").count(), 1);
+  assert.equal(await page.locator(".card-art").evaluate((e) => getComputedStyle(e).visibility), "hidden");
+  await page.close();
+});
+
+test("stroke order that fails to load says so, and the next press tries again", async () => {
+  const page = await open(listed, "#learn/1");
+  let calls = 0;
+  await page.route("**/data/strokes.json", (r) => (++calls === 1 ? r.abort() : r.continue()));
+  const toggle = page.locator(".kana-card").first().locator(".stroke-toggle");
+  await toggle.click();
+  await page.waitForFunction(() => /Can.t load/.test(document.querySelector(".stroke-toggle").textContent));
+  await toggle.click();
+  await page.locator(".kana-card").first().locator(".strokes path").first().waitFor();
+  assert.equal(calls, 2);
+  await page.close();
+});
+
+// A stroke that hasn't started showed a dot where it ends [round cap on a dash pattern exactly one path long].
+test("a stroke waiting its turn puts no ink on screen", async () => {
+  const page = await open(listed, "#learn/1");
+  await page.addStyleTag({ content: "* { animation-play-state: paused !important; }" });
+  await page.locator(".kana-card").first().locator(".stroke-toggle").click();
+  const svg = page.locator(".kana-card .strokes svg").first();
+  await svg.locator("path").first().waitFor({ state: "attached" });
+  const png = (await svg.screenshot()).toString("base64");
+  const ink = await page.evaluate(async (b64) => {
+    const img = new Image();
+    img.src = "data:image/png;base64," + b64;
+    await img.decode();
+    const c = Object.assign(document.createElement("canvas"), { width: img.width, height: img.height });
+    c.getContext("2d").drawImage(img, 0, 0);
+    const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] < 120 && d[i + 1] < 120 && d[i + 2] < 120) n++;
+    return n;
+  }, png);
+  assert.equal(ink, 0);
+  await page.close();
+});
+
+// The slot copied the drawing's full-width rule, which in a combination card's column layout pushed the button into the
+// next card [on #learn/15 at 360 px the button sat at x 118–202 under きゅ, and the page grew to 422 px].
+test("on a phone, a combination card keeps its stroke order inside the card", async () => {
+  const page = await open(listed, "#learn/15");
+  await page.setViewportSize({ width: 360, height: 740 });
+  const outside = () => page.locator(".kana-row .kana-card").evaluateAll((cards) => cards.filter((c) => {
+    const box = c.getBoundingClientRect();
+    return [...c.querySelectorAll(".stroke-toggle, .strokes svg")].some((el) => {
+      const r = el.getBoundingClientRect();
+      return r.left < box.left - 0.5 || r.right > box.right + 0.5;
+    });
+  }).length);
+  assert.equal(await outside(), 0);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 360);
+  await page.locator(".kana-row .stroke-toggle").first().click({ timeout: 3000 });
+  await page.locator(".kana-row .strokes path").first().waitFor();
+  assert.equal(await outside(), 0);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 360);
+  await page.close();
+});
+
+// The popup grew past a phone screen once the strokes opened under the drawing [シ ran from y -91 to 731 on a 640 px screen].
+test("on a phone, the chart popup with drawing and strokes open fits the screen and still closes", async () => {
+  const page = await open(listed, "#chart");
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.click("td[data-kana='シ']");
+  await page.click(".modal .art-toggle");
+  await page.locator(".modal img.art").waitFor();
+  await page.click(".modal .stroke-toggle");
+  await page.locator(".modal .strokes path").first().waitFor();
+  const box = await page.locator(".modal").boundingBox();
+  assert.ok(box.y >= 0 && box.y + box.height <= 640, `modal spans y ${box.y} to ${box.y + box.height}`);
+  await page.click(".modal [data-close]", { timeout: 3000 });
+  assert.equal(await page.locator(".modal").count(), 0);
+  await page.close();
+});
+
+test("clicking a drawn kana plays its strokes again from the first", async () => {
+  const page = await open(listed, "#learn/1");
+  await page.locator(".kana-card .stroke-toggle").first().click();
+  await page.locator(".kana-card .strokes path").first().waitFor();
+  await page.evaluate(() => { document.querySelector(".strokes svg").__old = true; });
+  await page.click(".kana-card .strokes");
+  assert.equal(await page.evaluate(() => document.querySelector(".strokes svg").__old), undefined);
+  await page.close();
+});
+
+test("a second press while the strokes are still loading cancels them", async () => {
+  const page = await open(listed, "#learn/1");
+  let release;
+  const held = new Promise((r) => { release = r; });
+  await page.route("**/data/strokes.json", async (r) => { await held; r.continue(); });
+  const toggle = page.locator(".kana-card").first().locator(".stroke-toggle");
+  await toggle.click();
+  await toggle.click();
+  release();
+  await page.waitForResponse("**/data/strokes.json");
+  await page.waitForTimeout(200);
+  assert.equal(await page.locator(".strokes").count(), 0);
+  assert.equal(await toggle.textContent(), "Stroke order");
+  await page.close();
+});

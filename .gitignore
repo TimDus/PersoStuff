@@ -13,3 +13,6 @@ node_modules/
 
 # Personal Claude Code notes for this machine.
 CLAUDE.local.md
+
+# Raw open-data downloads that tools/ trim into data/ [KanjiVG's 6,703 SVGs become a 51 KB strokes.json].
+_data/
