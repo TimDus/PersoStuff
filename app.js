@@ -798,7 +798,9 @@
     function draw() {
       const text = list[i];
       const kata = sheet === 2;
+      const step = readingFrom.match(/^#learn\/(k?)(\d+)$/);
       app.innerHTML = `
+        ${readingFrom ? `<p><a id="back" href="${esc(readingFrom)}">← ${step ? `${step[1] ? "Katakana step" : "Step"} ${step[2]}` : "All steps"}</a></p>` : ""}
         <h1>Reading practice</h1>
         <p class="lead">${kata
           ? "English, spelled out in katakana. Sound each sentence out and you'll hear what it says."
@@ -924,10 +926,14 @@
     teardown.forEach((fn) => fn());
     teardown = [];
   }
+  // The page shown before this one, and the Learn page that opened the reading [#learn/26 for small tsu's Reading practice].
+  let lastPage = "", readingFrom = "";
   function route() {
     cleanup();
     const [tab, ...rest] = decodeURIComponent(location.hash.slice(1)).split("/");
     const view = routes[tab] ? tab : "learn";
+    if (view === "reading" && !lastPage.startsWith("#reading")) readingFrom = lastPage.startsWith("#learn") ? lastPage : "";
+    lastPage = view === "learn" ? location.hash || "#learn" : location.hash;
     document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.dataset.tab === view));
     routes[view](rest);
     scrollTo(0, 0);

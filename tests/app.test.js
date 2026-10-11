@@ -483,6 +483,25 @@ test("each extended-sound group is its own step of full cards", async () => {
   await page.close();
 });
 
+// The Learn page's reading card led to a page with no way back but the browser's own button.
+test("reading opened from Learn links back to where it came from, and only then", async () => {
+  const page = await open(listed, "#learn");
+  await page.click(".lesson-card[href='#reading']");
+  assert.equal(await page.getAttribute("#back", "href"), "#learn");
+  await page.click("a.btn >> text=Practice #2");
+  assert.equal(await page.textContent("#back"), "← All steps", "switching sheets keeps the way back");
+  await page.click("#back");
+  await page.waitForSelector(".lesson-card");
+  await page.goto(base + "#learn/26");
+  await page.click("a.btn >> text=Reading practice");
+  assert.equal(await page.textContent("#back"), "← Step 26");
+  await page.goto(base + "#chart");
+  await page.click("nav a[data-tab='reading']");
+  await page.waitForSelector("#sent");
+  assert.equal(await page.locator("#back").count(), 0, "the menu's Reading has nowhere to go back to");
+  await page.close();
+});
+
 // ん waited for Enter on "n" in case "nn" followed, the only kana that didn't move on by itself.
 test("typing n for ん moves on by itself like every other kana", async () => {
   const page = await open(listed, "#quiz/w,k-w/1");
