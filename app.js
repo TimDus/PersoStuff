@@ -374,7 +374,15 @@
               ${k.lookalike ? `<div class="look">Look-alike: ${esc(k.lookalike)}</div>` : ""}</div>
             ${artBtn(k.kana)}
           </div>`;
-    const kanaCards = lessonGroups.length ? `<div class="kana-list">${lessonGroups.flatMap((g) => g.kana).map(card).join("")}</div>` : "";
+    // A row per column where the column is the lesson, a card per kana otherwise [しゃ しゅ しょ share one row under "し (shi) + small ゃゅょ"].
+    const row = (g) => `
+          <div class="panel kana-row"><div class="muted">${esc(g.note)}</div>
+            <div class="row-kana">${g.kana.map((k) => `
+              <div><span class="big">${esc(k.kana)}</span><span class="rom"><b>${esc(k.romaji)}</b>${speakBtn(k.kana)}</span></div>`).join("")}</div>
+          </div>`;
+    const kanaCards = !lessonGroups.length ? ""
+      : l.rows ? `<div class="kana-rows">${lessonGroups.map(row).join("")}</div>`
+      : `<div class="kana-list">${lessonGroups.flatMap((g) => g.kana).map(card).join("")}</div>`;
     const tsu = l.smallTsu ? `
       <p>In romaji you write the next consonant twice: かっこ is <b>kakko</b>. Before ch it becomes t: まっちゃ is <b>matcha</b>.
         Say each pair aloud and feel the pause.</p>

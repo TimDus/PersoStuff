@@ -95,7 +95,7 @@
     const baseRomaji = groups.flatMap((g) => g.kana).find((k) => k[0] === base)[1];
     groups.push({
       id: "y-" + id, label: base + "ゃ", name: `${base}ゃ ${base}ゅ ${base}ょ`, kind: "youon",
-      note: `${base} (${baseRomaji}) + small ゃゅょ: drop the i sound.`,
+      note: `${base} (${baseRomaji}) + small ゃゅょ`,
       kana: [["ゃ", "a"], ["ゅ", "u"], ["ょ", "o"]].map(([small, v]) => [base + small, cons + v, alts.map((a) => a + v)]),
     });
   }
@@ -281,9 +281,9 @@
     ...columnSteps("hiragana", "dakuten", { set: { id: "dakuten", name: "Dakuten", title: "が ざ だ ば ぱ" }, rounds: 3, intro: dakutenIntro,
       first: "Two dashes (゛) voice a sound: k→g, s→z, t→d, h→b. A small circle (゜) turns h into p.",
       mixWith: main, mixText: "Then mix all the dakuten in with everything.", sheet: "dakuten" }),
-    ...columnSteps("hiragana", "youon", { set: { id: "combinations", name: "Combinations", title: "きゃ しゅ ちょ" }, rounds: 2, sub: "Combination kana",
-      first: "An い-row kana plus a small ゃ, ゅ or ょ blends into one syllable: drop the i. き + ゃ = kya, not kiya.",
-      intro: (g) => g.note, sheet: "youon" }),
+    { title: "きゃ しゅ ちょ", sub: "Combination kana", groups: ids("youon"), sheet: "youon", rows: true,
+      intro: "An い-row kana plus a small ゃ, ゅ or ょ blends into one syllable: drop the i. き + ゃ = kya, not kiya.",
+      tasks: [{ quiz: ids("youon"), rounds: 2, text: "Quiz the combinations twice." }] },
     { title: "っ", sub: "Small tsu", groups: [], sheet: null, smallTsu: true,
       intro: "A small っ is a short pause that doubles the next consonant. It has no sound of its own.",
       tasks: [] },
@@ -313,9 +313,9 @@
     ...columnSteps("katakana", "dakuten", { set: { id: "dakuten", name: "Dakuten", title: "ガ ザ ダ バ パ" }, rounds: 3, intro: dakutenIntro,
       first: "These work exactly like hiragana's: k→g, s→z, t→d, h→b, and the circle makes h into p.",
       mixWith: kmain, mixText: "Then mix all the dakuten in with all katakana.", sheet: null }),
-    ...columnSteps("katakana", "youon", { set: { id: "combinations", name: "Combinations", title: "キャ シュ チョ" }, rounds: 2, sub: "Combination katakana",
-      first: "The same rule as hiragana: an イ-row kana plus a small ャ, ュ or ョ, and the i drops out.",
-      intro: (g) => g.note, sheet: null }),
+    { title: "キャ シュ チョ", sub: "Combination katakana", groups: kIds("youon"), sheet: null, rows: true,
+      intro: "The same rule as hiragana: an イ-row kana plus a small ャ, ュ or ョ, and the i drops out.",
+      tasks: [{ quiz: kIds("youon"), rounds: 2, text: "Quiz the combinations twice." }] },
     ...columnSteps("katakana", "extended", { set: { id: "extended", name: "Extended sounds", title: "ファ ティ ヴァ" }, rounds: 2, sub: "Extended sounds",
       first: "Katakana stretches to cover foreign sounds by adding a small ァ, ィ, ゥ, ェ or ォ: fa, ti, wi, va. Being able to read them is enough for now.",
       intro: (g) => g.note, sheet: null }),

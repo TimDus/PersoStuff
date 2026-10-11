@@ -280,7 +280,7 @@ test("katakana sentences read as romaji, long vowels and small vowels included",
 });
 
 test("the long-vowel step hides its Show button once the answer is out", async () => {
-  const page = await open(listed, "#learn/k30");
+  const page = await open(listed, "#learn/k19");
   assert.equal(await page.locator("#burger").isVisible(), false);
   await page.click("#reveal-burger");
   assert.equal(await page.locator("#reveal-burger").isVisible(), false);
@@ -439,45 +439,44 @@ test("each dakuten column is its own step of full cards, no popup needed", async
   await page.close();
 });
 
-// Splitting dakuten and combinations into a step per column put 40 cards on the Learn page; each set is one card that opens its steps.
+// Splitting dakuten and extended sounds into a step per column put 31 cards on the Learn page; each set is one card that opens its steps.
 test("the Learn page shows one card per set, which opens that set's steps", async () => {
   const page = await open(listed, "#learn");
   const hrefs = await page.$$eval(".lesson-card", (as) => as.map((a) => a.getAttribute("href")));
-  assert.deepEqual(hrefs.filter((h) => /dakuten|combinations|extended/.test(h)), ["#learn/dakuten", "#learn/combinations", "#learn/kdakuten", "#learn/kcombinations", "#learn/kextended"]);
-  assert.ok(!hrefs.includes("#learn/10") && hrefs.includes("#learn/26"), "set steps hide, the step after them shows");
+  assert.deepEqual(hrefs.filter((h) => /dakuten|extended/.test(h)), ["#learn/dakuten", "#learn/kdakuten", "#learn/kextended"]);
+  assert.ok(!hrefs.includes("#learn/10") && hrefs.includes("#learn/15"), "set steps hide, the step after them shows");
   assert.match(await page.textContent(".lesson-card[href='#learn/dakuten']"), /Steps 10–14[\s\S]*Dakuten · 5 steps · 25 kana/);
-  await page.click(".lesson-card[href='#learn/combinations']");
-  assert.equal(await page.textContent("main h1"), "Combinations");
+  await page.click(".lesson-card[href='#learn/dakuten']");
+  assert.equal(await page.textContent("main h1"), "Dakuten");
   const steps = await page.$$eval(".lesson-card", (as) => as.map((a) => a.getAttribute("href")));
-  assert.deepEqual(steps, Array.from({ length: 11 }, (_, i) => "#learn/" + (15 + i)));
-  await page.goto(base + "#learn/kcombinations");
-  assert.equal(await page.locator(".lesson-card").count(), 12, "katakana adds ヂャ");
+  assert.deepEqual(steps, Array.from({ length: 5 }, (_, i) => "#learn/" + (10 + i)));
   await page.goto(base + "#learn/kextended");
   assert.equal(await page.locator(".lesson-card").count(), 7);
   await page.close();
 });
 
-// The combinations were one step of 33 cells; each column is its own step of full cards now.
-test("each combination column is its own step of full cards", async () => {
-  const page = await open(listed, "#learn/16");
-  assert.equal(await page.textContent("main h1"), "しゃ しゅ しょ");
-  assert.equal(await page.locator(".kana-card").count(), 3);
-  assert.match(await page.locator(".kana-card").first().textContent(), /し \(shi\) \+ ゃ = しゃ \(sha\)/);
-  assert.equal(decodeURIComponent(await page.locator(".task a", { hasText: "Start quiz" }).getAttribute("href")), "#quiz/y-ky,y-sh/2");
-  assert.equal(await page.getAttribute("main p a[href='#learn/combinations']", "href"), "#learn/combinations");
-  await page.goto(base + "#learn/25");
-  assert.equal(await page.textContent("main h1"), "ぴゃ ぴゅ ぴょ");
+// A step per combination column was 11 steps of 3 kana each; they are one step again, a row per column.
+test("the combinations are one step with a row per column", async () => {
+  const page = await open(listed, "#learn/15");
+  assert.equal(await page.textContent("main h1"), "きゃ しゅ ちょ");
+  assert.equal(await page.locator(".kana-row").count(), 11);
+  assert.equal(await page.locator(".kana-card").count(), 0);
+  const sh = page.locator(".kana-row", { has: page.locator(".big", { hasText: /^しゃ$/ }) });
+  assert.match(await sh.textContent(), /し \(shi\) \+ small ゃゅょ[\s\S]*しゃ\s*sha[\s\S]*しゅ\s*shu[\s\S]*しょ\s*sho/);
+  assert.match(decodeURIComponent(await page.locator(".task a", { hasText: "Start quiz" }).getAttribute("href")), /^#quiz\/y-ky,.*,y-py\/2$/);
   assert.equal(await page.locator(".task a", { hasText: "Worksheet" }).getAttribute("href"), "#sheets/youon");
+  await page.goto(base + "#learn/k11");
+  assert.equal(await page.locator(".kana-row").count(), 12, "katakana adds ヂャ");
   await page.close();
 });
 
 // The extended sounds were one step of 25 cells that each needed a click; each group is its own step of full cards now.
 test("each extended-sound group is its own step of full cards", async () => {
-  const page = await open(listed, "#learn/k25");
+  const page = await open(listed, "#learn/k14");
   assert.equal(await page.textContent("main h1"), "ファ フィ フェ フォ");
   assert.equal(await page.locator(".kana-card").count(), 4);
   assert.match(await page.locator(".kana-card").first().textContent(), /フ \(fu\) \+ ァ = ファ \(fa\)/);
-  await page.goto(base + "#learn/k23");
+  await page.goto(base + "#learn/k12");
   const va = page.locator(".kana-card", { has: page.locator(".big", { hasText: /^ヴァ$/ }) });
   assert.match(await va.textContent(), /ヴ \(vu\) \+ ァ = ヴァ \(va\)/, "spelled from ヴ, listed after it");
   await page.close();
@@ -492,9 +491,9 @@ test("reading opened from Learn links back to where it came from, and only then"
   assert.equal(await page.textContent("#back"), "← All steps", "switching sheets keeps the way back");
   await page.click("#back");
   await page.waitForSelector(".lesson-card");
-  await page.goto(base + "#learn/26");
+  await page.goto(base + "#learn/16");
   await page.click("a.btn >> text=Reading practice");
-  assert.equal(await page.textContent("#back"), "← Step 26");
+  assert.equal(await page.textContent("#back"), "← Step 16");
   await page.goto(base + "#chart");
   await page.click("nav a[data-tab='reading']");
   await page.waitForSelector("#sent");
