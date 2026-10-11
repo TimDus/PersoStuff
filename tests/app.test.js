@@ -544,3 +544,34 @@ test("typing n for ん moves on by itself like every other kana", async () => {
   assert.match(await page.textContent("main"), /100%accuracy/);
   await page.close();
 });
+
+// A quiz only offered the misses back, so a kana you got right after a long think never came up again.
+test("a finished quiz offers the missed plus the slowest quarter, and drills them", async () => {
+  const page = await open(listed, "#quiz/a,k/1");
+  const missed = await page.textContent("#kana");
+  await page.fill("#in", "zz");
+  await page.press("#in", "Enter");
+  await page.keyboard.press("Enter");
+  // Three kana answered at 0.9s, 0.6s and 0.3s against the rest at once [9 clean kana, 25% = 3].
+  const slow = ["こ", "く", "け", "か"].filter((k) => k !== missed).slice(0, 3);
+  const play = async () => {
+    const seen = [];
+    while (!(await page.locator("h1", { hasText: "Done!" }).count())) {
+      const k = await page.textContent("#kana");
+      seen.push(k);
+      const wait = [900, 600, 300][slow.indexOf(k)];
+      if (wait) await page.waitForTimeout(wait);
+      await page.type("#in", await romajiOf(page, k));
+      await page.waitForFunction((n) => document.querySelector("h1")?.textContent === "Done!" || document.querySelector("#prog")?.textContent.startsWith(n + " /"), seen.length + 1);
+    }
+    return seen;
+  };
+  await play();
+  const drills = await page.locator("button.slow").allTextContents();
+  assert.deepEqual(drills, ["Missed + slowest 25% 4 kana"], "50% runs into the instant ones, a tie that takes in all 10");
+  await page.click("button.slow");
+  const seen = await play();
+  assert.equal(seen.length, 12);
+  assert.deepEqual([...new Set(seen)].sort(), [missed, ...slow].sort());
+  await page.close();
+});

@@ -1,7 +1,7 @@
 (function () {
   const { groups, KANA, LESSONS, KATA_LESSONS, SMALL_TSU, LONG_VOWELS, ids, main } = window.HIRAGANA;
   const { clipPath, imagePath, merge, same } = window.HiraSync;
-  const { gapFor, spaced, requeue } = window.HiraOrder;
+  const { gapFor, spaced, requeue, slowest } = window.HiraOrder;
   const backend = window.HIRA_BACKEND;
   // Worksheets and sentences arrive from the private bucket after sign-in [empty until then, or when offline].
   let SHEETS = [];
@@ -553,7 +553,9 @@
     const queue = spaced(list, rounds);
     const total = queue.length, gap = gapFor(list.length);
     const misses = new Map();
-    let idx = 0, right = 0, wrong = 0, waiting = false;
+    // Each kana's correct answers in ms [か twice at 1.2s and 0.8s = [1200, 800]].
+    const took = new Map();
+    let idx = 0, right = 0, wrong = 0, waiting = false, shownAt = 0;
     const start = Date.now();
 
     app.innerHTML = `
@@ -577,10 +579,12 @@
       input.value = ""; input.className = "quiz-input"; input.readOnly = false; input.focus();
       fb.innerHTML = "";
       waiting = false;
+      shownAt = Date.now();
     }
     function correct(k) {
       record(k.kana, true);
       right++;
+      took.set(k, [...(took.get(k) || []), Date.now() - shownAt]);
       app.querySelector("#ok").textContent = right;
       input.classList.add("right"); input.readOnly = true;
       idx++;
@@ -629,6 +633,9 @@
         } else note = `Best: ${fmtTime(prev.ms)} at ${prev.acc}%`;
       }
       const sorted = [...misses].sort((a, b) => b[1] - a[1]);
+      const mean = (ms) => ms.reduce((a, b) => a + b, 0) / ms.length;
+      // A drill of every kana is just Again [a 4-kana quiz's slowest 75% is 3 of them, so it stays].
+      const drills = slowest(new Map([...took].map(([k, ms]) => [k, mean(ms)])), sorted.map(([k]) => k)).filter((d) => d.items.length < list.length);
       app.innerHTML = `
         <div class="panel" style="text-align:center;max-width:560px;margin:2rem auto">
           <h1>Done!</h1>
@@ -644,9 +651,13 @@
             <button id="re">Again</button>
             ${sorted.length ? `<button class="ghost" id="miss">Drill the missed ones</button>` : ""}
             <a class="btn ghost" href="#quiz">Other kana</a>
-          </div></div>`;
+          </div>
+          ${drills.length ? `<h2>Drill on time</h2><div class="row" style="justify-content:center">${drills.map((d, i) =>
+            `<button class="ghost slow" data-i="${i}">${sorted.length ? "Missed + slowest" : "Slowest"} ${d.share * 100}% <small class="muted">${d.items.length} kana</small></button>`).join("")}</div>` : ""}
+          </div>`;
       app.querySelector("#re").addEventListener("click", () => runQuiz(list, rounds, bestKey));
       app.querySelector("#miss")?.addEventListener("click", () => runQuiz(sorted.map(([k]) => k), 3, null));
+      app.querySelectorAll(".slow").forEach((b) => b.addEventListener("click", () => runQuiz(drills[b.dataset.i].items, 3, null)));
     }
     show();
   }

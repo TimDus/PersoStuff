@@ -1,4 +1,4 @@
-// Quiz order, pure so node can test it: what comes next, and where a missed kana comes back.
+// Quiz order, pure so node can test it: what comes next, where a missed kana comes back, and what to drill after.
 (function (root) {
   // Others between two of the same kana [5 from 7 kana up, 3 for the 5 vowels so rounds still shuffle, 1 for 2 kana].
   const gapFor = (n) => Math.max(Math.min(5, n - 2), Math.min(1, n - 1));
@@ -46,7 +46,20 @@
     return 1;
   }
 
-  const api = { gapFor, spaced, requeue };
+  // Drill lists per share: the missed plus the slowest of the rest, rounded up and ties at a tenth of a second kept [10 clean, 25% = 3].
+  function slowest(times, missed, shares = [0.25, 0.5, 0.75]) {
+    const tenths = (k) => Math.round(times.get(k) / 100);
+    const clean = [...times.keys()].filter((k) => !missed.includes(k)).sort((a, b) => tenths(b) - tenths(a));
+    const out = [];
+    for (const share of shares) {
+      let n = Math.ceil(share * clean.length);
+      while (n > 0 && n < clean.length && tenths(clean[n]) === tenths(clean[n - 1])) n++;
+      if (n && n !== out.at(-1)?.slow) out.push({ share, slow: n, items: [...missed, ...clean.slice(0, n)] });
+    }
+    return out;
+  }
+
+  const api = { gapFor, spaced, requeue, slowest };
   if (typeof module !== "undefined") module.exports = api;
   else root.HiraOrder = api;
 })(this);

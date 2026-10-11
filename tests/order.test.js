@@ -4,7 +4,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fc = require("fast-check");
-const { gapFor, spaced, requeue } = require("../order.js");
+const { gapFor, spaced, requeue, slowest } = require("../order.js");
 
 // A repeatable Math.random stand-in [seed 1 always gives the same order].
 const seeded = (seed) => () => {
@@ -74,4 +74,41 @@ test("misses anywhere in a real quiz keep the gap, short of the very end", () =>
         if (tooClose(q, 5).length) { assert.equal(q.at(-1), k, `too close at ${tooClose(q, 5)} of ${q.length}`); break; }
       }
     }));
+});
+
+// Drilling on time: the missed kana plus the slowest quarter, half or three quarters of the rest.
+const timed = (ms) => new Map(ms.map((t, i) => ["k" + i, t]));
+
+test("each share rounds up, and the missed come first in every drill", () => {
+  const times = timed([100, 1000, 200, 900, 300, 800, 400, 700, 500, 600, 1500]);
+  const drills = slowest(times, ["k10"]);
+  assert.deepEqual(drills.map((d) => d.slow), [3, 5, 8], "10 clean kana: 2.5, 5 and 7.5 round up");
+  assert.deepEqual(drills[0].items, ["k10", "k1", "k3", "k5"]);
+  assert.ok(drills.every((d) => d.items[0] === "k10"));
+});
+
+test("a tie at the cut is taken whole, to the tenth of a second", () => {
+  const times = timed([2000, 1240, 1160, 1210, 500, 400, 300, 200]);
+  assert.deepEqual(slowest(times, [], [0.25])[0].items, ["k0", "k1", "k2", "k3"], "1.24, 1.16 and 1.21 all read 1.2s");
+});
+
+test("a share that adds nothing over the last one is left out", () => {
+  assert.deepEqual(slowest(timed([300, 200]), []).map((d) => [d.share, d.slow]), [[0.25, 1], [0.75, 2]]);
+  assert.deepEqual(slowest(timed([300]), ["k0"]), [], "nothing clean to add to the missed");
+});
+
+test("a drill never skips a slower kana for a faster one", () => {
+  fc.assert(fc.property(fc.array(fc.integer({ min: 0, max: 5000 }), { minLength: 1, maxLength: 46 }), fc.array(fc.boolean()), (ms, miss) => {
+    const times = timed(ms);
+    const missed = [...times.keys()].filter((_, i) => miss[i]);
+    const clean = [...times.keys()].filter((k) => !missed.includes(k));
+    for (const d of slowest(times, missed)) {
+      assert.deepEqual(d.items.slice(0, missed.length), missed);
+      const picked = d.items.slice(missed.length);
+      assert.ok(picked.length >= Math.ceil(d.share * clean.length));
+      const left = clean.filter((k) => !picked.includes(k));
+      const tenth = (k) => Math.round(times.get(k) / 100);
+      assert.ok(left.every((k) => picked.every((p) => tenth(p) > tenth(k))), `${picked} against ${left}`);
+    }
+  }));
 });
