@@ -188,6 +188,26 @@ test("after a quiz miss the drawing can be opened and Enter still moves on", asy
   await page.close();
 });
 
+// A miss came back once and the counter's total stayed put, so it sat at 15 / 15 while the quiz kept asking.
+test("a quiz miss comes back twice, the counter counts it, and no kana repeats within five", async () => {
+  const page = await open({ user: me, allowed: true }, "#quiz/a,k,s/1");
+  const seen = [await page.textContent("#kana")];
+  await page.fill("#in", "zz");
+  await page.press("#in", "Enter");
+  await page.keyboard.press("Enter");
+  assert.equal(await page.textContent("#prog"), "2 / 17");
+  while (!(await page.locator("h1", { hasText: "Done!" }).count())) {
+    const k = await page.textContent("#kana");
+    seen.push(k);
+    await page.type("#in", await romajiOf(page, k));
+    await page.waitForFunction((n) => document.querySelector("h1")?.textContent === "Done!" || document.querySelector("#prog")?.textContent.startsWith(n + " /"), seen.length + 1);
+  }
+  assert.equal(seen.length, 17);
+  assert.equal(seen.filter((k) => k === seen[0]).length, 3);
+  assert.deepEqual(seen.flatMap((k, i) => (seen.slice(i + 1, i + 6).includes(k) ? [i] : [])), [], seen.join(""));
+  await page.close();
+});
+
 test("without signed links there is no illustration button", async () => {
   const page = await open({ user: me, allowed: true, offline: true, local: { "sync.allowed": true } }, "#learn/1");
   assert.equal(await page.locator(".art-toggle").first().isVisible(), false);

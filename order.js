@@ -1,0 +1,52 @@
+// Quiz order, pure so node can test it: what comes next, and where a missed kana comes back.
+(function (root) {
+  // Others between two of the same kana [5 from 7 kana up, 3 for the 5 vowels so rounds still shuffle, 1 for 2 kana].
+  const gapFor = (n) => Math.max(Math.min(5, n - 2), Math.min(1, n - 1));
+
+  // Each item `rounds` times, the most-left first so a round's end never crowds the next one's start [お can't end round 1 and open round 2].
+  function spaced(items, rounds, rand = Math.random) {
+    const gap = gapFor(items.length);
+    const left = new Map(items.map((k) => [k, rounds]));
+    const out = [];
+    while (out.length < items.length * rounds) {
+      const recent = gap ? out.slice(-gap) : [];
+      const open = items.filter((k) => left.get(k) > 0 && !recent.includes(k));
+      const pool = open.length ? open : items.filter((k) => left.get(k) > 0);
+      const most = Math.max(...pool.map((k) => left.get(k)));
+      const top = pool.filter((k) => left.get(k) === most);
+      const k = top[Math.floor(rand() * top.length)];
+      out.push(k);
+      left.set(k, left.get(k) - 1);
+    }
+    return out;
+  }
+
+  // Puts the kana at idx back twice, 6–8 and 15–20 on, or once at the farthest fit when two won't fit [missed at 30 of 33 = once, last].
+  function requeue(queue, idx, gap, rand = Math.random) {
+    const k = queue[idx];
+    // An insert at p leaves `gap` others to the nearest copy on each side [gap 5: no k in p-5..p+4].
+    const fits = (p) => !queue.slice(Math.max(0, p - gap), p + gap).includes(k);
+    const fitting = () => { const ps = []; for (let p = idx + 1; p <= queue.length; p++) if (fits(p)) ps.push(p); return ps; };
+    // A random fit inside [from, to], else the nearest after it, else the farthest before it.
+    const pick = (ps, from, to) => {
+      const inside = ps.filter((p) => p >= from && p <= to);
+      if (inside.length) return inside[Math.floor(rand() * inside.length)];
+      return ps.find((p) => p > to) ?? ps.filter((p) => p < from).at(-1) ?? -1;
+    };
+    const firsts = fitting();
+    // The earliest first copy leaves the most room for the second, so it's the retry when the random one blocks it.
+    for (const p1 of new Set([pick(firsts, idx + 6, idx + 8), firsts[0] ?? -1])) {
+      if (p1 === -1) continue;
+      queue.splice(p1, 0, k);
+      const p2 = pick(fitting(), idx + 15, idx + 20);
+      if (p2 !== -1) { queue.splice(p2, 0, k); return 2; }
+      queue.splice(p1, 1);
+    }
+    queue.splice(firsts.length ? firsts.at(-1) : queue.length, 0, k);
+    return 1;
+  }
+
+  const api = { gapFor, spaced, requeue };
+  if (typeof module !== "undefined") module.exports = api;
+  else root.HiraOrder = api;
+})(this);

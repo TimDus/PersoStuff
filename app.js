@@ -1,6 +1,7 @@
 (function () {
   const { groups, KANA, LESSONS, KATA_LESSONS, SMALL_TSU, LONG_VOWELS, ids, main } = window.HIRAGANA;
   const { clipPath, imagePath, merge, same } = window.HiraSync;
+  const { gapFor, spaced, requeue } = window.HiraOrder;
   const backend = window.HIRA_BACKEND;
   // Worksheets and sentences arrive from the private bucket after sign-in [empty until then, or when offline].
   let SHEETS = [];
@@ -550,9 +551,8 @@
 
   function runQuiz(list, rounds, bestKey) {
     cleanup();
-    const queue = [];
-    for (let i = 0; i < rounds; i++) queue.push(...shuffle([...list]));
-    const total = queue.length;
+    const queue = spaced(list, rounds);
+    const total = queue.length, gap = gapFor(list.length);
     const misses = new Map();
     let idx = 0, right = 0, wrong = 0, waiting = false;
     const start = Date.now();
@@ -574,7 +574,7 @@
       if (idx >= queue.length) return finish();
       const k = queue[idx];
       app.querySelector("#kana").textContent = k.kana;
-      app.querySelector("#prog").textContent = `${Math.min(right + 1, total)} / ${total}`;
+      app.querySelector("#prog").textContent = `${idx + 1} / ${queue.length}`;
       input.value = ""; input.className = "quiz-input"; input.readOnly = false; input.focus();
       fb.innerHTML = "";
       waiting = false;
@@ -597,7 +597,7 @@
         ${artBtn(k.kana)}
         <button class="ghost" id="next" style="margin-top:.5rem">Continue <span class="kbd">Enter</span></button>`;
       fb.querySelector("#next").addEventListener("click", show);
-      queue.splice(idx + 3 + Math.floor(Math.random() * 4), 0, k);
+      requeue(queue, idx, gap);
       idx++;
       waiting = true;
     }

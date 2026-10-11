@@ -8,6 +8,7 @@
     "verify-db": "bash tools/psql.sh -q -f supabase/verify.sql"
   },
   "devDependencies": {
+    "fast-check": "^4.10.2",
     "playwright": "^1.56.0"
   }
 }
