@@ -205,16 +205,17 @@
     const hand = /han-dakuten/.test(g.name);
     return [String.fromCodePoint(kana.codePointAt(0) - (hand ? 2 : 1)), hand ? "゜" : "゛"];
   };
-  // A dakuten kana past the first in its column, or any combination, spelled from its parts [ぎ = "き (ki) + ゛ = ぎ (gi).", しゃ = "し (shi) + ゃ = しゃ (sha)."].
+  // A dakuten kana past the first in its column, or any two-kana sound, spelled from its parts [ぎ = "き (ki) + ゛ = ぎ (gi).", ファ = "フ (fu) + ァ = ファ (fa)."].
   const marked = (g, kana, romaji, i) => {
-    if (g.kind === "youon") return `${kana[0]} (${romajiOf.get(kana[0])}) + ${kana[1]} = ${kana} (${romaji}).`;
+    if (g.kind === "youon" || g.kind === "extended" && kana.length === 2) return `${kana[0]} (${romajiOf.get(kana[0])}) + ${kana[1]} = ${kana} (${romaji}).`;
     if (g.kind !== "dakuten" || i === 0) return "";
     const [base, mark] = plainOf(g, kana);
     return `${base} (${romajiOf.get(base)}) + ${mark} = ${kana} (${romaji}).`;
   };
+  // Every romaji first, so a sound can name a kana listed after it [ヴァ is spelled from ヴ, two places later].
+  groups.forEach((g) => g.kana.forEach(([kana, romaji]) => romajiOf.set(kana, romaji)));
   for (const g of groups) {
     g.kana = g.kana.map(([kana, romaji, alts = [], mnemonic = "", lookalike = ""], i) => {
-      romajiOf.set(kana, romaji);
       const k = { kana, romaji, accept: [romaji, ...alts], mnemonic: mnemonic || marked(g, kana, romaji, i) || g.note || "", lookalike,
         group: g.id, kind: g.kind, script: g.script };
       KANA.push(k);
@@ -315,9 +316,9 @@
     ...columnSteps("katakana", "youon", { set: { id: "combinations", name: "Combinations", title: "キャ シュ チョ" }, rounds: 2, sub: "Combination katakana",
       first: "The same rule as hiragana: an イ-row kana plus a small ャ, ュ or ョ, and the i drops out.",
       intro: (g) => g.note, sheet: null }),
-    { title: "ファ ティ ヴァ", sub: "Extended sounds", groups: kIds("extended"), sheet: null,
-      intro: "Katakana stretches to cover foreign sounds by adding a small ァ, ィ, ゥ, ェ or ォ: fa, ti, wi, va. Being able to read them is enough for now.",
-      tasks: [{ quiz: kIds("extended"), rounds: 2, text: "Quiz the extended sounds twice." }] },
+    ...columnSteps("katakana", "extended", { set: { id: "extended", name: "Extended sounds", title: "ファ ティ ヴァ" }, rounds: 2, sub: "Extended sounds",
+      first: "Katakana stretches to cover foreign sounds by adding a small ァ, ィ, ゥ, ェ or ォ: fa, ti, wi, va. Being able to read them is enough for now.",
+      intro: (g) => g.note, sheet: null }),
     { title: "ー", sub: "Long vowels", groups: [], sheet: null, longVowel: true,
       intro: "Katakana marks a long vowel with a dash: stretch the vowel in front of it.",
       tasks: [] },

@@ -374,15 +374,7 @@
               ${k.lookalike ? `<div class="look">Look-alike: ${esc(k.lookalike)}</div>` : ""}</div>
             ${artBtn(k.kana)}
           </div>`;
-    // Main, dakuten and combination steps get a full card per kana, the rest a cell per kana [ぎ's card reads き + ゛, ファ opens a popup].
-    const kanaCards = ["main", "dakuten", "youon"].includes(lessonGroups[0]?.kind)
-      ? `<div class="kana-list">${lessonGroups.flatMap((g) => g.kana).map(card).join("")}</div>`
-      : lessonGroups.map((g) => `
-          <h2 class="jp">${g.kana.map((k) => esc(k.kana)).join(" ")}</h2>
-          <p class="muted">${esc(g.note)}</p>
-          <div class="sheet-grid wide">${g.kana.map((k) => `
-            <div class="cell" data-kana="${esc(k.kana)}" style="cursor:pointer"><div class="kana">${esc(k.kana)}</div><b>${esc(k.romaji)}</b></div>`).join("")}
-          </div>`).join("");
+    const kanaCards = lessonGroups.length ? `<div class="kana-list">${lessonGroups.flatMap((g) => g.kana).map(card).join("")}</div>` : "";
     const tsu = l.smallTsu ? `
       <p>In romaji you write the next consonant twice: かっこ is <b>kakko</b>. Before ch it becomes t: まっちゃ is <b>matcha</b>.
         Say each pair aloud and feel the pause.</p>
@@ -417,7 +409,6 @@
         <span class="spacer"></span>
         ${i < lessons.length - 1 ? `<a class="btn ghost" href="#learn/${prefix}${i + 2}">${name} ${i + 2} →</a>` : `<a class="btn ghost" href="${reading}">Reading practice →</a>`}
       </div>`;
-    app.querySelectorAll("[data-kana]").forEach((el) => el.addEventListener("click", () => kanaModal(byKana.get(el.dataset.kana))));
     app.querySelector("#reveal-burger")?.addEventListener("click", (e) => { e.target.hidden = true; app.querySelector("#burger").hidden = false; });
   }
 
