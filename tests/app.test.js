@@ -561,8 +561,10 @@ test("a finished quiz offers the missed plus the slowest quarter, and drills the
       seen.push(k);
       const wait = [900, 600, 300][slow.indexOf(k)];
       if (wait) await page.waitForTimeout(wait);
+      // The counter, not `seen`, says the answer landed [the opening miss puts it one ahead, and く got typed twice: "kuke"].
+      const prog = await page.textContent("#prog");
       await page.type("#in", await romajiOf(page, k));
-      await page.waitForFunction((n) => document.querySelector("h1")?.textContent === "Done!" || document.querySelector("#prog")?.textContent.startsWith(n + " /"), seen.length + 1);
+      await page.waitForFunction((p) => document.querySelector("h1")?.textContent === "Done!" || document.querySelector("#prog")?.textContent !== p, prog);
     }
     return seen;
   };
