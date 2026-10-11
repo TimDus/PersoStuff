@@ -304,19 +304,29 @@
     hiragana: { lessons: LESSONS, prefix: "", reading: "#reading/0/0" },
     katakana: { lessons: KATA_LESSONS, prefix: "k", reading: "#reading/2/0" },
   };
-  function viewLearn([step]) {
-    const kata = /^k\d+$/.test(step || "");
-    const n = +(kata ? step.slice(1) : step);
-    const track = TRACKS[kata ? "katakana" : "hiragana"];
-    if (step && track.lessons[n - 1]) return viewLesson(n - 1, kata ? "katakana" : "hiragana");
-    const cards = ({ lessons, prefix }) => lessons.map((l, i) => {
-      const list = kanaOf(l.groups);
-      return `<a class="panel lesson-card" href="#learn/${prefix}${i + 1}">
-        <div class="step">Step ${i + 1}</div>
-        <div class="title">${esc(l.title)}</div>
-        <div class="muted">${esc(l.sub)}${list.length ? ` · ${list.length} kana` : ""}</div>
+  const lessonCard = (href, step, title, sub, list) => `<a class="panel lesson-card" href="${href}">
+        <div class="step">${step}</div>
+        <div class="title">${esc(title)}</div>
+        <div class="muted">${esc(sub)}${list.length ? ` · ${list.length} kana` : ""}</div>
         ${list.length ? `<div class="bar"><span style="width:${Math.round(mastery(list) * 100)}%"></span></div>` : ""}
       </a>`;
+  // A set's steps with their place in the track [hiragana dakuten = steps 10 to 14].
+  const setSteps = (lessons, set) => lessons.map((l, i) => [l, i]).filter(([l]) => l.set === set);
+  function viewLearn([step]) {
+    const kata = /^k/.test(step || "");
+    const script = kata ? "katakana" : "hiragana";
+    const key = kata ? step.slice(1) : step;
+    const track = TRACKS[script];
+    if (step && track.lessons[+key - 1]) return viewLesson(+key - 1, script);
+    const set = step && track.lessons.find((l) => l.set?.id === key)?.set;
+    if (set) return viewSet(set, script);
+    // One card per step, and one per set in place of its steps [Dakuten reads "Steps 10–14"].
+    const cards = ({ lessons, prefix }) => lessons.map((l, i) => {
+      if (!l.set) return lessonCard(`#learn/${prefix}${i + 1}`, `Step ${i + 1}`, l.title, l.sub, kanaOf(l.groups));
+      if (lessons[i - 1]?.set === l.set) return "";
+      const steps = setSteps(lessons, l.set);
+      return lessonCard(`#learn/${prefix}${l.set.id}`, `Steps ${i + 1}–${steps.at(-1)[1] + 1}`, l.set.title,
+        `${l.set.name} · ${steps.length} steps`, kanaOf(steps.flatMap(([s]) => s.groups)));
     }).join("");
     app.innerHTML = `
       <h1>Learn hiragana in ${LESSONS.length} steps</h1>
@@ -341,6 +351,17 @@
       </div>`;
   }
 
+  function viewSet(set, script) {
+    const { lessons, prefix } = TRACKS[script];
+    app.innerHTML = `
+      <p><a href="#learn">← All steps</a></p>
+      <div class="muted">${script === "katakana" ? "Katakana" : "Hiragana"}</div>
+      <h1>${esc(set.name)}</h1>
+      <p class="lead">One column a step. Each quiz takes in the columns before it, so go in order.</p>
+      <div class="grid">${setSteps(lessons, set).map(([l, i]) =>
+        lessonCard(`#learn/${prefix}${i + 1}`, `Step ${i + 1}`, l.title, l.sub, kanaOf(l.groups))).join("")}</div>`;
+  }
+
   function viewLesson(i, script) {
     const { lessons, prefix, reading } = TRACKS[script];
     const l = lessons[i];
@@ -353,8 +374,8 @@
               ${k.lookalike ? `<div class="look">Look-alike: ${esc(k.lookalike)}</div>` : ""}</div>
             ${artBtn(k.kana)}
           </div>`;
-    // Main and dakuten steps get a full card per kana, the rest a cell per kana [ぎ's card reads き + ゛, きゃ opens a popup].
-    const kanaCards = ["main", "dakuten"].includes(lessonGroups[0]?.kind)
+    // Main, dakuten and combination steps get a full card per kana, the rest a cell per kana [ぎ's card reads き + ゛, ファ opens a popup].
+    const kanaCards = ["main", "dakuten", "youon"].includes(lessonGroups[0]?.kind)
       ? `<div class="kana-list">${lessonGroups.flatMap((g) => g.kana).map(card).join("")}</div>`
       : lessonGroups.map((g) => `
           <h2 class="jp">${g.kana.map((k) => esc(k.kana)).join(" ")}</h2>
@@ -383,7 +404,7 @@
     ].filter(Boolean);
     const name = script === "katakana" ? "Katakana step" : "Step";
     app.innerHTML = `
-      <p><a href="#learn">← All steps</a></p>
+      <p><a href="#learn">← All steps</a>${l.set ? ` · <a href="#learn/${prefix}${l.set.id}">${esc(l.set.name)}</a>` : ""}</p>
       <div class="muted">${name} ${i + 1} · ${esc(l.sub)}</div>
       <h1 class="jp">${esc(l.title)}</h1>
       <p class="lead">${esc(l.intro)}</p>

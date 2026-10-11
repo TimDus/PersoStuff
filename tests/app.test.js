@@ -126,7 +126,7 @@ test("progress from another device merges in, and new answers sync back", async 
 test("offline after a past sign-in: lessons work, worksheets explain why not", async () => {
   const page = await open({ user: me, allowed: true, offline: true, local: { "sync.allowed": true } }, "#learn");
   assert.equal(await page.locator("nav").isVisible(), true);
-  assert.equal(await page.locator(".lesson-card").count(), 17 + 14);
+  assert.equal(await page.locator(".lesson-card").count(), 13 + 10);
   assert.match(await page.textContent("#sync-note"), /Offline/);
   await page.goto(base + "#sheets");
   assert.match(await page.textContent("main"), /Can't load the worksheets/);
@@ -280,7 +280,7 @@ test("katakana sentences read as romaji, long vowels and small vowels included",
 });
 
 test("the long-vowel step hides its Show button once the answer is out", async () => {
-  const page = await open(listed, "#learn/k13");
+  const page = await open(listed, "#learn/k24");
   assert.equal(await page.locator("#burger").isVisible(), false);
   await page.click("#reveal-burger");
   assert.equal(await page.locator("#reveal-burger").isVisible(), false);
@@ -338,7 +338,7 @@ test("another account signing in on this browser doesn't inherit the last one's 
 test("a boot with nothing new doesn't write the row again", async () => {
   const row = { progress: { か: { box: 4, right: 6, wrong: 0 } }, "quiz.best": {}, "sheets.done": {}, "reading.done": [], resetAt: 0, savedAt: 50 };
   const page = await open({ user: me, allowed: true, remote: row, local: { progress: row.progress, "sync.savedAt": 50 } }, "#learn");
-  assert.equal(await page.locator(".lesson-card").count(), 17 + 14);
+  assert.equal(await page.locator(".lesson-card").count(), 13 + 10);
   assert.deepEqual(await saves(page), []);
   await page.close();
 });
@@ -436,6 +436,36 @@ test("each dakuten column is its own step of full cards, no popup needed", async
   assert.equal(await page.locator(".task a", { hasText: "Worksheet" }).getAttribute("href"), "#sheets/dakuten");
   await page.goto(base + "#learn/k6");
   assert.equal(await page.locator(".kana-card").count(), 5);
+  await page.close();
+});
+
+// Splitting dakuten and combinations into a step per column put 40 cards on the Learn page; each set is one card that opens its steps.
+test("the Learn page shows one card per set, which opens that set's steps", async () => {
+  const page = await open(listed, "#learn");
+  const hrefs = await page.$$eval(".lesson-card", (as) => as.map((a) => a.getAttribute("href")));
+  assert.deepEqual(hrefs.filter((h) => /dakuten|combinations/.test(h)), ["#learn/dakuten", "#learn/combinations", "#learn/kdakuten", "#learn/kcombinations"]);
+  assert.ok(!hrefs.includes("#learn/10") && hrefs.includes("#learn/26"), "set steps hide, the step after them shows");
+  assert.match(await page.textContent(".lesson-card[href='#learn/dakuten']"), /Steps 10–14[\s\S]*Dakuten · 5 steps · 25 kana/);
+  await page.click(".lesson-card[href='#learn/combinations']");
+  assert.equal(await page.textContent("main h1"), "Combinations");
+  const steps = await page.$$eval(".lesson-card", (as) => as.map((a) => a.getAttribute("href")));
+  assert.deepEqual(steps, Array.from({ length: 11 }, (_, i) => "#learn/" + (15 + i)));
+  await page.goto(base + "#learn/kcombinations");
+  assert.equal(await page.locator(".lesson-card").count(), 12, "katakana adds ヂャ");
+  await page.close();
+});
+
+// The combinations were one step of 33 cells; each column is its own step of full cards now.
+test("each combination column is its own step of full cards", async () => {
+  const page = await open(listed, "#learn/16");
+  assert.equal(await page.textContent("main h1"), "しゃ しゅ しょ");
+  assert.equal(await page.locator(".kana-card").count(), 3);
+  assert.match(await page.locator(".kana-card").first().textContent(), /し \(shi\) \+ ゃ = しゃ \(sha\)/);
+  assert.equal(decodeURIComponent(await page.locator(".task a", { hasText: "Start quiz" }).getAttribute("href")), "#quiz/y-ky,y-sh/2");
+  assert.equal(await page.getAttribute("main p a[href='#learn/combinations']", "href"), "#learn/combinations");
+  await page.goto(base + "#learn/25");
+  assert.equal(await page.textContent("main h1"), "ぴゃ ぴゅ ぴょ");
+  assert.equal(await page.locator(".task a", { hasText: "Worksheet" }).getAttribute("href"), "#sheets/youon");
   await page.close();
 });
 

@@ -205,8 +205,9 @@
     const hand = /han-dakuten/.test(g.name);
     return [String.fromCodePoint(kana.codePointAt(0) - (hand ? 2 : 1)), hand ? "゜" : "゛"];
   };
-  // A dakuten kana past the first in its column, spelled from its plain kana [ぎ = "き (ki) + ゛ = ぎ (gi)."].
+  // A dakuten kana past the first in its column, or any combination, spelled from its parts [ぎ = "き (ki) + ゛ = ぎ (gi).", しゃ = "し (shi) + ゃ = しゃ (sha)."].
   const marked = (g, kana, romaji, i) => {
+    if (g.kind === "youon") return `${kana[0]} (${romajiOf.get(kana[0])}) + ${kana[1]} = ${kana} (${romaji}).`;
     if (g.kind !== "dakuten" || i === 0) return "";
     const [base, mark] = plainOf(g, kana);
     return `${base} (${romajiOf.get(base)}) + ${mark} = ${kana} (${romaji}).`;
@@ -226,19 +227,25 @@
   const kmain = ids("main", "katakana");
   const upTo = (id) => main.slice(0, main.indexOf(id) + 1);
   const kUpTo = (id) => kmain.slice(0, kmain.indexOf(id) + 1);
-  // One step per dakuten column, each quizzing the columns so far [the だ step quizzes が, ざ and だ three times].
-  const dakutenSteps = (script, first, mixWith, mixText, sheet) => {
-    const cols = ids("dakuten", script);
+  // One step per column of a kind, each quizzing the columns so far [the だ step quizzes が, ざ and だ three times].
+  // Steps of one set share a card on the Learn page [hiragana steps 10 to 14 open from one Dakuten card].
+  const columnSteps = (script, kind, { set, first, intro, rounds, sub, mixWith, mixText, sheet }) => {
+    const cols = ids(kind, script);
+    const times = { 2: "twice", 3: "three times" }[rounds];
     return cols.map((id, i) => {
       const g = groups.find((x) => x.id === id);
-      const [base, mark] = plainOf(g, g.kana[0].kana);
-      const from = romajiOf.get(base).slice(0, -1), to = g.kana[0].romaji.slice(0, -1);
       const last = i === cols.length - 1;
-      return { title: g.kana.map((k) => k.kana).join(" "), sub: g.name, groups: [id], sheet: last ? sheet : null,
-        intro: i === 0 ? first : `${mark === "゜" ? "A small circle (゜) turns" : "Two dashes (゛) turn"} the ${from}-column into ${to}: ${base} becomes ${g.kana[0].kana}.`,
-        tasks: [{ quiz: cols.slice(0, i + 1), rounds: 3, text: i === 0 ? "Quiz this column three times." : "Quiz the dakuten columns so far three times." },
-          ...(last ? [{ quiz: [...mixWith, ...cols], rounds: 1, text: mixText }] : [])] };
+      return { title: g.kana.map((k) => k.kana).join(" "), sub: sub || g.name, groups: [id], sheet: last ? sheet : null, set,
+        intro: i === 0 ? first : intro(g),
+        tasks: [{ quiz: cols.slice(0, i + 1), rounds, text: i === 0 ? `Quiz this column ${times}.` : `Quiz the ${set.name.toLowerCase()} so far ${times}.` },
+          ...(last && mixWith ? [{ quiz: [...mixWith, ...cols], rounds: 1, text: mixText }] : [])] };
     });
+  };
+  // A dakuten column after the first, said from its plain column [the k-column into g: か becomes が].
+  const dakutenIntro = (g) => {
+    const [base, mark] = plainOf(g, g.kana[0].kana);
+    const from = romajiOf.get(base).slice(0, -1), to = g.kana[0].romaji.slice(0, -1);
+    return `${mark === "゜" ? "A small circle (゜) turns" : "Two dashes (゛) turn"} the ${from}-column into ${to}: ${base} becomes ${g.kana[0].kana}.`;
   };
 
   // Steps of the guide; tasks are what it asks you to do after each one [step 2: quiz あ and か five times].
@@ -270,11 +277,12 @@
     { title: "わ を ん", sub: "W & N", groups: ["w"], sheet: "rwn",
       intro: "を sounds like お and is almost only a particle. ん is the only lone consonant; type nn when a vowel or y follows.",
       tasks: [{ quiz: main, rounds: 1, text: "Quiz all 46 main kana as fast as you can." }] },
-    ...dakutenSteps("hiragana", "Two dashes (゛) voice a sound: k→g, s→z, t→d, h→b. A small circle (゜) turns h into p.",
-      main, "Then mix all the dakuten in with everything.", "dakuten"),
-    { title: "きゃ しゅ ちょ", sub: "Combination kana", groups: ids("youon"), sheet: "youon",
-      intro: "An い-row kana plus a small ゃ, ゅ or ょ blends into one syllable: drop the i. き + ゃ = kya, not kiya.",
-      tasks: [{ quiz: ids("youon"), rounds: 2, text: "Quiz the combinations twice." }] },
+    ...columnSteps("hiragana", "dakuten", { set: { id: "dakuten", name: "Dakuten", title: "が ざ だ ば ぱ" }, rounds: 3, intro: dakutenIntro,
+      first: "Two dashes (゛) voice a sound: k→g, s→z, t→d, h→b. A small circle (゜) turns h into p.",
+      mixWith: main, mixText: "Then mix all the dakuten in with everything.", sheet: "dakuten" }),
+    ...columnSteps("hiragana", "youon", { set: { id: "combinations", name: "Combinations", title: "きゃ しゅ ちょ" }, rounds: 2, sub: "Combination kana",
+      first: "An い-row kana plus a small ゃ, ゅ or ょ blends into one syllable: drop the i. き + ゃ = kya, not kiya.",
+      intro: (g) => g.note, sheet: "youon" }),
     { title: "っ", sub: "Small tsu", groups: [], sheet: null, smallTsu: true,
       intro: "A small っ is a short pause that doubles the next consonant. It has no sound of its own.",
       tasks: [] },
@@ -301,11 +309,12 @@
     { title: "ラ リ ル レ ロ ワ ヲ ン", sub: "R, W & N", groups: ["k-r", "k-w"], sheet: "k-rwn",
       intro: "ル and レ are halves of each other, and ワ, ウ and フ differ by a single stroke.",
       tasks: [{ quiz: kmain, rounds: 1, text: "Quiz all 46 katakana as fast as you can." }] },
-    ...dakutenSteps("katakana", "These work exactly like hiragana's: k→g, s→z, t→d, h→b, and the circle makes h into p.",
-      kmain, "Then mix all the dakuten in with all katakana.", null),
-    { title: "キャ シュ チョ", sub: "Combination katakana", groups: kIds("youon"), sheet: null,
-      intro: "The same rule as hiragana: an イ-row kana plus a small ャ, ュ or ョ, and the i drops out.",
-      tasks: [{ quiz: kIds("youon"), rounds: 2, text: "Quiz the combinations twice." }] },
+    ...columnSteps("katakana", "dakuten", { set: { id: "dakuten", name: "Dakuten", title: "ガ ザ ダ バ パ" }, rounds: 3, intro: dakutenIntro,
+      first: "These work exactly like hiragana's: k→g, s→z, t→d, h→b, and the circle makes h into p.",
+      mixWith: kmain, mixText: "Then mix all the dakuten in with all katakana.", sheet: null }),
+    ...columnSteps("katakana", "youon", { set: { id: "combinations", name: "Combinations", title: "キャ シュ チョ" }, rounds: 2, sub: "Combination katakana",
+      first: "The same rule as hiragana: an イ-row kana plus a small ャ, ュ or ョ, and the i drops out.",
+      intro: (g) => g.note, sheet: null }),
     { title: "ファ ティ ヴァ", sub: "Extended sounds", groups: kIds("extended"), sheet: null,
       intro: "Katakana stretches to cover foreign sounds by adding a small ァ, ィ, ゥ, ェ or ォ: fa, ti, wi, va. Being able to read them is enough for now.",
       tasks: [{ quiz: kIds("extended"), rounds: 2, text: "Quiz the extended sounds twice." }] },
