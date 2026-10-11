@@ -455,12 +455,12 @@ test("the Learn page shows one card per set, which opens that set's steps", asyn
   await page.close();
 });
 
-// A step per combination column was 11 steps of 3 kana each; they are one step again, a row per column.
+// A step per combination column was 11 steps of 3 kana each; they are one step again, a row of three full cards per column.
 test("the combinations are one step with a row per column", async () => {
   const page = await open(listed, "#learn/15");
   assert.equal(await page.textContent("main h1"), "きゃ しゅ ちょ");
   assert.equal(await page.locator(".kana-row").count(), 11);
-  assert.equal(await page.locator(".kana-card").count(), 0);
+  assert.equal(await page.locator(".kana-row .row-cards > .kana-card").count(), 33, "three full cards a row");
   const sh = page.locator(".kana-row", { has: page.locator(".big", { hasText: /^しゃ$/ }) });
   assert.match(await sh.textContent(), /し \(shi\) \+ small ゃゅょ[\s\S]*しゃ\s*sha[\s\S]*しゅ\s*shu[\s\S]*しょ\s*sho/);
   assert.match(decodeURIComponent(await page.locator(".task a", { hasText: "Start quiz" }).getAttribute("href")), /^#quiz\/y-ky,.*,y-py\/2$/);
