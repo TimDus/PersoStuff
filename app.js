@@ -252,7 +252,6 @@
     openModal(`
       <div class="kana">${esc(k.kana)}</div>
       <div class="big-number">${esc(k.romaji)} ${speakBtn(k.kana)}</div>
-      ${k.accept.length > 1 ? `<div class="muted small">also accepted: ${esc(k.accept.slice(1).join(", "))}</div>` : ""}
       <p>${esc(k.mnemonic)}</p>
       ${k.lookalike ? `<p class="muted small">Look-alike: ${esc(k.lookalike)}</p>` : ""}
       ${artBtn(k.kana)}
@@ -604,7 +603,7 @@
     input.addEventListener("input", () => {
       if (waiting || input.readOnly) return;
       const k = queue[idx], v = norm(input.value);
-      if (k.accept.includes(v)) correct(k);
+      if (v === k.romaji) correct(k);
     });
     input.addEventListener("keydown", (e) => {
       if (e.key !== "Enter") return;
@@ -612,7 +611,7 @@
       if (waiting) return show();
       if (input.readOnly) return;
       const k = queue[idx];
-      k.accept.includes(norm(input.value)) ? correct(k) : miss(k);
+      norm(input.value) === k.romaji ? correct(k) : miss(k);
     });
     // Enter still continues once focus has left the answer box [after pressing Show illustration].
     onKey((e) => { if (waiting && e.key === "Enter" && e.target !== input && !e.target.closest("button")) show(); });
@@ -725,7 +724,7 @@
       let right = 0;
       inputs.forEach((inp, i) => {
         const k = byKana.get(cells[i]);
-        const ok = k.accept.includes(norm(inp.value));
+        const ok = norm(inp.value) === k.romaji;
         record(k.kana, ok);
         if (ok) right++;
         const cell = inp.closest(".cell");

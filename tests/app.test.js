@@ -256,15 +256,27 @@ test("the chart keeps every extended sound, even three that share a column", asy
   await page.close();
 });
 
-test("a katakana quiz accepts the romaji and the guide's typing spellings", async () => {
+// A slip like "si" for し or "sya" for しゃ counted as right because it was another accepted spelling; only the standard one counts now.
+test("the quiz and the worksheets take only the standard spelling", async () => {
   const page = await open(listed, "#quiz/k-x-t,k-x-dh/1");
-  const typed = { ティ: "thi", トゥ: "twu", ディ: "dhi", ドゥ: "du" };
+  const typed = { ティ: "thi", トゥ: "twu", ディ: "dhi", ドゥ: "dwu" };
   for (let n = 0; n < 4; n++) {
     const kana = await page.textContent("#kana");
     await page.type("#in", typed[kana]);
-    await page.waitForTimeout(250);
+    await page.press("#in", "Enter");
+    assert.equal((await page.textContent("#fb .ans")).split(" ")[0], await romajiOf(page, kana));
+    await page.keyboard.press("Enter");
   }
-  assert.match(await page.textContent("main"), /100%accuracy/);
+  assert.equal(await page.textContent("#bad"), "4");
+  assert.equal(await page.textContent("#ok"), "0");
+  await page.goto(base + "#sheets/s");
+  const cells = await page.$$eval(".cell .kana", (els) => els.map((e) => e.textContent));
+  const inputs = await page.$$(".cell input");
+  for (let i = 0; i < inputs.length; i++) await inputs[i].fill(cells[i] === "し" ? "si" : await romajiOf(page, cells[i]));
+  await page.click("#check");
+  const shi = cells.filter((k) => k === "し").length;
+  assert.ok(shi > 0);
+  assert.ok((await page.textContent("#score")).includes(` ${cells.length - shi} / ${cells.length}`), "every し marked wrong");
   await page.close();
 });
 

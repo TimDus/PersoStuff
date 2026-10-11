@@ -1,81 +1,81 @@
 // Kana, mnemonics and lesson order after Tofugu's hiragana and katakana guides [234 kana in 29 steps].
 (function () {
-  // Each row is [kana, romaji, other accepted spellings, mnemonic, look-alike note].
+  // Each row is [kana, romaji, mnemonic, look-alike note].
   const groups = [
     { id: "a", label: "あ", name: "Vowels", kind: "main", kana: [
-      ["あ", "a", [], "Find the capital A hidden inside it.", "お has a loop on the right instead of a cross."],
-      ["い", "i", [], "Two eels standing upright, like a letter i.", ""],
-      ["う", "u", [], "A sideways U wearing a little hat.", "つ is the same curve without the hat."],
-      ["え", "e", [], "An exotic bird with a feathery head.", ""],
-      ["お", "o", [], "You can spot two little o's in it.", "あ has no loop on the right."],
+      ["あ", "a", "Find the capital A hidden inside it.", "お has a loop on the right instead of a cross."],
+      ["い", "i", "Two eels standing upright, like a letter i.", ""],
+      ["う", "u", "A sideways U wearing a little hat.", "つ is the same curve without the hat."],
+      ["え", "e", "An exotic bird with a feathery head.", ""],
+      ["お", "o", "You can spot two little o's in it.", "あ has no loop on the right."],
     ]},
     { id: "k", label: "か", name: "K-column", kind: "main", kana: [
-      ["か", "ka", [], "A mosquito (ka in Japanese) — cut it out!", "が is the same with two dakuten dashes."],
-      ["き", "ki", [], "It looks like a key.", "さ has one cross bar, き has two."],
-      ["く", "ku", [], "A cuckoo's open beak going ku ku.", ""],
-      ["け", "ke", [], "A strand of wiggly kelp.", "は has a loop at the bottom."],
-      ["こ", "ko", [], "Two worms cohabiting side by side.", "い stands up, こ lies down."],
+      ["か", "ka", "A mosquito (ka in Japanese) — cut it out!", "が is the same with two dakuten dashes."],
+      ["き", "ki", "It looks like a key.", "さ has one cross bar, き has two."],
+      ["く", "ku", "A cuckoo's open beak going ku ku.", ""],
+      ["け", "ke", "A strand of wiggly kelp.", "は has a loop at the bottom."],
+      ["こ", "ko", "Two worms cohabiting side by side.", "い stands up, こ lies down."],
     ]},
     { id: "s", label: "さ", name: "S-column", kind: "main", kana: [
-      ["さ", "sa", [], "Two hands stirring a bowl of chunky salsa.", "ち faces the other way."],
-      ["し", "shi", ["si"], "A shepherd's crook for herding sheep (shee). Not 'si'!", ""],
-      ["す", "su", [], "A swing that loops and flings the kid: I'M GONNA SUE!", ""],
-      ["せ", "se", [], "A mouth with one vampire fang, selling you a set of teeth.", ""],
-      ["そ", "so", [], "A mouth slurping soda.", ""],
+      ["さ", "sa", "Two hands stirring a bowl of chunky salsa.", "ち faces the other way."],
+      ["し", "shi", "A shepherd's crook for herding sheep (shee). Not 'si'!", ""],
+      ["す", "su", "A swing that loops and flings the kid: I'M GONNA SUE!", ""],
+      ["せ", "se", "A mouth with one vampire fang, selling you a set of teeth.", ""],
+      ["そ", "so", "A mouth slurping soda.", ""],
     ]},
     { id: "t", label: "た", name: "T-column", kind: "main", kana: [
-      ["た", "ta", [], "A fork with a lime garnish, next to a taco.", "な has a loop at the bottom."],
-      ["ち", "chi", ["ti"], "A forced 'cheese' smile in a group photo. Not 'ti'!", "さ faces the other way."],
-      ["つ", "tsu", ["tu"], "A tsunami wave swooshing past. Not 'tu'!", "う has a hat on top."],
-      ["て", "te", [], "A telescope held in your hand (te means hand).", ""],
-      ["と", "to", [], "A toe with a splinter stuck in it.", ""],
+      ["た", "ta", "A fork with a lime garnish, next to a taco.", "な has a loop at the bottom."],
+      ["ち", "chi", "A forced 'cheese' smile in a group photo. Not 'ti'!", "さ faces the other way."],
+      ["つ", "tsu", "A tsunami wave swooshing past. Not 'tu'!", "う has a hat on top."],
+      ["て", "te", "A telescope held in your hand (te means hand).", ""],
+      ["と", "to", "A toe with a splinter stuck in it.", ""],
     ]},
     { id: "n", label: "な", name: "N-column", kind: "main", kana: [
-      ["な", "na", [], "A nun praying at a cross... for nachos.", "た has no loop."],
-      ["に", "ni", [], "A needle pulling thread.", "こ plus a line on the left."],
-      ["ぬ", "nu", [], "A bowl of soft, bendy noodles — no sharp corners.", "め has no loop at the end."],
-      ["ね", "ne", [], "Nelly the cat (neko) curling her tail.", "れ ends in a kick, わ ends in a curve."],
-      ["の", "no", [], "A pig's big nose — or a No Smoking sign.", ""],
+      ["な", "na", "A nun praying at a cross... for nachos.", "た has no loop."],
+      ["に", "ni", "A needle pulling thread.", "こ plus a line on the left."],
+      ["ぬ", "nu", "A bowl of soft, bendy noodles — no sharp corners.", "め has no loop at the end."],
+      ["ね", "ne", "Nelly the cat (neko) curling her tail.", "れ ends in a kick, わ ends in a curve."],
+      ["の", "no", "A pig's big nose — or a No Smoking sign.", ""],
     ]},
     { id: "h", label: "は", name: "H-column", kind: "main", kana: [
-      ["は", "ha", [], "A capital H and a little a squeezed together: Ha!", "ほ has an extra bar on top."],
-      ["ひ", "hi", [], "A guy with a huge nose saying hee hee.", ""],
-      ["ふ", "fu", ["hu"], "A fool dancing with a hula hoop — somewhere between f and h.", ""],
-      ["へ", "he", [], "Mount Saint Helens, squat and wide.", ""],
-      ["ほ", "ho", [], "A mutant Santa climbing down a chimney: ho ho ho.", "は has no bar on top."],
+      ["は", "ha", "A capital H and a little a squeezed together: Ha!", "ほ has an extra bar on top."],
+      ["ひ", "hi", "A guy with a huge nose saying hee hee.", ""],
+      ["ふ", "fu", "A fool dancing with a hula hoop — somewhere between f and h.", ""],
+      ["へ", "he", "Mount Saint Helens, squat and wide.", ""],
+      ["ほ", "ho", "A mutant Santa climbing down a chimney: ho ho ho.", "は has no bar on top."],
     ]},
     { id: "m", label: "ま", name: "M-column", kind: "main", kana: [
-      ["ま", "ma", [], "Mama doing evil magic — taking her own head off.", "ほ has a line on the left."],
-      ["み", "mi", [], "A 21 in blackjack: lucky me!", ""],
-      ["む", "mu", [], "A cow going moo.", ""],
-      ["め", "me", [], "A beautiful eye (me means eye) with makeup.", "ぬ has a loop at the end."],
-      ["も", "mo", [], "A fish hook catching more and more worms.", "し with two bars."],
+      ["ま", "ma", "Mama doing evil magic — taking her own head off.", "ほ has a line on the left."],
+      ["み", "mi", "A 21 in blackjack: lucky me!", ""],
+      ["む", "mu", "A cow going moo.", ""],
+      ["め", "me", "A beautiful eye (me means eye) with makeup.", "ぬ has a loop at the end."],
+      ["も", "mo", "A fish hook catching more and more worms.", "し with two bars."],
     ]},
     { id: "y", label: "や", name: "Y-column", kind: "main", kana: [
-      ["や", "ya", [], "A yacht with its anchor out — or a yak's face.", ""],
-      ["ゆ", "yu", [], "A big fish eye staring at you.", ""],
-      ["よ", "yo", [], "A Y and an o: play it like a yo-yo.", "ま has two bars."],
+      ["や", "ya", "A yacht with its anchor out — or a yak's face.", ""],
+      ["ゆ", "yu", "A big fish eye staring at you.", ""],
+      ["よ", "yo", "A Y and an o: play it like a yo-yo.", "ま has two bars."],
     ]},
     { id: "r", label: "ら", name: "R-column", kind: "main", kana: [
-      ["ら", "ra", [], "A rabbit facing left with droopy ears.", "ち has a cross bar."],
-      ["り", "ri", [], "Reeds swaying in the wind.", "Some fonts join the two strokes into one."],
-      ["る", "ru", [], "A route with a loop at the end of it.", "ろ is the same road without the loop."],
-      ["れ", "re", [], "A man on his knees, retching.", "ね ends in a loop, わ ends in a curve."],
-      ["ろ", "ro", [], "A plain road — no loop.", "る has a loop."],
+      ["ら", "ra", "A rabbit facing left with droopy ears.", "ち has a cross bar."],
+      ["り", "ri", "Reeds swaying in the wind.", "Some fonts join the two strokes into one."],
+      ["る", "ru", "A route with a loop at the end of it.", "ろ is the same road without the loop."],
+      ["れ", "re", "A man on his knees, retching.", "ね ends in a loop, わ ends in a curve."],
+      ["ろ", "ro", "A plain road — no loop.", "る has a loop."],
     ]},
     { id: "w", label: "わ", name: "W & N", kind: "main", kana: [
-      ["わ", "wa", [], "A wasp flying straight up, away from the cat ね.", "ね ends in a loop, れ ends in a kick."],
-      ["を", "wo", ["o"], "A chinless man hit by a boomerang: whoa! (Said 'o', mostly a particle.)", ""],
-      ["ん", "n", ["nn"], "Looks like a lowercase n. The only kana with no vowel.", ""],
+      ["わ", "wa", "A wasp flying straight up, away from the cat ね.", "ね ends in a loop, れ ends in a kick."],
+      ["を", "wo", "A chinless man hit by a boomerang: whoa! (Said 'o', mostly a particle.)", ""],
+      ["ん", "n", "Looks like a lowercase n. The only kana with no vowel.", ""],
     ]},
     { id: "g", label: "が", name: "G (dakuten)", kind: "dakuten", note: "か + ゛: the car (ka) crashes into the guard rail (ga).", kana: [
       ["が", "ga"], ["ぎ", "gi"], ["ぐ", "gu"], ["げ", "ge"], ["ご", "go"],
     ]},
     { id: "z", label: "ざ", name: "Z (dakuten)", kind: "dakuten", note: "さ + ゛: the saw (sa) gets zapped (za). し becomes じ (ji).", kana: [
-      ["ざ", "za"], ["じ", "ji", ["zi"]], ["ず", "zu"], ["ぜ", "ze"], ["ぞ", "zo"],
+      ["ざ", "za"], ["じ", "ji"], ["ず", "zu"], ["ぜ", "ze"], ["ぞ", "zo"],
     ]},
     { id: "d", label: "だ", name: "D (dakuten)", kind: "dakuten", note: "た + ゛: TA-DA! ち becomes ぢ (ji) and つ becomes づ (zu), both rare.", kana: [
-      ["だ", "da"], ["ぢ", "ji", ["di", "dzi", "zi"]], ["づ", "zu", ["du", "dzu"]], ["で", "de"], ["ど", "do"],
+      ["だ", "da"], ["ぢ", "ji"], ["づ", "zu"], ["で", "de"], ["ど", "do"],
     ]},
     { id: "b", label: "ば", name: "B (dakuten)", kind: "dakuten", note: "は + ゛: laughing 'ha ha' at a bar (ba)...", kana: [
       ["ば", "ba"], ["び", "bi"], ["ぶ", "bu"], ["べ", "be"], ["ぼ", "bo"],
@@ -87,16 +87,16 @@
 
   // Combination kana from an い-row kana plus small ゃゅょ [き + ゃ = kya].
   const youon = [
-    ["ky", "き", "ky", []], ["sh", "し", "sh", ["sy"]], ["ch", "ち", "ch", ["ty", "cy"]],
-    ["ny", "に", "ny", []], ["hy", "ひ", "hy", []], ["my", "み", "my", []], ["ry", "り", "ry", []],
-    ["gy", "ぎ", "gy", []], ["j", "じ", "j", ["jy", "zy"]], ["by", "び", "by", []], ["py", "ぴ", "py", []],
+    ["ky", "き", "ky"], ["sh", "し", "sh"], ["ch", "ち", "ch"],
+    ["ny", "に", "ny"], ["hy", "ひ", "hy"], ["my", "み", "my"], ["ry", "り", "ry"],
+    ["gy", "ぎ", "gy"], ["j", "じ", "j"], ["by", "び", "by"], ["py", "ぴ", "py"],
   ];
-  for (const [id, base, cons, alts] of youon) {
+  for (const [id, base, cons] of youon) {
     const baseRomaji = groups.flatMap((g) => g.kana).find((k) => k[0] === base)[1];
     groups.push({
       id: "y-" + id, label: base + "ゃ", name: `${base}ゃ ${base}ゅ ${base}ょ`, kind: "youon",
       note: `${base} (${baseRomaji}) + small ゃゅょ`,
-      kana: [["ゃ", "a"], ["ゅ", "u"], ["ょ", "o"]].map(([small, v]) => [base + small, cons + v, alts.map((a) => a + v)]),
+      kana: [["ゃ", "a"], ["ゅ", "u"], ["ょ", "o"]].map(([small, v]) => [base + small, cons + v]),
     });
   }
 
@@ -166,33 +166,33 @@
     groups.push({
       id: "k-" + g.id, label: toKata(g.label), name: toKata(g.name), kind: g.kind, script: "katakana",
       note: g.kind === "youon" ? toKata(g.note) : KATA_NOTES[g.id] || "",
-      kana: g.kana.map(([kana, romaji, alts]) => {
+      kana: g.kana.map(([kana, romaji]) => {
         const kk = toKata(kana);
-        return [kk, romaji, alts, ...(KATA[kk] || [])];
+        return [kk, romaji, ...(KATA[kk] || [])];
       }),
     });
     if (g.id === "y-j") {
       groups.push({ id: "k-y-dj", label: "ヂャ", name: "ヂャ ヂュ ヂョ", kind: "youon", script: "katakana",
         note: "ヂ (ji) + small ャュョ. Rare, and said just like ジャ.",
-        kana: [["ヂャ", "ja", ["dya", "jya", "zya"]], ["ヂュ", "ju", ["dyu", "jyu", "zyu"]], ["ヂョ", "jo", ["dyo", "jyo", "zyo"]]] });
+        kana: [["ヂャ", "ja"], ["ヂュ", "ju"], ["ヂョ", "jo"]] });
     }
   }
   // Small vowels let katakana spell sounds Japanese lacks [フ + ァ = fa].
   const EXTENDED = [
     ["v", "ヴァ ヴィ ヴ ヴェ ヴォ", "ウ + ゛ = ヴ, plus small vowels for the v-sounds. Most speakers say them closer to b.",
-      [["ヴァ", "va", ["bwa"]], ["ヴィ", "vi", ["bwi"]], ["ヴ", "vu", ["bu"]], ["ヴェ", "ve", ["bwe"]], ["ヴォ", "vo", ["bwo"]]]],
+      [["ヴァ", "va"], ["ヴィ", "vi"], ["ヴ", "vu"], ["ヴェ", "ve"], ["ヴォ", "vo"]]],
     ["w", "ウィ ウェ ウォ", "ウ + a small vowel for the w-sounds that わ and を don't cover.",
-      [["ウィ", "wi"], ["ウェ", "we"], ["ウォ", "wo", ["uxo"]]]],
+      [["ウィ", "wi"], ["ウェ", "we"], ["ウォ", "wo"]]],
     ["f", "ファ フィ フェ フォ", "フ + a small vowel for every f-sound.",
       [["ファ", "fa"], ["フィ", "fi"], ["フェ", "fe"], ["フォ", "fo"]]],
     ["ts", "ツァ ツィ ツェ ツォ", "ツ + a small vowel, for Italian z and Chinese ts, as in モッツァレラ.",
-      [["ツァ", "tsa", ["tza"]], ["ツィ", "tsi", ["tzi"]], ["ツェ", "tse", ["tze"]], ["ツォ", "tso", ["tzo"]]]],
+      [["ツァ", "tsa"], ["ツィ", "tsi"], ["ツェ", "tse"], ["ツォ", "tso"]]],
     ["e", "シェ ジェ チェ", "シ, ジ and チ + a small ェ: shell, jelly, check.",
-      [["シェ", "she"], ["ジェ", "je", ["jye"]], ["チェ", "che"]]],
+      [["シェ", "she"], ["ジェ", "je"], ["チェ", "che"]]],
     ["t", "ティ トゥ", "テ + small ィ and ト + small ゥ: party, two.",
-      [["ティ", "ti", ["thi"]], ["トゥ", "tu", ["twu"]]]],
+      [["ティ", "ti"], ["トゥ", "tu"]]],
     ["dh", "ディ ドゥ", "デ + small ィ and ド + small ゥ: candy, dew.",
-      [["ディ", "di", ["dhi"]], ["ドゥ", "du", ["dwu"]]]],
+      [["ディ", "di"], ["ドゥ", "du"]]],
   ];
   for (const [id, name, note, kana] of EXTENDED) {
     groups.push({ id: "k-x-" + id, label: kana[0][0], name, kind: "extended", script: "katakana", note, kana });
@@ -215,8 +215,8 @@
   // Every romaji first, so a sound can name a kana listed after it [ヴァ is spelled from ヴ, two places later].
   groups.forEach((g) => g.kana.forEach(([kana, romaji]) => romajiOf.set(kana, romaji)));
   for (const g of groups) {
-    g.kana = g.kana.map(([kana, romaji, alts = [], mnemonic = "", lookalike = ""], i) => {
-      const k = { kana, romaji, accept: [romaji, ...alts], mnemonic: mnemonic || marked(g, kana, romaji, i) || g.note || "", lookalike,
+    g.kana = g.kana.map(([kana, romaji, mnemonic = "", lookalike = ""], i) => {
+      const k = { kana, romaji, mnemonic: mnemonic || marked(g, kana, romaji, i) || g.note || "", lookalike,
         group: g.id, kind: g.kind, script: g.script };
       KANA.push(k);
       return k;
