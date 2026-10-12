@@ -140,7 +140,7 @@
       </div>`;
     shell.app.querySelector("#per").addEventListener("change", (e) => {
       deck = local();
-      deck.settings = { newPerDay: +e.target.value, at: Date.now() };
+      deck.settings = { newPerDay: +e.target.value, at: Math.max(Date.now(), (deck.settings.at || 0) + 1) };
       save();
       hub();
     });

@@ -956,3 +956,75 @@ test("a deck left on this browser without an owner isn't handed to whoever signs
   assert.deepEqual((await deckOf(page)).cards, {});
   await page.close();
 });
+
+// On a phone the keyboard closed after every answer: the box went read-only, and Continue took the focus [a tap per kana to get it back].
+test("the answer box keeps focus through a right answer, a miss and Continue, so a phone keyboard stays up", async () => {
+  const page = await open(listed, "#quiz/a,k/1");
+  await page.evaluate(() => {
+    const box = document.querySelector("#in");
+    window.__blurs = 0;
+    window.__locks = 0;
+    box.addEventListener("blur", () => window.__blurs++);
+    new MutationObserver((m) => { window.__locks += m.length; }).observe(box, { attributes: true, attributeFilter: ["readonly", "disabled"] });
+  });
+  const prog = await page.textContent("#prog");
+  await page.type("#in", await romajiOf(page, await page.textContent("#kana")));
+  await page.waitForFunction((p) => document.querySelector("#prog").textContent !== p, prog);
+  await page.type("#in", "zz");
+  await page.press("#in", "Enter");
+  await page.click("#fb .speak");
+  await page.click("#next");
+  assert.deepEqual(await page.evaluate(() => [window.__blurs, window.__locks, document.activeElement.id]), [0, 0, "in"]);
+  await page.close();
+});
+
+test("letters typed while a right answer settles start the next answer", async () => {
+  const page = await open(listed, "#quiz/k/1");
+  const prog = await page.textContent("#prog");
+  await page.keyboard.type((await romajiOf(page, await page.textContent("#kana"))) + "k");
+  await page.waitForFunction((p) => document.querySelector("#prog").textContent !== p, prog);
+  assert.equal(await page.inputValue("#in"), "k");
+  await page.close();
+});
+
+test("a miss on the last kana leaves it for the Missed list instead of asking it twice in a row", async () => {
+  const page = await open(listed, "#quiz/a/1");
+  for (let i = 0; i < 4; i++) {
+    const prog = await page.textContent("#prog");
+    await page.type("#in", await romajiOf(page, await page.textContent("#kana")));
+    await page.waitForFunction((p) => document.querySelector("#prog").textContent !== p, prog);
+  }
+  const last = await page.textContent("#kana");
+  await page.type("#in", "zz");
+  await page.press("#in", "Enter");
+  await page.press("#in", "Enter");
+  await page.locator("h1", { hasText: "Done!" }).waitFor();
+  assert.match(await page.textContent(".miss-list"), new RegExp(last));
+  await page.close();
+});
+
+test("the quiz uses the shared-kana rule [や and きゃ never back to back]", async () => {
+  const page = await open(listed, "#quiz/y,y-k,y-sh/2");
+  const seen = [];
+  while (!(await page.locator("h1", { hasText: "Done!" }).count())) {
+    const prog = await page.textContent("#prog");
+    const k = await page.textContent("#kana");
+    seen.push(k);
+    await page.type("#in", await romajiOf(page, k));
+    await page.waitForFunction((p) => document.querySelector("h1")?.textContent === "Done!" || document.querySelector("#prog")?.textContent !== p, prog);
+  }
+  const shared = await page.evaluate((s) => s.slice(1).filter((k, i) => HiraOrder.shareKana({ kana: s[i] }, { kana: k })).length, seen);
+  assert.equal(shared, 0, seen.join(" "));
+  await page.close();
+});
+
+// A per-day change after syncing with a fast-clock device lost the next merge and quietly reverted.
+test("changing new words a day sticks after syncing with a device whose clock runs ahead", async () => {
+  const ahead = Date.now() + 3600e3;
+  const page = await open({ ...listed, remoteStudy: { cards: {}, settings: { newPerDay: 20, at: ahead }, savedAt: ahead } }, "#words");
+  await page.locator("#new").waitFor();
+  await page.selectOption("#per", "10");
+  await page.evaluate(() => HiraStudy.flush());
+  assert.equal((await deckOf(page)).settings.newPerDay, 10);
+  await page.close();
+});

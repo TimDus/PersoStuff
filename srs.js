@@ -63,7 +63,9 @@
   const ORDER = ["n", "last", "lapses", "due", "ivl", "ease"];
   const wins = (c, cur) => {
     for (const f of ORDER) if ((c[f] ?? 0) !== (cur[f] ?? 0)) return f === "n" || f === "last" ? (c[f] ?? 0) > (cur[f] ?? 0) : (c[f] ?? 0) < (cur[f] ?? 0);
-    return false;
+    // Any other difference is settled by the text of the card, the same answer on every device [a `miss` on one copy only].
+    const text = (x) => JSON.stringify(Object.keys(x).sort().map((f) => [f, x[f]]));
+    return text(c) > text(cur);
   };
   // Two devices' decks into one: cards by `wins`, settings from the later change, and any other key whole from the newer side
   // so a later section's data outlives a tab that predates it [a verb-drill key written by the next version].

@@ -40,3 +40,9 @@ test("words written in kana get the type of the word the list means", () => {
     ["irregular verb", "ichidan verb", "godan verb", "interjection", "adverb"]);
   assert.equal(by("する|する").pos[0], "vs-i");
 });
+
+// Matching the right homophone moved はい from 213th to 641st of 717, because its entry carries no newspaper rank.
+test("a kana word ranks by how common its sound is [はい, よく, どう, その in the first half of N5]", () => {
+  const at = (k) => vocab.findIndex((w) => w.k === k);
+  assert.deepEqual(["はい|はい", "よく|よく", "どう|どう", "その|その"].filter((k) => at(k) >= 359), []);
+});

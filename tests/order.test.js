@@ -4,7 +4,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fc = require("fast-check");
-const { gapFor, spaced, requeue, slowest } = require("../order.js");
+const { gapFor, spaced, requeue, slowest, shareKana } = require("../order.js");
 
 // A repeatable Math.random stand-in [seed 1 always gives the same order].
 const seeded = (seed) => () => {
@@ -53,9 +53,10 @@ test("near the end a miss comes back twice while two fit, then once and last", (
     assert.equal(requeue(nine, 23, 5, seeded(seed)), 1);
     assert.equal(nine.at(-1), "k23");
   }
+  // The last kana missed isn't asked twice in a row; it waits in the Missed list instead [user's call, 2026-10-12].
   const last = kana(33);
-  assert.equal(requeue(last, 32, 5), 1);
-  assert.deepEqual(last.slice(-2), ["k32", "k32"], "nothing left to put between");
+  assert.equal(requeue(last, 32, 5), 0);
+  assert.deepEqual(last, kana(33));
 });
 
 test("misses anywhere in a real quiz keep the gap, short of the very end", () => {
@@ -111,4 +112,36 @@ test("a drill never skips a slower kana for a faster one", () => {
       assert.ok(left.every((k) => picked.every((p) => tenth(p) > tenth(k))), `${picked} against ${left}`);
     }
   }));
+});
+
+// Two kana in a row that share a character read as the same card twice [や then きゃ, き then きゃ, しゃ then しょ].
+global.window = {};
+require("../data.js");
+const { KANA, ids } = window.HIRAGANA;
+const pick = (...groups) => KANA.filter((k) => groups.flat().includes(k.group));
+
+test("kana that share a character count as the same, small kana as their big ones, scripts apart", () => {
+  const share = (a, b) => shareKana({ kana: a }, { kana: b });
+  assert.deepEqual([share("や", "きゃ"), share("き", "きゃ"), share("しゃ", "しょ"), share("きゃ", "きゃ")], [true, true, true, true]);
+  assert.deepEqual([share("や", "ヤ"), share("か", "が"), share("や", "ゆ"), share("きゃ", "しゅ")], [false, false, false, false]);
+});
+
+test("a quiz never puts two kana that share a character back to back when it can avoid it", () => {
+  const list = pick("y", "k", ids("youon"));
+  fc.assert(fc.property(fc.integer({ min: 1, max: 3 }), fc.integer(), (rounds, seed) => {
+    const q = spaced(list, rounds, seeded(seed), shareKana);
+    assert.equal(q.length, list.length * rounds);
+    const pairs = q.slice(1).flatMap((k, i) => (shareKana(q[i], k) ? [q[i].kana + k.kana] : []));
+    assert.deepEqual(pairs, []);
+  }), { numRuns: 50 });
+});
+
+test("a missed kana comes back away from any kana it shares a character with", () => {
+  const list = pick("y", "k", ids("youon"));
+  fc.assert(fc.property(fc.integer({ min: 0, max: 30 }), fc.integer(), (idx, seed) => {
+    const q = spaced(list, 2, seeded(seed), shareKana);
+    requeue(q, idx, gapFor(list.length), seeded(seed + 1), shareKana);
+    const pairs = q.slice(1).flatMap((k, i) => (shareKana(q[i], k) ? [q[i].kana + k.kana] : []));
+    assert.deepEqual(pairs, []);
+  }), { numRuns: 50 });
 });

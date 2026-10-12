@@ -101,7 +101,8 @@ for (const word of words) {
   const overlap = (e) => words_(e.senses.map((s) => s.gloss).join(" ")).filter((x) => meant.has(x)).length;
   const kanaFirst = (e) => (isKana(w) && e.kana ? 0 : 1);
   const e = cands.sort((a, b) => overlap(b) - overlap(a) || kanaFirst(a) - kanaFirst(b) || score(a) - score(b))[0];
-  word.f = score(e);
+  // A kana word is as common as its sound, whichever homophone it is [はい: the reading's best rank, not 50 for its untagged entry].
+  word.f = isKana(w) ? Math.min(score(e), ...cands.map((x) => rank(x.rebs.find((y) => y.text === r).pri))) : score(e);
   // A suru verb conjugates as する whatever its noun's first sense says [勉強 is n, 勉強する is vs].
   word.pos = word.suru ? ["vs", ...e.senses[0].pos.filter((p) => p !== "vs")] : e.senses[0].pos;
 }

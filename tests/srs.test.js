@@ -149,3 +149,9 @@ test("Easy on a relearning card gives a day more than Good", () => {
   const lapsed = { st: "relearn", ivl: 1, ease: 1.9, due: 100, n: 8, lapses: 2, first: 10, last: 100 };
   assert.deepEqual([grade(lapsed, 3, 100).card.ivl, grade(lapsed, 4, 100).card.ivl], [1, 2]);
 });
+
+test("two copies differing anywhere settle on one, not just in the ranked fields [Again vs Hard on a new word: only miss differs]", () => {
+  const a = { st: "learn", ivl: 0, ease: 2.5, due: 100, n: 1, lapses: 0, first: 100, last: 100, miss: 100 };
+  const b = { st: "learn", ivl: 0, ease: 2.5, due: 100, n: 1, lapses: 0, first: 100, last: 100 };
+  assert.deepEqual(mergeStudy({ cards: { k: a } }, { cards: { k: b } }).cards.k, mergeStudy({ cards: { k: b } }, { cards: { k: a } }).cards.k);
+});

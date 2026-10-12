@@ -1,7 +1,7 @@
 (function () {
   const { groups, KANA, LESSONS, KATA_LESSONS, SMALL_TSU, LONG_VOWELS, ids, main } = window.HIRAGANA;
   const { clipPath, imagePath, merge, same } = window.HiraSync;
-  const { gapFor, spaced, requeue, slowest } = window.HiraOrder;
+  const { gapFor, spaced, requeue, slowest, shareKana } = window.HiraOrder;
   const backend = window.HIRA_BACKEND;
   // Worksheets and sentences arrive from the private bucket after sign-in [empty until then, or when offline].
   let SHEETS = [];
@@ -555,12 +555,13 @@
 
   function runQuiz(list, rounds, bestKey) {
     cleanup();
-    const queue = spaced(list, rounds);
+    const queue = spaced(list, rounds, Math.random, shareKana);
     const total = queue.length, gap = gapFor(list.length);
     const misses = new Map();
     // Each kana's correct answers in ms [か twice at 1.2s and 0.8s = [1200, 800]].
     const took = new Map();
-    let idx = 0, right = 0, wrong = 0, waiting = false, shownAt = 0;
+    // The box is never read-only, which would drop a phone keyboard: `settling` covers the beat after a right answer, `waiting` a miss.
+    let idx = 0, right = 0, wrong = 0, waiting = false, settling = false, carryFrom = 0, shownAt = 0;
     const start = Date.now();
 
     app.innerHTML = `
@@ -581,7 +582,10 @@
       const k = queue[idx];
       app.querySelector("#kana").textContent = k.kana;
       app.querySelector("#prog").textContent = `${idx + 1} / ${queue.length}`;
-      input.value = ""; input.className = "quiz-input"; input.readOnly = false; input.focus();
+      // Letters typed while the last answer settled start this one ["ka" + "k" leaves "k"].
+      input.value = settling ? input.value.slice(carryFrom) : "";
+      input.className = "quiz-input"; input.focus();
+      settling = false;
       fb.innerHTML = "";
       waiting = false;
       shownAt = Date.now();
@@ -591,7 +595,7 @@
       right++;
       took.set(k, [...(took.get(k) || []), Date.now() - shownAt]);
       app.querySelector("#ok").textContent = right;
-      input.classList.add("right"); input.readOnly = true;
+      input.classList.add("right"); settling = true; carryFrom = input.value.length;
       idx++;
       after(160, show);
     }
@@ -600,17 +604,17 @@
       wrong++;
       misses.set(k, (misses.get(k) || 0) + 1);
       app.querySelector("#bad").textContent = wrong;
-      input.classList.add("wrong"); input.readOnly = true;
+      input.classList.add("wrong");
       fb.innerHTML = `<div class="ans">${esc(k.romaji)} ${speakBtn(k.kana)}</div><div class="muted">${esc(k.mnemonic)}</div>
         ${artBtn(k.kana)}
         <button class="ghost" id="next" style="margin-top:.5rem">Continue <span class="kbd">Enter</span></button>`;
       fb.querySelector("#next").addEventListener("click", show);
-      requeue(queue, idx, gap);
+      requeue(queue, idx, gap, Math.random, shareKana);
       idx++;
       waiting = true;
     }
     input.addEventListener("input", () => {
-      if (waiting || input.readOnly) return;
+      if (waiting || settling) return;
       const k = queue[idx], v = norm(input.value);
       if (v === k.romaji) correct(k);
     });
@@ -618,10 +622,14 @@
       if (e.key !== "Enter") return;
       e.preventDefault();
       if (waiting) return show();
-      if (input.readOnly) return;
+      if (settling) return;
       const k = queue[idx];
       norm(input.value) === k.romaji ? correct(k) : miss(k);
     });
+    // A missed answer stays put until Continue [typing over "zz" does nothing].
+    input.addEventListener("beforeinput", (e) => { if (waiting) e.preventDefault(); });
+    // Buttons under a miss take no focus, so the answer box keeps the keyboard [Listen, Show illustration, Continue].
+    fb.addEventListener("mousedown", (e) => { if (e.target.closest("button")) e.preventDefault(); });
     // Enter still continues once focus has left the answer box [after pressing Show illustration].
     onKey((e) => { if (waiting && e.key === "Enter" && e.target !== input && !e.target.closest("button")) show(); });
     function finish() {
