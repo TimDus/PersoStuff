@@ -1,6 +1,6 @@
 (function () {
   const { groups, KANA, LESSONS, KATA_LESSONS, SMALL_TSU, LONG_VOWELS, ids, main } = window.HIRAGANA;
-  const { clipPath, imagePath, merge, same } = window.HiraSync;
+  const { clipPath, imagePath, merge, same, wholeCategories } = window.HiraSync;
   const { gapFor, spaced, requeue, slowest, shareKana } = window.HiraOrder;
   const backend = window.HIRA_BACKEND;
   // Worksheets and sentences arrive from the private bucket after sign-in [empty until then, or when offline].
@@ -9,6 +9,7 @@
   let contentError = "";
   const byKana = new Map(KANA.map((k) => [k.kana, k]));
   const groupById = new Map(groups.map((g) => [g.id, g]));
+  const keepBest = wholeCategories(groups);
   const app = document.getElementById("app");
 
   // Google Doc ids of the original worksheets, for printing on paper [p0 to p2 are the sentence sheets, p2 in katakana].
@@ -98,7 +99,7 @@
       if (!user || !backend) return;
       try {
         const remote = await (pulled || backend.loadProgress());
-        const merged = merge(snapshot(), remote);
+        const merged = merge(snapshot(), remote, keepBest);
         applySnapshot(merged);
         if (!same(merged, remote)) await backend.saveProgress(user.id, merged);
         localStorage.setItem("hira.sync.pushedAt", merged.savedAt);
@@ -267,6 +268,11 @@
   const SCRIPTS = [["hiragana", "Hiragana", ["main", "dakuten", "youon"]], ["katakana", "Katakana", ["main", "dakuten", "youon", "extended"]]];
   const KIND_NAMES = { main: "Main kana", dakuten: "Dakuten", youon: "Combinations", extended: "Extended sounds" };
   // Group ids per chip: one Learn step for main kana, one column otherwise [hiragana step 7 = m,y; katakana step 1 = k-a,k-k].
+  // Group ids behind an all or none button [hiragana = its main, dakuten and combinations; hiragana:main = 10 columns].
+  const idsOf = (target) => {
+    const [script, kind] = target.split(":");
+    return groups.filter((g) => g.script === script && (!kind || g.kind === kind)).map((g) => g.id);
+  };
   const chipsOf = (script, kind) => (kind === "main"
     ? { hiragana: LESSONS, katakana: KATA_LESSONS }[script].map((l) => l.groups).filter((g) => g.length && groupById.get(g[0]).kind === "main")
     : groups.filter((g) => g.kind === kind && g.script === script).map((g) => [g.id]));
@@ -278,7 +284,8 @@
         title="${esc(gs.map((g) => g.name).join(" & "))}">${gs.flatMap((g) => g.kana).map((k) => esc(k.kana)).join("")}</span>`;
     };
     const draw = () => {
-      el.innerHTML = SCRIPTS.map(([script, title, kinds]) => `<h3 class="picker-script">${title}</h3>` + kinds.map((kind) => `
+      el.innerHTML = SCRIPTS.map(([script, title, kinds]) => `<div class="picker-script"><h3>${title}</h3>
+        <button class="linkish" data-all="${script}">all</button><button class="linkish" data-none="${script}">none</button></div>` + kinds.map((kind) => `
         <div class="picker-head"><strong>${KIND_NAMES[kind]}</strong>
           <button class="linkish" data-all="${script}:${kind}">all</button><button class="linkish" data-none="${script}:${kind}">none</button></div>
         <div class="picker">${chipsOf(script, kind).map(chip).join("")}
@@ -292,8 +299,8 @@
         const gids = hit.dataset.g.split(",");
         const on = gids.every((id) => selected.has(id));
         gids.forEach((id) => (on ? selected.delete(id) : selected.add(id)));
-      } else if (all) ids(...all.dataset.all.split(":").reverse()).forEach((id) => selected.add(id));
-      else if (none) ids(...none.dataset.none.split(":").reverse()).forEach((id) => selected.delete(id));
+      } else if (all) idsOf(all.dataset.all).forEach((id) => selected.add(id));
+      else if (none) idsOf(none.dataset.none).forEach((id) => selected.delete(id));
       else return;
       draw();
       onChange(selected);
@@ -525,7 +532,10 @@
   // ---------- Quiz ----------
   function viewQuiz([sel, rounds]) {
     // A hand-typed hash can name no known group [#quiz/zz/1 = the picker, not a 0-kana run at NaN%].
-    if (sel && kanaOf(sel.split(",")).length) return runQuiz(kanaOf(sel.split(",")), Math.max(1, +rounds || 1), `${sel}/${+rounds || 1}`);
+    if (sel && kanaOf(sel.split(",")).length) {
+      const key = `${sel}/${+rounds || 1}`;
+      return runQuiz(kanaOf(sel.split(",")), Math.max(1, +rounds || 1), keepBest(key) ? key : null);
+    }
     const selected = new Set(store.get("quiz.sel", main));
     let r = store.get("quiz.rounds", 1);
     app.innerHTML = `
@@ -544,7 +554,8 @@
       app.querySelector("#count").textContent = `${n} kana × ${r}`;
       app.querySelector("#go").disabled = !n;
       const best = store.get("quiz.best", {})[key()];
-      app.querySelector("#best").textContent = best ? `Best: ${fmtTime(best.ms)} at ${best.acc}%` : "";
+      app.querySelector("#best").textContent = !keepBest(key()) ? (n ? "Times are kept for whole categories only" : "")
+        : best ? `Best: ${fmtTime(best.ms)} at ${best.acc}%` : "";
       store.set("quiz.sel", [...selected]);
     };
     app.querySelector("#pick").appendChild(picker(selected, update));
@@ -823,6 +834,8 @@
     const list = READING[sheet];
     let i = Math.min(list.length - 1, Math.max(0, +n || 0));
     let showAll = false;
+    // The romaji typed for this sentence and whether it was checked right [kept while Show romaji redraws].
+    let typed = "", typedOk = false;
     const done = new Set(store.get("reading.done", []));
 
     function draw() {
@@ -846,6 +859,9 @@
             [...t].some(isKana) ? `<span class="tok" data-r="${esc(toRomaji(t))}">${esc(t)}</span>` : esc(t)).join("")}</div>
           ${showAll ? `<div class="romaji-line">${esc(toRomaji(text))}</div>` : ""}
           ${kata ? "" : `<p class="muted small">Romaji here is letter by letter: as particles, は is said <b>wa</b>, へ is said <b>e</b> and を is said <b>o</b>.</p>`}
+          <input class="quiz-input sentence-input ${typedOk ? "right" : ""}" id="typed" value="${esc(typed)}" autocomplete="off" autocapitalize="off" autocorrect="off"
+            spellcheck="false" enterkeyhint="done" placeholder="Type it in romaji, then Enter">
+          <div class="romaji-line" id="typed-fb"></div>
         </div>
         <div class="row" style="margin-top:1rem">
           <button class="ghost" id="prev" ${i === 0 ? "disabled" : ""}>← Prev</button>
@@ -868,10 +884,43 @@
       app.querySelector("#next").addEventListener("click", () => go(i + 1));
       app.querySelector("#all").addEventListener("click", toggle);
       app.querySelector("#read").addEventListener("click", markRead);
+      const box = app.querySelector("#typed");
+      box.addEventListener("input", () => { typed = box.value; typedOk = false; box.classList.remove("right", "wrong"); });
+      box.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        if (typedOk) return go(i + 1);
+        checkTyped();
+      });
+    }
+    // Typed romaji against the letter-by-letter reading, letters only [いっしゅうかん、 = "isshuukan", the comma and spaces don't count].
+    function checkTyped() {
+      const letters = (r) => r.toLowerCase().replace(/[^a-z]/g, "");
+      const want = letters(toRomaji(list[i])), got = letters(typed);
+      if (!got) return;
+      if (got === want) {
+        typedOk = true;
+        done.add(`${sheet}-${i}`);
+        store.set("reading.done", [...done]);
+        draw();
+        app.querySelector("#typed").focus();
+        return;
+      }
+      const box = app.querySelector("#typed");
+      box.classList.add("wrong");
+      app.querySelector("#typed-fb").textContent = "Not quite: it goes off at the marked kana.";
+      // The kana where the typing first goes wrong, the last one when it runs on [さんじ typed as "sanzi" marks じ].
+      let at = 0;
+      while (at < got.length && got[at] === want[at]) at++;
+      let seen = 0;
+      const toks = [...app.querySelectorAll(".tok")];
+      const tok = toks.find((t) => (seen += letters(t.dataset.r).length) > at) || toks.at(-1);
+      app.querySelectorAll(".tok.off").forEach((t) => t.classList.remove("off"));
+      tok?.classList.add("off");
     }
     function go(j) {
       if (j < 0 || j >= list.length) return;
-      i = j; showAll = false;
+      i = j; showAll = false; typed = ""; typedOk = false;
       history.replaceState(null, "", `#reading/${sheet}/${i}`);
       draw();
     }

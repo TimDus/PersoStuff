@@ -9,9 +9,17 @@
   const better = (a, b) => (a.acc !== b.acc ? (a.acc > b.acc ? a : b) : a.ms <= b.ms ? a : b);
   const seen = (p) => (p ? p.right + p.wrong : -1);
 
+  // Quiz keys that cover whole categories, the only ones kept a best time [all of hiragana main = kept, a,k,s = dropped].
+  const wholeCategories = (groups) => (key) => {
+    const gids = key.split("/")[0].split(",").filter(Boolean);
+    const cat = new Map(groups.map((g) => [g.id, g]));
+    return gids.length > 0 && gids.every((id) => cat.has(id)
+      && groups.every((g) => g.script !== cat.get(id).script || g.kind !== cat.get(id).kind || gids.includes(g.id)));
+  };
+
   // Two devices' snapshots into one, nothing lost [phone knows か, PC knows き = both know both].
   // A side that hasn't seen the newest reset is dropped, answers since included [phone on reset 0 meets PC's reset 1000 = phone's copy ignored].
-  function merge(a, b) {
+  function merge(a, b, keepBest = () => true) {
     const resetAt = Math.max(a?.resetAt || 0, b?.resetAt || 0);
     const sides = [a, b].filter((s) => s && (s.resetAt || 0) >= resetAt);
     const out = { progress: {}, "quiz.best": {}, "sheets.done": {}, "reading.done": [], resetAt,
@@ -24,6 +32,7 @@
         if (!cur || seen(p) > seen(cur) || (seen(p) === seen(cur) && p.box > cur.box)) out.progress[kana] = p;
       }
       for (const [key, best] of Object.entries(s["quiz.best"] || {})) {
+        if (!keepBest(key)) continue;
         const cur = out["quiz.best"][key];
         out["quiz.best"][key] = cur ? better(cur, best) : best;
       }
@@ -41,7 +50,7 @@
     : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])])) : v);
   const same = (a, b) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
 
-  const api = { clipPath, imagePath, merge, same };
+  const api = { clipPath, imagePath, merge, same, wholeCategories };
   if (typeof module !== "undefined") module.exports = api;
   else root.HiraSync = api;
 })(this);

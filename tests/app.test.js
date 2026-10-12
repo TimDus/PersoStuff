@@ -228,7 +228,7 @@ test("katakana comes after hiragana on the Learn page, the picker and the chart"
   assert.equal(hrefs[0], "#learn/1");
   assert.ok(hrefs.indexOf("#learn/k1") > hrefs.indexOf("#reading"), "katakana steps follow the hiragana reading card");
   await page.goto(base + "#quiz");
-  assert.deepEqual(await page.$$eval(".picker-script", (h) => h.map((x) => x.textContent)), ["Hiragana", "Katakana"]);
+  assert.deepEqual(await page.$$eval(".picker-script h3", (h) => h.map((x) => x.textContent)), ["Hiragana", "Katakana"]);
   await page.goto(base + "#chart");
   assert.deepEqual(await page.$$eval("main h2", (h) => h.map((x) => x.textContent.split(" ")[0])), ["Hiragana", "Katakana"]);
   await page.close();
@@ -1026,5 +1026,72 @@ test("changing new words a day sticks after syncing with a device whose clock ru
   await page.selectOption("#per", "10");
   await page.evaluate(() => HiraStudy.flush());
   assert.equal((await deckOf(page)).settings.newPerDay, 10);
+  await page.close();
+});
+
+// Picking a whole script took a click on every kind's all or none [four for katakana].
+test("a script's own all and none set every kind under it", async () => {
+  const page = await open(listed, "#quiz");
+  await page.click("[data-none='hiragana']");
+  await page.click("[data-all='katakana']");
+  const on = await page.$$eval(".picker", (ps) => ps.map((p) => [...p.querySelectorAll(".chip")].every((c) => c.classList.contains("on"))));
+  assert.deepEqual(on, [false, false, false, true, true, true, true]);
+  const katakana = await page.evaluate(() => HIRAGANA.KANA.filter((k) => k.script === "katakana").length);
+  assert.equal(await page.textContent("#count"), `${katakana} kana × 1`);
+  await page.close();
+});
+
+// Every selection kept its own best, so a row filled with Learn-step keys nobody looks up again [29 keys, 4 of them whole].
+test("only quizzes of whole categories keep a best time, and the rest leave the row", async () => {
+  const t = { ms: 60000, acc: 90 };
+  const extended = "k-x-v,k-x-w,k-x-f,k-x-ts,k-x-e,k-x-t,k-x-dh";
+  const page = await open({
+    ...listed,
+    remote: { progress: {}, "quiz.best": { "a,k,s/2": t, "a,k,s,t,n,h,m,y,r,w/1": t }, "sheets.done": {}, "reading.done": [], savedAt: 50, resetAt: 0 },
+  }, "#quiz");
+  assert.deepEqual(Object.keys((await saves(page)).at(-1)["quiz.best"]), ["a,k,s,t,n,h,m,y,r,w/1"]);
+  await page.click("[data-none='hiragana']");
+  await page.click("[data-all='hiragana:main']");
+  assert.equal(await page.textContent("#best"), "Best: 1:00 at 90%");
+  await page.click(".chip >> text=あいうえお");
+  assert.equal(await page.textContent("#best"), "Times are kept for whole categories only");
+
+  // Answers typed at once all tie, and a drill of every kana is never offered, so two of them wait [600 and 300 ms].
+  const run = async (hash, waits = []) => {
+    await page.goto(base + hash);
+    for (let n = 0; await page.locator("#kana").count(); n++) {
+      const prog = await page.textContent("#prog");
+      if (waits[n]) await page.waitForTimeout(waits[n]);
+      await page.type("#in", await romajiOf(page, await page.textContent("#kana")));
+      await page.waitForFunction((p) => document.querySelector("h1")?.textContent === "Done!" || document.querySelector("#prog")?.textContent !== p, prog);
+    }
+  };
+  await run("#quiz/a/1", [600, 300]);
+  assert.equal(await page.textContent(".panel p.muted"), "");
+  assert.ok(await page.locator(".slow").count(), "a partial quiz still drills on time");
+  await run(`#quiz/${extended}/1`);
+  assert.equal(await page.textContent(".panel p.muted"), "First run — now beat it.");
+  assert.deepEqual(Object.keys(await page.evaluate(() => JSON.parse(localStorage.getItem("hira.quiz.best")))).sort(),
+    ["a,k,s,t,n,h,m,y,r,w/1", `${extended}/1`]);
+  await page.close();
+});
+
+// Reading sentences could only be ticked off as read, with nothing to check that they were.
+test("a sentence typed in romaji marks the kana where it goes wrong, and counts as read once right", async () => {
+  const page = await open(listed, "#reading/0/0");
+  const answer = (await page.$$eval(".tok", (ts) => ts.map((t) => t.dataset.r).join(" ")));
+  assert.match(answer, /^wa ta shi no ko do mo ha /);
+  await page.fill("#typed", "watashinokodomowa");
+  await page.press("#typed", "Enter");
+  assert.equal(await page.textContent(".tok.off"), "は");
+  assert.equal(await page.locator(".dot.done").count(), 0);
+  await page.fill("#typed", answer.toUpperCase());
+  await page.press("#typed", "Enter");
+  assert.match(await page.getAttribute("#typed", "class"), /\bright\b/);
+  assert.equal(await page.locator(".tok.off").count(), 0);
+  assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("hira.reading.done"))), ["0-0"]);
+  await page.press("#typed", "Enter");
+  assert.match(page.url(), /#reading\/0\/1$/);
+  assert.equal(await page.inputValue("#typed"), "");
   await page.close();
 });

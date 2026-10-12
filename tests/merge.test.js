@@ -3,7 +3,7 @@
 // and "Reset my progress" would come straight back from whichever device synced next.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { merge, clipPath, same } = require("../sync.js");
+const { merge, clipPath, same, wholeCategories } = require("../sync.js");
 
 const side = (over) => ({ progress: {}, "quiz.best": {}, "sheets.done": {}, "reading.done": [], savedAt: 100, resetAt: 0, ...over });
 
@@ -26,6 +26,23 @@ test("quiz bests keep higher accuracy, then the faster time", () => {
   );
   assert.deepEqual(m["quiz.best"]["a/1"], { ms: 9000, acc: 100 });
   assert.deepEqual(m["quiz.best"]["k/1"], { ms: 4000, acc: 90 });
+});
+
+test("only quizzes of whole categories keep a best time, from either side", () => {
+  globalThis.window = globalThis;
+  require("../data.js");
+  const keep = wholeCategories(window.HIRAGANA.groups);
+  const t = { ms: 9000, acc: 100 };
+  const hiraMain = "a,k,s,t,n,h,m,y,r,w";
+  const withExtended = `${hiraMain},k-x-v,k-x-w,k-x-f,k-x-ts,k-x-e,k-x-t,k-x-dh/1`;
+  const m = merge(
+    side({ "quiz.best": { [`${hiraMain}/2`]: t, "a,k,s/2": t, "g,z,d,b/1": t } }),
+    side({ "quiz.best": { [withExtended]: t, [`${hiraMain},k-x-v/1`]: t, "zz/1": t } }),
+    keep,
+  );
+  assert.deepEqual(Object.keys(m["quiz.best"]).sort(), [`${hiraMain}/2`, withExtended].sort());
+  assert.ok(keep(`g,z,d,b,p,${hiraMain}/1`), "key order doesn't matter");
+  assert.ok(!keep("/1"), "an empty selection is no category");
 });
 
 test("worksheet scores keep the best and read sentences add up", () => {
