@@ -605,6 +605,8 @@
     every(500, () => { const t = app.querySelector("#time"); if (t) t.textContent = fmtTime(Date.now() - start); });
 
     function show() {
+      // Cleared before Done so a later Enter there finds nothing to continue [it redrew Done at 0:01, 0:03, 0:05].
+      waiting = false;
       if (idx >= queue.length) return finish();
       const k = queue[idx];
       app.querySelector("#kana").textContent = k.kana;
@@ -614,7 +616,6 @@
       input.className = "quiz-input"; input.focus();
       settling = false;
       fb.innerHTML = "";
-      waiting = false;
       shownAt = Date.now();
       // A whole answer typed ahead counts at once ["ai" in one burst answers あ and い].
       if (input.value && norm(input.value) === k.romaji) correct(k);
@@ -774,6 +775,8 @@
       drawChecks();
     }
     function show() {
+      // Cleared before Done, as in the reading quiz [a later Enter redrew it].
+      waiting = false;
       if (idx >= queue.length) return finish();
       k = queue[idx];
       app.querySelector("#romaji").textContent = k.romaji;

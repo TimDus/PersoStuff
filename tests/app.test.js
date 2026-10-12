@@ -195,6 +195,25 @@ test("after a quiz miss the drawing can be opened and Enter still moves on", asy
 });
 
 // A miss came back once and the counter's total stayed put, so it sat at 15 / 15 while the quiz kept asking.
+// Enter after a miss on the last kana opens Done, and later Enters must leave it be [it redrew at 0:01, 0:03, 0:05].
+test("Enter on the quiz's Done page after a last-kana miss doesn't draw it again", async () => {
+  const page = await open(listed, "#quiz/a/1");
+  await page.locator("#kana").waitFor();
+  while ((await page.textContent("#prog")) !== "5 / 5") {
+    const prog = await page.textContent("#prog");
+    await page.type("#in", await romajiOf(page, await page.textContent("#kana")));
+    await page.waitForFunction((p) => document.querySelector("#prog").textContent !== p, prog);
+  }
+  await page.fill("#in", "zz");
+  await page.press("#in", "Enter");
+  await page.press("#in", "Enter");
+  const done = await page.waitForSelector("h1:has-text('Done!')");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  assert.equal(await done.evaluate((h) => h.isConnected), true);
+  await page.close();
+});
+
 test("a quiz miss comes back twice, the counter counts it, and no kana repeats within five", async () => {
   const page = await open({ user: me, allowed: true }, "#quiz/a,k,s/1");
   const seen = [await page.textContent("#kana")];
@@ -1116,6 +1135,27 @@ async function drawStroke(page, pts, dx = 0, dy = 0) {
 const writeKana = async (page) => { for (const s of await strokesOf(page, await padKana(page))) await drawStroke(page, s); };
 const deckWrite = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("hira.study") || "{}").write);
 const nextKana = (page, prog) => page.waitForFunction((p) => document.querySelector("h1")?.textContent === "Done!" || document.querySelector("#prog")?.textContent !== p, prog);
+
+// Enter after a miss on the last kana opens Done, and later Enters must leave it be [it redrew with a later time and flushed again].
+test("Enter on the writing quiz's Done page after a last-kana miss doesn't draw it again", async () => {
+  const page = await open(listed, "#write/a/1");
+  await page.locator("#pad rect").first().waitFor();
+  while ((await page.textContent("#prog")) !== "5 / 5") {
+    const prog = await page.textContent("#prog");
+    await writeKana(page);
+    await nextKana(page, prog);
+  }
+  const [first, ...rest] = await strokesOf(page, await padKana(page));
+  for (let i = 0; i < 3; i++) await drawStroke(page, first, 0, 40);
+  for (const st of [first, ...rest]) await drawStroke(page, st);
+  await page.locator("#next").waitFor();
+  await page.keyboard.press("Enter");
+  const done = await page.waitForSelector("h1:has-text('Done!')");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  assert.equal(await done.evaluate((h) => h.isConnected), true);
+  await page.close();
+});
 
 test("the Write switch on the quiz page starts a writing run of the picked kana", async () => {
   const page = await open(listed, "#quiz");
