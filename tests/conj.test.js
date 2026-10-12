@@ -103,7 +103,7 @@ test("word parts and spellings without their kana ending give no questions", () 
   assert.equal(conjugate(listed("大切"), "ta").w, "大切だった", "a な-adjective's spelling never ends in kana");
 });
 
-// The box converts on every key, so each prefix must leave what the next key needs [onn = おんn would end おんあ].
+// The box converts on every key, so each prefix must leave what the next key needs [onn = おん, so + a = おんあ].
 test("romaji typed one key at a time gives the same kana as typed at once", () => {
   const typed = (s) => [...s].reduce((v, ch) => toKana(v + ch), "");
   for (const s of ["onna", "annaishimasu", "zannen", "konnichiha", "shinnyuu", "kinnbe", "kon'ya", "tabemashita", "itte"]) {
@@ -116,4 +116,12 @@ test("romaji typed one key at a time gives the same kana as typed at once", () =
 test("a form id this version doesn't know gives no question", () => {
   assert.equal(conjugate(v("食べる", "たべる", "v1"), "gone"), null);
   assert.equal(conjugate(v("来る", "くる", "vk"), "gone"), null);
+});
+
+// Romaji only ever gives hiragana, so a katakana word is compared as hiragana [tesutoshimasu = てすとします for テストします].
+test("a katakana word's form can be typed in romaji", () => {
+  assert.equal(accepts(conjugate(listed("テスト"), "masu"), "tesutoshimasu"), true);
+  assert.equal(accepts(conjugate(listed("コピーする"), "ta"), "kopi-shita"), true);
+  assert.equal(accepts(conjugate(listed("テスト"), "masu"), "テストします"), true);
+  assert.equal(accepts(conjugate(listed("テスト"), "masu"), "tesutoshita"), false);
 });

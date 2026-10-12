@@ -12,7 +12,7 @@
     return !c ? null : c === "adj-na" ? "adj-na" : c.startsWith("adj") ? "adj-i" : "verb";
   };
   const SEL = "hira.verbs.sel";
-  // The saved choice, keeping only forms and kinds this version knows [an older version's "gone" form is dropped].
+  // The saved choice, keeping only the forms, kinds and counts on offer [none removed yet; an unknown form id crashed the drill].
   const loadSel = () => {
     let sel = {};
     try { sel = JSON.parse(localStorage.getItem(SEL)) || {}; } catch {}
@@ -123,7 +123,7 @@
       if (idx >= queue.length) return finish();
       const q = queue[idx];
       app.querySelector("#word").innerHTML = shown(q.word);
-      app.querySelector("#type").textContent = q.word.t;
+      app.querySelector("#type").textContent = q.word.t + (base(q.word).w !== q.word.w ? " + する" : "");
       // The meaning says which word is meant where the kana alone doesn't [はく: to put on, not to vomit].
       app.querySelector("#meaning").textContent = q.word.m;
       app.querySelector("#form").textContent = label(q.form);
@@ -157,17 +157,16 @@
       idx++;
       waiting = true;
     }
-    // Romaji turns into kana as it's typed, except while a Japanese keyboard is composing [tabe = たべ; たべ|ました + ra = たべら|ました].
+    // Romaji before the caret turns into kana as it's typed, except while a Japanese keyboard is composing [たべ|ました + ra = たべら|ました].
     input.addEventListener("compositionstart", () => { composing = true; });
     input.addEventListener("compositionend", () => { composing = false; });
     input.addEventListener("beforeinput", (e) => { if (waiting || settling) e.preventDefault(); });
     input.addEventListener("input", () => {
       if (composing) return;
-      const kana = toKana(input.value);
-      if (kana === input.value) return;
-      const after = input.value.length - input.selectionEnd;
-      input.value = kana;
-      input.setSelectionRange(kana.length - after, kana.length - after);
+      const at = input.selectionStart, head = toKana(input.value.slice(0, at));
+      if (head === input.value.slice(0, at)) return;
+      input.value = head + input.value.slice(at);
+      input.setSelectionRange(head.length, head.length);
     });
     input.addEventListener("keydown", (e) => {
       if (e.key !== "Enter" || e.isComposing) return;

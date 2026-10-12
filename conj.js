@@ -116,12 +116,14 @@
     return out;
   }
 
+  // Katakana as hiragana, since romaji only ever gives hiragana [テストします = てすとします].
+  const hira = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
   // A typed answer against a form, in kana, romaji or the kanji spelling [書きます, かきます and kakimasu all count].
   const accepts = (want, typed) => {
     const t = typed.trim();
     if (!t) return false;
-    const kana = toKana(t, true);
-    return kana === want.r || kana === want.w;
+    const kana = hira(toKana(t, true));
+    return kana === hira(want.r) || kana === hira(want.w);
   };
 
   const api = { FORMS, base, conjugate, classOf, toKana, accepts };

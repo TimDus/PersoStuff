@@ -1152,6 +1152,18 @@ test("a kana written stroke by stroke counts as written, kept apart from reading
   await page.close();
 });
 
+// Writing and verb bests share one store in the deck, each under its own name [write.best["a,i/1"], verbs.best["masu|verb|10"]].
+test("a writing best is kept in the deck apart from the verb drills' bests", async () => {
+  const page = await open(listed, "#quiz");
+  await page.locator("#go").waitFor();
+  const got = await page.evaluate(() => {
+    HiraStudy.write.setBest("a/1", { ms: 9000, acc: 100 });
+    return [HiraStudy.write.best("a/1"), HiraStudy.verbs.best("a/1"), JSON.parse(localStorage.getItem("hira.study")).write.best["a/1"]];
+  });
+  assert.deepEqual(got, [{ ms: 9000, acc: 100 }, undefined, { ms: 9000, acc: 100 }]);
+  await page.close();
+});
+
 test("a stroke missed three times shows faintly to trace, and the kana counts as a miss", async () => {
   const page = await open(listed, "#write/a/1");
   await page.locator("#pad rect").first().waitFor();
@@ -1340,6 +1352,7 @@ test("a noun that takes する is asked with it and answered with it", async () 
   while ((await question(page)).k !== "電話|でんわ") await answerRight(page);
   const ok = await page.textContent("#ok");
   assert.match(await page.textContent("#word"), /する$/);
+  assert.equal(await page.textContent("#type"), "noun + する");
   await page.type("#in", "denwashimasu");
   await page.press("#in", "Enter");
   assert.equal(await page.textContent("#ok"), String(+ok + 1));
@@ -1366,6 +1379,11 @@ test("a correction typed mid-answer keeps the caret in place", async () => {
   await page.evaluate(() => document.querySelector("#in").setSelectionRange(2, 2));
   await page.keyboard.type("ra");
   assert.deepEqual(await page.evaluate(() => [document.querySelector("#in").value, document.querySelector("#in").selectionStart]), ["たべらました", 3]);
+  // An nn before the caret waits for its next key like one at the end [anna before します = あんなします, not あんあします].
+  await page.fill("#in", "します");
+  await page.evaluate(() => document.querySelector("#in").setSelectionRange(0, 0));
+  await page.keyboard.type("anna");
+  assert.deepEqual(await page.evaluate(() => [document.querySelector("#in").value, document.querySelector("#in").selectionStart]), ["あんなします", 3]);
   await page.close();
 });
 
