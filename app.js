@@ -1298,7 +1298,7 @@
     // This device's copy belongs to the account that made it [A's session expires, B signs in = A's answers stay out of B's row].
     if (store.get("sync.user", user.id) !== user.id) applySnapshot(blank());
     store.set("sync.user", user.id);
-    await Promise.all([sync(pulled), study.start({ app, esc, onKey, onLeave: (fn) => teardown.push(fn), cleanup, backend, user, syncState }, pulledStudy)]);
+    await Promise.all([sync(pulled), study.start({ app, esc, fmtTime, onKey, onLeave: (fn) => teardown.push(fn), cleanup, backend, user, syncState }, pulledStudy)]);
     route();
   }
   boot();

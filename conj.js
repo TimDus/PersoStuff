@@ -1,4 +1,4 @@
-// Conjugation for the drills, pure so node can test it: every form of a verb or adjective in kana and in its kanji spelling, and romaji typed into kana.
+// Conjugation for the drills, pure so node can test it [書く → polite past = 書きました / かきました; kakimashita = かきました].
 (function (root) {
   // The drill's forms, N5 first [set 5 = ます forms, て, plain negative and past].
   const FORMS = [
@@ -13,7 +13,7 @@
   const TE = { う: "って", つ: "って", る: "って", く: "いて", ぐ: "いで", す: "して", ぬ: "んで", ぶ: "んで", む: "んで" };
   const past = (te) => te.replace(/て$/, "た").replace(/で$/, "だ");
 
-  // What replaces the last kana of a godan verb, or the る of an ichidan one, per form.
+  // What replaces a godan verb's last kana, per form [む: みます, まない, んで, めば].
   function godan(k, cls) {
     const [a, i, , e, o] = ROWS[k];
     // ございます-type verbs take い where others take り [いらっしゃる: いらっしゃいます, いらっしゃい].
@@ -44,13 +44,19 @@
   // The word's conjugation class, the first part-of-speech code that has one [勉強する: vs; 有る: v5r-i].
   const classOf = (word) => word.pos.find((p) => /^(v1|v5|vk|vs-i|vs$|adj-i|adj-ix|adj-na)/.test(p));
 
+  // The form a word is asked in, with the する a bare noun leaves off [電話 → 電話する; 勉強する stays].
+  const base = (word) => (/^vs/.test(classOf(word) || "") && !word.r.endsWith("する") ? { w: word.w + "する", r: word.r + "する" } : { w: word.w, r: word.r });
+
   // One form in kana and in the word's own spelling, or null where the word has none [高い has no ます form; ある no potential].
   function conjugate(word, form) {
     const cls = classOf(word);
-    const swap = (cut, add) => ({ w: word.w.slice(0, word.w.length - cut) + add, r: word.r.slice(0, word.r.length - cut) + add });
-    if (!cls) return null;
+    if (!cls || !FORMS.some((f) => f.id === form)) return null;
+    // A word part or a spelling without its kana ending has nothing to type or to change [～だす; 堅 read かたい → くない].
+    if (/^[～〜]/.test(word.w) || (/^(v1|v5|adj-i)/.test(cls) && word.w.slice(-1) !== word.r.slice(-1))) return null;
+    const { w, r } = base(word);
+    const swap = (cut, add) => ({ w: w.slice(0, w.length - cut) + add, r: r.slice(0, r.length - cut) + add });
     if (cls === "v1") return swap(1, ICHIDAN[form]);
-    if (cls === "vk") return { w: word.w.slice(0, 1) + KURU[form].slice(1), r: KURU[form] };
+    if (cls === "vk") return { w: w.slice(0, 1) + KURU[form].slice(1), r: KURU[form] };
     if (cls === "vs-i" || cls === "vs") return swap(2, SURU[form]);
     if (cls === "v5r-i") {
       if (form === "nai" || form === "nakatta") return { w: form === "nai" ? "ない" : "なかった", r: form === "nai" ? "ない" : "なかった" };
@@ -62,7 +68,7 @@
     if (cls === "adj-i" || cls === "adj-ix") {
       if (!ADJ_I[form]) return null;
       // いい borrows よい's stem [いい: よくない, よかった].
-      if (cls === "adj-ix") return { w: (word.w === "いい" ? "よ" : word.w.slice(0, -1)) + ADJ_I[form], r: "よ" + ADJ_I[form] };
+      if (cls === "adj-ix") return { w: (w === "いい" ? "よ" : w.slice(0, -1)) + ADJ_I[form], r: "よ" + ADJ_I[form] };
       return swap(1, ADJ_I[form]);
     }
     if (cls === "adj-na") return ADJ_NA[form] ? swap(0, ADJ_NA[form]) : null;
@@ -91,7 +97,11 @@
       if (c === "n") {
         if (next === "'") { out += "ん"; i += 2; continue; }
         // nn is one ん unless a vowel follows the second [konnichi = こんにち, onna = おんな, kinnbe = きんべ].
-        if (next === "n") { out += "ん"; i += VOWEL.test(s[i + 2] || "") ? 1 : 2; continue; }
+        if (next === "n") {
+          // A last nn waits for the key that decides it [onn + a = おんな, not おんあ].
+          if (!done && i + 2 === s.length) { out += "nn"; i += 2; continue; }
+          out += "ん"; i += VOWEL.test(s[i + 2] || "") ? 1 : 2; continue;
+        }
         if (next && !VOWEL.test(next) && /[a-z]/.test(next)) { out += "ん"; i++; continue; }
         if (!next) { out += done ? "ん" : "n"; i++; continue; }
       }
@@ -114,7 +124,7 @@
     return kana === want.r || kana === want.w;
   };
 
-  const api = { FORMS, conjugate, classOf, toKana, accepts };
+  const api = { FORMS, base, conjugate, classOf, toKana, accepts };
   if (typeof module !== "undefined") module.exports = api;
   else root.HiraConj = api;
 })(this);

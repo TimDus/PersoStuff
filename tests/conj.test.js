@@ -3,7 +3,9 @@
 // with real words from the list, and the romaji box gets the spellings a learner actually types.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { conjugate, FORMS, toKana, accepts } = require("../conj.js");
+const { conjugate, base, FORMS, toKana, accepts } = require("../conj.js");
+const WORDS = require("../data/vocab.json");
+const listed = (w) => WORDS.find((x) => x.w === w);
 
 const v = (w, r, pos) => ({ w, r, pos: [pos] });
 const forms = (word, names) => names.map((f) => conjugate(word, f)?.r);
@@ -81,4 +83,37 @@ test("an answer counts in kana, in romaji, or in the kanji spelling", () => {
   for (const typed of ["かきます。", "kakimas", "書きました", ""]) assert.equal(accepts(want, typed), false, typed);
   assert.equal(accepts({ w: "読んで", r: "よんで" }, "yonde"), true);
   assert.equal(accepts({ w: "死なない", r: "しなない" }, "shinanai"), true);
+});
+
+// The list keeps most する nouns bare, so the drill adds the する [電話 polite = 電話します; cutting two kana gave でします].
+test("a bare noun from the list that takes する conjugates with it", () => {
+  assert.deepEqual(conjugate(listed("電話"), "masu"), { w: "電話します", r: "でんわします" });
+  assert.deepEqual(conjugate(listed("仕事"), "nakatta"), { w: "仕事しなかった", r: "しごとしなかった" });
+  assert.equal(conjugate(listed("しっかり"), "te").r, "しっかりして");
+  assert.deepEqual(conjugate(listed("勉強する"), "masu"), { w: "勉強します", r: "べんきょうします" });
+  assert.deepEqual(base(listed("電話")), { w: "電話する", r: "でんわする" });
+  assert.deepEqual(base(listed("勉強する")), { w: "勉強する", r: "べんきょうする" });
+});
+
+// A word part can't be typed in romaji and a spelling without its kana ending has nothing to change [～だす, 堅 → くない].
+test("word parts and spellings without their kana ending give no questions", () => {
+  const parts = WORDS.filter((w) => /^[～〜]/.test(w.w));
+  assert.ok(parts.some((w) => w.w === "～だす"));
+  for (const w of [...parts, listed("堅")]) for (const f of FORMS) assert.equal(conjugate(w, f.id), null, w.w + " " + f.id);
+  assert.equal(conjugate(listed("大切"), "ta").w, "大切だった", "a な-adjective's spelling never ends in kana");
+});
+
+// The box converts on every key, so each prefix must leave what the next key needs [onn = おんn would end おんあ].
+test("romaji typed one key at a time gives the same kana as typed at once", () => {
+  const typed = (s) => [...s].reduce((v, ch) => toKana(v + ch), "");
+  for (const s of ["onna", "annaishimasu", "zannen", "konnichiha", "shinnyuu", "kinnbe", "kon'ya", "tabemashita", "itte"]) {
+    assert.equal(toKana(typed(s), true), toKana(s, true), s);
+  }
+  assert.equal(typed("annai"), "あんない");
+});
+
+// A selection saved by an older version can name a form this one lacks [食べ + undefined = 食べundefined].
+test("a form id this version doesn't know gives no question", () => {
+  assert.equal(conjugate(v("食べる", "たべる", "v1"), "gone"), null);
+  assert.equal(conjugate(v("来る", "くる", "vk"), "gone"), null);
 });

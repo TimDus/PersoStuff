@@ -1,6 +1,7 @@
 // The Verbs tab: conjugation drills on the list's verbs and adjectives, met words first [食べる → polite past = 食べました].
 (function () {
-  const { FORMS, conjugate, classOf, toKana, accepts } = window.HiraConj;
+  const { FORMS, base, conjugate, classOf, toKana, accepts } = window.HiraConj;
+  const { better } = window.HiraSync;
   const { spaced, requeue, gapFor } = window.HiraOrder;
   const study = window.HiraStudy;
   // A drill draws on at least this many words, topped up from the most common [3 verbs met = 12 more from the top of N5].
@@ -11,13 +12,20 @@
     return !c ? null : c === "adj-na" ? "adj-na" : c.startsWith("adj") ? "adj-i" : "verb";
   };
   const SEL = "hira.verbs.sel";
+  // The saved choice, keeping only forms and kinds this version knows [an older version's "gone" form is dropped].
   const loadSel = () => {
-    try { return { forms: ["masu", "masen", "mashita", "masendeshita"], kinds: ["verb"], count: 20, ...JSON.parse(localStorage.getItem(SEL)) }; }
-    catch { return { forms: ["masu", "masen", "mashita", "masendeshita"], kinds: ["verb"], count: 20 }; }
+    let sel = {};
+    try { sel = JSON.parse(localStorage.getItem(SEL)) || {}; } catch {}
+    const known = (list, ok, fallback) => (Array.isArray(list) ? list.filter(ok) : fallback);
+    return {
+      forms: known(sel.forms, (id) => FORMS.some((f) => f.id === id), ["masu", "masen", "mashita", "masendeshita"]),
+      kinds: known(sel.kinds, (k) => k in KINDS, ["verb"]),
+      count: [10, 20, 40].includes(sel.count) ? sel.count : 20,
+    };
   };
-  // The best a selection has scored is kept per forms and word kinds [masu,te|verb].
-  const selKey = (sel) => `${[...sel.forms].sort().join(",")}|${[...sel.kinds].sort().join(",")}`;
-  const fmt = (ms) => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+  // The best a selection has scored is kept per forms, word kinds and question count [masu,te|verb|20].
+  const selKey = (sel) => `${[...sel.forms].sort().join(",")}|${[...sel.kinds].sort().join(",")}|${sel.count}`;
+  const fmt = (ms) => study.shell().fmtTime(ms);
   const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const sameWord = (a, b) => a.word === b.word;
 
@@ -32,18 +40,18 @@
   }
 
   const esc = (s) => study.shell().esc(s);
-  const ruby = (w) => w.fu.map(([text, rt]) => (rt ? `<ruby>${esc(text)}<rt>${esc(rt)}</rt></ruby>` : esc(text))).join("");
+  // The word as asked, a bare する noun with its する [電話 → 電話する].
+  const shown = (w) => study.ruby(w) + esc(base(w).w.slice(w.w.length));
   const label = (id) => FORMS.find((f) => f.id === id).label;
 
   async function viewVerbs([mode]) {
     const { app } = study.shell();
     let words;
     const here = location.hash;
+    app.innerHTML = `<p class="muted">Loading words…</p>`;
     try { words = await study.words(); } catch {
       if (location.hash !== here) return;
-      app.innerHTML = `<div class="panel" style="text-align:center;max-width:520px;margin:2rem auto"><h1>Can't load the words</h1>
-        <p class="muted">The word list comes with the site and needs a connection the first time.</p><button id="retry">Try again</button></div>`;
-      return app.querySelector("#retry").addEventListener("click", () => viewVerbs([mode]));
+      return study.needWords(() => viewVerbs([mode]));
     }
     if (location.hash !== here) return;
     const sel = loadSel();
@@ -110,9 +118,11 @@
       </div>`;
     const input = app.querySelector("#in"), fb = app.querySelector("#fb");
     function show() {
+      // Cleared before Done so a later Enter there finds nothing to continue [it redrew Done at 0:04, 0:05, 0:07].
+      waiting = false; settling = false;
       if (idx >= queue.length) return finish();
       const q = queue[idx];
-      app.querySelector("#word").innerHTML = ruby(q.word);
+      app.querySelector("#word").innerHTML = shown(q.word);
       app.querySelector("#type").textContent = q.word.t;
       // The meaning says which word is meant where the kana alone doesn't [はく: to put on, not to vomit].
       app.querySelector("#meaning").textContent = q.word.m;
@@ -122,12 +132,10 @@
       app.querySelector(".verb-q").dataset.form = q.form;
       input.value = ""; input.className = "quiz-input jp"; input.focus();
       fb.innerHTML = "";
-      waiting = false; settling = false;
     }
     function submit() {
       const q = queue[idx];
       if (accepts(q.want, input.value)) {
-        study.verbs.record(q.form, true);
         right++;
         app.querySelector("#ok").textContent = right;
         input.value = toKana(input.value, true);
@@ -138,7 +146,6 @@
         setTimeout(() => { if (settling && input.isConnected) show(); }, 350);
         return;
       }
-      study.verbs.record(q.form, false);
       wrong++;
       missed.push(q);
       app.querySelector("#bad").textContent = wrong;
@@ -150,14 +157,17 @@
       idx++;
       waiting = true;
     }
-    // Romaji turns into kana as it's typed, except while a Japanese keyboard is composing [tabe = たべ].
+    // Romaji turns into kana as it's typed, except while a Japanese keyboard is composing [tabe = たべ; たべ|ました + ra = たべら|ました].
     input.addEventListener("compositionstart", () => { composing = true; });
     input.addEventListener("compositionend", () => { composing = false; });
     input.addEventListener("beforeinput", (e) => { if (waiting || settling) e.preventDefault(); });
     input.addEventListener("input", () => {
       if (composing) return;
       const kana = toKana(input.value);
-      if (kana !== input.value) input.value = kana;
+      if (kana === input.value) return;
+      const after = input.value.length - input.selectionEnd;
+      input.value = kana;
+      input.setSelectionRange(kana.length - after, kana.length - after);
     });
     input.addEventListener("keydown", (e) => {
       if (e.key !== "Enter" || e.isComposing) return;
@@ -173,19 +183,19 @@
       let note = "";
       if (!given) {
         const key = selKey(sel), prev = study.verbs.best(key);
-        if (!prev || acc > prev.acc || (acc === prev.acc && ms < prev.ms)) {
+        if (!prev || better(prev, { ms, acc }) !== prev) {
           study.verbs.setBest(key, { ms, acc });
           note = prev ? `New best! Previous ${fmt(prev.ms)} at ${prev.acc}%` : "First run — now beat it.";
         } else note = `Best: ${fmt(prev.ms)} at ${prev.acc}%`;
       }
-      // A finished drill uploads at once, like a finished review [the best and the per-form answers].
+      // A finished drill uploads at once, like a finished review [a new best reaches the other devices now, not in 20 s].
       study.flush();
       app.innerHTML = `
         <div class="panel" style="text-align:center;max-width:560px;margin:2rem auto">
           <h1>Done!</h1>
           <div class="stats" style="margin:1rem 0"><div><div class="big-number">${fmt(ms)}</div>time</div><div><div class="big-number">${acc}%</div>accuracy</div></div>
           <p class="muted">${note}</p>
-          ${missed.length ? `<h2>Missed</h2><div class="verb-misses">${missed.map((q) => `<div><span class="jp">${ruby(q.word)}</span> · ${esc(label(q.form))} → <b class="jp">${esc(q.want.w)}</b></div>`).join("")}</div>` : ""}
+          ${missed.length ? `<h2>Missed</h2><div class="verb-misses">${missed.map((q) => `<div><span class="jp">${shown(q.word)}</span> · ${esc(label(q.form))} → <b class="jp">${esc(q.want.w)}</b></div>`).join("")}</div>` : ""}
           <div class="row" style="justify-content:center;margin-top:1.2rem">
             <button id="re">Again</button>
             ${missed.length ? `<button class="ghost" id="miss">Drill the missed ones</button>` : ""}

@@ -1230,9 +1230,7 @@ test("a whole answer typed while the last one settles counts at once", async () 
 });
 
 // ---------- Verbs ----------
-// A conjugation drill grades the learner, so these drive it end to end: the met words it promises, romaji turning into
-// kana and counting as the answer, a miss showing the right form and coming back, adjectives on request, and the best
-// score kept in the synced deck rather than on one device.
+// A conjugation drill grades the learner, so these drive it end to end [met words first, romaji into kana, a best per selection].
 // Romaji for a kana answer, the way a learner types it [かいて = kaite, よんで = yonde, いって = itte].
 const romajiFor = (page, kana) => page.evaluate((s) => {
   const table = new Map(HIRAGANA.KANA.filter((k) => k.script === "hiragana").map((k) => [k.kana, k.romaji]));
@@ -1267,6 +1265,9 @@ test("the Verbs tab drills met verbs in the chosen form, romaji turning into kan
   assert.deepEqual(await page.locator("nav a:visible").evaluateAll((as) => as.map((a) => a.dataset.tab)), ["words", "verbs"]);
   await page.type("#in", "tabe");
   assert.equal(await page.inputValue("#in"), "たべ");
+  await page.fill("#in", "");
+  await page.type("#in", "annaishimasu");
+  assert.equal(await page.inputValue("#in"), "あんないします");
   await page.fill("#in", "");
   const seen = [];
   while (!(await page.locator("h1", { hasText: "Done!" }).count())) {
@@ -1312,9 +1313,74 @@ test("a finished drill keeps its best for that choice of forms, in the synced de
   const page = await open({ ...listed, local: verbsSel({}) }, "#verbs/run");
   await page.locator(".verb-q").waitFor();
   while (!(await page.locator("h1", { hasText: "Done!" }).count())) await answerRight(page);
-  const best = await page.evaluate(() => JSON.parse(localStorage.getItem("hira.study")).verbs.best["masu|verb"]);
+  const best = await page.evaluate(() => JSON.parse(localStorage.getItem("hira.study")).verbs.best["masu|verb|10"]);
   assert.equal(best.acc, 100);
-  await page.waitForFunction(() => window.__log.some((l) => l.study?.verbs?.best?.["masu|verb"]), null, { timeout: 3000 });
+  await page.waitForFunction(() => window.__log.some((l) => l.study?.verbs?.best?.["masu|verb|10"]), null, { timeout: 3000 });
+  await page.close();
+});
+
+// A short drill's time can't be beaten by a longer one, so each question count keeps its own [10 in 0:04 vs 40 in 0:15].
+test("a best is kept per question count", async () => {
+  const page = await open({ ...listed, local: verbsSel({}) }, "#verbs/run");
+  await page.locator(".verb-q").waitFor();
+  while (!(await page.locator("h1", { hasText: "Done!" }).count())) await answerRight(page);
+  await page.click("text=Choose forms");
+  await page.locator("#count").waitFor();
+  assert.match(await page.textContent("#best"), /Best/);
+  await page.selectOption("#count", "20");
+  await page.waitForFunction(() => document.querySelector("#count").value === "20");
+  assert.equal(await page.textContent("#best"), "");
+  await page.close();
+});
+
+// The list keeps most する nouns bare, so the drill shows and wants the する [電話 → polite = 電話します].
+test("a noun that takes する is asked with it and answered with it", async () => {
+  const page = await open({ ...listed, local: { ...verbsSel({}), "study.user": "u1", study: deckWith({ "電話|でんわ#r": reviewed() }) } }, "#verbs/run");
+  await page.locator(".verb-q").waitFor();
+  while ((await question(page)).k !== "電話|でんわ") await answerRight(page);
+  const ok = await page.textContent("#ok");
+  assert.match(await page.textContent("#word"), /する$/);
+  await page.type("#in", "denwashimasu");
+  await page.press("#in", "Enter");
+  assert.equal(await page.textContent("#ok"), String(+ok + 1));
+  await page.close();
+});
+
+// A selection saved by an older version may name a form that's gone [label() threw on "gone" and the drill never drew].
+test("a stale saved selection drills only the forms that exist", async () => {
+  const page = await open({ ...listed, local: verbsSel({ forms: ["gone", "masu"] }) }, "#verbs/run");
+  await page.locator(".verb-q").waitFor({ timeout: 3000 });
+  while (!(await page.locator("h1", { hasText: "Done!" }).count())) {
+    assert.equal((await question(page)).form, "masu");
+    await answerRight(page);
+  }
+  assert.deepEqual(await page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem("hira.study")).verbs.best)), ["masu|verb|10"]);
+  await page.close();
+});
+
+// Writing the kana back into the box must leave the caret where the learner typed [たべ|ました + ra = たべら|ました].
+test("a correction typed mid-answer keeps the caret in place", async () => {
+  const page = await open({ ...listed, local: verbsSel({}) }, "#verbs/run");
+  await page.locator(".verb-q").waitFor();
+  await page.fill("#in", "たべました");
+  await page.evaluate(() => document.querySelector("#in").setSelectionRange(2, 2));
+  await page.keyboard.type("ra");
+  assert.deepEqual(await page.evaluate(() => [document.querySelector("#in").value, document.querySelector("#in").selectionStart]), ["たべらました", 3]);
+  await page.close();
+});
+
+// Enter after a miss on the last question opens Done, and later Enters must leave it be [it redrew with 0:04, 0:05, 0:07].
+test("Enter on the Done page after a last-question miss doesn't draw it again", async () => {
+  const page = await open({ ...listed, local: verbsSel({}) }, "#verbs/run");
+  await page.locator(".verb-q").waitFor();
+  while ((await page.textContent("#prog")) !== "10 / 10") await answerRight(page);
+  await page.type("#in", "zzz");
+  await page.press("#in", "Enter");
+  await page.press("#in", "Enter");
+  const done = await page.waitForSelector("h1:has-text('Done!')");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  assert.equal(await done.evaluate((h) => h.isConnected), true);
   await page.close();
 });
 

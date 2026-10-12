@@ -70,7 +70,7 @@
     : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])])) : v);
   const same = (a, b) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
 
-  const api = { clipPath, imagePath, bump, merge, mergeWrite, same, wholeCategories };
+  const api = { clipPath, imagePath, bump, better, merge, mergeWrite, same, wholeCategories };
   if (typeof module !== "undefined") module.exports = api;
   else root.HiraSync = api;
 })(this);

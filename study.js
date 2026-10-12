@@ -278,6 +278,15 @@
     });
   }
 
+  // A drill's bests in the deck, so they sync [verbs.best["masu|verb|20"] = { ms: 41000, acc: 95 }].
+  const drill = (name) => ({
+    best: (key) => deck[name]?.best?.[key],
+    setBest(key, best) {
+      (deck[name] ||= { kana: {}, best: {}, resetAt: 0 }).best[key] = best;
+      save();
+    },
+  });
+
   window.HiraStudy = {
     routes: { words: viewWords },
     // Once the account is let in: a deck owned by someone else, or by nobody, is dropped first [a tab from before the deck signed out without clearing it].
@@ -296,15 +305,11 @@
     flush: () => sync(),
     // Writing progress and bests, kept in the deck so they sync with it [write.kana["か"] = { box: 3, right: 4, wrong: 1 }].
     write: {
+      ...drill("write"),
       of: (kana) => deck.write?.kana?.[kana],
-      best: (key) => deck.write?.best?.[key],
       record(kana, ok) {
         const w = (deck.write ||= { kana: {}, best: {}, resetAt: 0 });
         bump(w.kana[kana] ||= { box: 0, right: 0, wrong: 0 }, ok);
-        save();
-      },
-      setBest(key, best) {
-        (deck.write ||= { kana: {}, best: {}, resetAt: 0 }).best[key] = best;
         save();
       },
       // Newer than any writing reset this device has seen, whatever its clock says [last reset 1000, clock reads 900 = 1001].
@@ -314,23 +319,13 @@
         return sync();
       },
     },
-    // What the Verbs tab needs from the Words side [the word list, the shell, and whether a word was met in Words].
+    // What the Verbs tab needs from the Words side [met("食べる|たべる") = its Japanese-first card exists].
     shell: () => shell,
+    ruby,
+    needWords,
     words: () => (words ? Promise.resolve(words) : loadWords()),
     met: (k) => !!deck.cards[k + "#r"],
-    // Verb drill answers per form and bests per selection, in the deck so they sync [verbs.kana.masu = { box: 3, right: 4, wrong: 1 }].
-    verbs: {
-      best: (key) => deck.verbs?.best?.[key],
-      record(form, ok) {
-        const v = (deck.verbs ||= { kana: {}, best: {}, resetAt: 0 });
-        bump(v.kana[form] ||= { box: 0, right: 0, wrong: 0 }, ok);
-        save();
-      },
-      setBest(key, best) {
-        (deck.verbs ||= { kana: {}, best: {}, resetAt: 0 }).best[key] = best;
-        save();
-      },
-    },
+    verbs: drill("verbs"),
     unsynced: () => local().savedAt > pushedAt(),
   };
 })();
