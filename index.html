@@ -8,14 +8,19 @@
 </head>
 <body>
   <header class="top">
-    <a class="brand" href="#learn"><span class="brand-kana">ひ</span> Hiragana</a>
+    <a class="brand" href="#learn"><span class="brand-kana">ひ</span> <span class="long">Hiragana</span></a>
+    <div class="sections">
+      <a href="#learn" data-section-link="kana">かな <span class="long">Kana</span></a>
+      <a href="#words" data-section-link="japanese">日本語 <span class="long">Japanese</span></a>
+    </div>
     <nav>
-      <a href="#learn" data-tab="learn">Learn</a>
-      <a href="#cards" data-tab="cards"><span class="long">Flashcards</span><span class="short">Cards</span></a>
-      <a href="#quiz" data-tab="quiz">Quiz</a>
-      <a href="#sheets" data-tab="sheets"><span class="long">Worksheets</span><span class="short">Sheets</span></a>
-      <a href="#reading" data-tab="reading">Reading</a>
-      <a href="#chart" data-tab="chart">Chart</a>
+      <a href="#learn" data-tab="learn" data-section="kana">Learn</a>
+      <a href="#cards" data-tab="cards" data-section="kana"><span class="long">Flashcards</span><span class="short">Cards</span></a>
+      <a href="#quiz" data-tab="quiz" data-section="kana">Quiz</a>
+      <a href="#sheets" data-tab="sheets" data-section="kana"><span class="long">Worksheets</span><span class="short">Sheets</span></a>
+      <a href="#reading" data-tab="reading" data-section="kana">Reading</a>
+      <a href="#chart" data-tab="chart" data-section="kana">Chart</a>
+      <a href="#words" data-tab="words" data-section="japanese">Words</a>
     </nav>
     <button id="font-toggle" class="ghost" title="Switch kana font">Font: Gothic</button>
   </header>
@@ -25,6 +30,11 @@
     Based on <a href="https://www.tofugu.com/japanese/learn-hiragana/" target="_blank" rel="noopener">Tofugu's Learn Hiragana guide</a>
     and its worksheets. Stroke order from <a href="https://kanjivg.tagaini.net" target="_blank" rel="noopener">KanjiVG</a>
     (<a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a>).
+    <div class="credits-ja">Words from the JLPT lists of <a href="https://github.com/jamsinclair/open-anki-jlpt-decks" target="_blank" rel="noopener">open-anki-jlpt-decks</a> (MIT),
+      readings and word types from <a href="https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project" target="_blank" rel="noopener">JMdict</a>
+      by the EDRDG (<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>),
+      example sentences from <a href="https://tatoeba.org" target="_blank" rel="noopener">Tatoeba</a>
+      (<a href="https://creativecommons.org/licenses/by/2.0/fr/" target="_blank" rel="noopener">CC BY 2.0 FR</a>).</div>
   </footer>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
   <script src="config.js"></script>
@@ -33,6 +43,8 @@
   <script src="order.js"></script>
   <script src="backend.js"></script>
   <script src="strokes.js"></script>
+  <script src="srs.js"></script>
+  <script src="study.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

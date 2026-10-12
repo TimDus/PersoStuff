@@ -20,6 +20,8 @@ create table if not exists public.progress (
   data jsonb not null default '{}',
   updated_at timestamptz not null default now()
 );
+-- The vocabulary deck, apart from `data` because the site before it saves `data` whole [its sync kept only the four kana keys].
+alter table public.progress add column if not exists study jsonb not null default '{}';
 alter table public.progress enable row level security;
 revoke all on public.progress from anon;
 grant select, insert, update on public.progress to authenticated;

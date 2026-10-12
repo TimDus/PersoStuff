@@ -22,8 +22,13 @@ insert into public.progress (user_id, data) values ('11111111-1111-1111-1111-111
 select 'progress rows visible: ' || count(*) from public.progress;
 update public.progress set data = '{"hacked": true}' where user_id = '22222222-2222-2222-2222-222222222222';
 select count(*) from public.allowed_emails;
+-- The deployed site saves `data` alone, so a tab on old code must leave the vocabulary deck in `study` alone [upsert of data only].
+update public.progress set study = '{"cards": {"会う|あう#r": 1}}' where user_id = '11111111-1111-1111-1111-111111111111';
+insert into public.progress (user_id, data, updated_at) values ('11111111-1111-1111-1111-111111111111', '{"old": true}', now())
+  on conflict (user_id) do update set data = excluded.data, updated_at = excluded.updated_at;
+select 'study after a data-only save: ' || study::text from public.progress where user_id = '11111111-1111-1111-1111-111111111111';
 
-\echo '== stranger: expect false, 0 files, 0 rows, and both writes refused'
+\echo '== stranger: expect false, 0 files, 0 rows, and all three writes refused'
 select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","email":"stranger@example.com","role":"authenticated"}', true);
 select 'is_allowed: ' || public.is_allowed();
 select 'content files visible: ' || count(*) from storage.objects where bucket_id = 'content';
@@ -31,8 +36,10 @@ select 'progress rows visible: ' || count(*) from public.progress;
 insert into public.progress (user_id, data) values ('22222222-2222-2222-2222-222222222222', '{"try": 1}')
   on conflict (user_id) do update set data = excluded.data;
 insert into public.allowed_emails values ('stranger@example.com');
+update public.progress set study = '{"hacked": true}' where user_id = '11111111-1111-1111-1111-111111111111';
 
 reset role;
-\echo '== expect the stranger row unchanged'
+\echo '== expect the stranger row unchanged, and the listed deck still its own'
 select 'stranger row: ' || data::text from public.progress where user_id = '22222222-2222-2222-2222-222222222222';
+select 'listed study: ' || study::text from public.progress where user_id = '11111111-1111-1111-1111-111111111111';
 rollback;

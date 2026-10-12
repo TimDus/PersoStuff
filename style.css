@@ -279,3 +279,33 @@ body.has-media .art-slot { display: block; }
 .picker-script:first-child { margin-top: 0; }
 /* Author display rules beat the browser's own [hidden] rule, so restate it [the long-vowel Show button stayed visible]. */
 [hidden] { display: none !important; }
+
+/* Kana or Japanese: the nav shows the section's own tabs [#words hides the six kana tabs]. */
+.sections { display: flex; gap: .2rem; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: .15rem; }
+.sections a { text-decoration: none; color: var(--muted); padding: .2rem .7rem; border-radius: 999px; font-size: .9rem; white-space: nowrap; }
+body[data-section="kana"] .sections [data-section-link="kana"], body[data-section="japanese"] .sections [data-section-link="japanese"] {
+  background: var(--panel); color: var(--ink); font-weight: 600; box-shadow: var(--shadow); }
+body:not([data-section="japanese"]) nav a[data-section="japanese"], body[data-section="japanese"] nav a[data-section="kana"] { display: none; }
+body.gated .sections { display: none; }
+footer .credits-ja { display: none; margin-top: .3rem; }
+body[data-section="japanese"] footer .credits-ja { display: block; }
+/* A phone keeps the logo and the short labels so the header stays one row [ひ, かな | 日本語, Font at 360 px]. */
+@media (max-width: 600px) {
+  .sections .long, .brand .long { display: none; }
+}
+
+/* Vocabulary cards open the answer under the question instead of flipping [a meaning and two sentences overflow a 4:3 card]. */
+.vcard { width: min(560px, 100%); cursor: pointer; }
+.vcard .face { position: static; transform: none; backface-visibility: visible; min-height: 11rem; }
+.vcard .face.back { margin-top: .6rem; min-height: 0; cursor: default; }
+.vcard .face .hint { position: static; margin-top: 1rem; }
+.vcard .word { font-family: var(--jp); font-size: 3rem; line-height: 1.7; }
+.vcard .face.back .word { font-size: 2.2rem; }
+.vcard rt { font-size: .38em; color: var(--muted); }
+.vcard .meaning { font-size: 1.4rem; font-weight: 600; }
+.examples { margin-top: .8rem; border-top: 1px solid var(--line); padding-top: .6rem; display: grid; gap: .5rem; text-align: left; width: 100%; }
+.ex .jp { font-size: 1.1rem; }
+.grades { justify-content: center; }
+.grades button { min-width: 5rem; }
+.grades small { opacity: .8; font-size: .75rem; }
+a.btn.disabled { opacity: .45; pointer-events: none; }

@@ -35,6 +35,13 @@
       async saveProgress(userId, data) {
         must(await sb.from("progress").upsert({ user_id: userId, data, updated_at: new Date().toISOString() }));
       },
+      // The vocabulary deck has its own column, so neither save overwrites the other [an upsert sets only the columns it names].
+      async loadStudy() {
+        return must(await sb.from("progress").select("study").maybeSingle())?.study || null;
+      },
+      async saveStudy(userId, study) {
+        must(await sb.from("progress").upsert({ user_id: userId, study, updated_at: new Date().toISOString() }));
+      },
     };
   }
 

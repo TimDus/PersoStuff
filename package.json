@@ -6,6 +6,7 @@
     "build-content": "node tools/build-content.js _research audio images content",
     "upload-content": "node tools/upload-content.js",
     "build-strokes": "node tools/build-strokes.js _data/kanjivg/main/kanji data/strokes.json",
+    "build-vocab": "node tools/build-vocab.js _data data/vocab.json",
     "verify-db": "bash tools/psql.sh -q -f supabase/verify.sql"
   },
   "devDependencies": {

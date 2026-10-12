@@ -80,9 +80,13 @@
     localStorage.setItem("hira.sync.resetAt", s.resetAt);
     progress = s.progress;
   }
-  function setSyncNote(text) {
+  // One note for both syncs, Offline while either last failed [kana synced, deck pull failed = Offline].
+  const syncOk = { kana: true, study: true };
+  function syncState(part, ok) {
+    syncOk[part] = ok;
     const el = document.getElementById("sync-note");
-    if (el) el.textContent = text;
+    if (el) el.textContent = syncOk.kana && syncOk.study
+      ? `Synced ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Offline, will sync later";
   }
   // Answers this device holds that the server doesn't [savedAt 1200, last pushed 1000 = one quiz since the last sync].
   const unsynced = () => store.get("sync.savedAt", 0) > store.get("sync.pushedAt", 0);
@@ -98,9 +102,9 @@
         applySnapshot(merged);
         if (!same(merged, remote)) await backend.saveProgress(user.id, merged);
         localStorage.setItem("hira.sync.pushedAt", merged.savedAt);
-        setSyncNote(`Synced ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
+        syncState("kana", true);
       } catch {
-        setSyncNote("Offline, will sync later");
+        syncState("kana", false);
       }
     });
     return syncChain;
@@ -113,7 +117,7 @@
   addEventListener("online", () => sync());
   document.addEventListener("visibilitychange", () => { if (document.hidden && syncTimer) sync(); });
 
-  // Timers and key handlers live until the next route change [a break countdown stops when you leave the worksheet].
+  // Timers, key handlers and leave hooks last until the next route change [a break countdown stops, a half-done review uploads].
   let teardown = [];
   const onKey = (fn) => {
     document.addEventListener("keydown", fn);
@@ -937,8 +941,9 @@
   fontBtn.addEventListener("click", () => setFont(!document.body.classList.contains("mincho")));
   setFont(store.get("font", false));
 
-  const routes = { learn: viewLearn, cards: viewCards, quiz: viewQuiz, sheets: viewSheets, reading: viewReading, chart: viewChart };
-  // Stops the timers and key handlers of whatever was on screen [a finished quiz's clock].
+  const study = window.HiraStudy;
+  const routes = { learn: viewLearn, cards: viewCards, quiz: viewQuiz, sheets: viewSheets, reading: viewReading, chart: viewChart, ...study.routes };
+  // Runs the teardown of whatever was on screen [a finished quiz's clock stops, a left review uploads].
   function cleanup() {
     document.querySelectorAll(".modal-back").forEach((m) => m.remove());
     teardown.forEach((fn) => fn());
@@ -952,6 +957,7 @@
     const view = routes[tab] ? tab : "learn";
     if (view === "reading" && !lastPage.startsWith("#reading")) readingFrom = lastPage.startsWith("#learn") ? lastPage : "";
     lastPage = view === "learn" ? location.hash || "#learn" : location.hash;
+    document.body.dataset.section = view in study.routes ? "japanese" : "kana";
     document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.dataset.tab === view));
     routes[view](rest);
     scrollTo(0, 0);
@@ -981,10 +987,11 @@
     app.querySelector("#google").addEventListener("click", () => backend.signIn());
   }
   async function signOut() {
-    await sync();
-    if (unsynced() && !confirm("Your latest answers haven't reached the server yet. Sign out and lose them?")) return;
+    await Promise.all([sync(), study.flush()]);
+    if ((unsynced() || study.unsynced()) && !confirm("Your latest answers haven't reached the server yet. Sign out and lose them?")) return;
     await backend.signOut();
     ["sync.allowed", "sync.savedAt", "sync.resetAt", "sync.pushedAt", "sync.user", ...SYNCED].forEach((k) => localStorage.removeItem("hira." + k));
+    study.reset();
     location.replace(location.pathname);
   }
   function blockedScreen(message) {
@@ -1005,6 +1012,8 @@
     // One round trip for everything; content and clips fail by themselves when the account isn't listed.
     const pulled = backend.loadProgress();
     pulled.catch(() => {});
+    const pulledStudy = backend.loadStudy();
+    pulledStudy.catch(() => {});
     const [allowed] = await Promise.all([
       backend.isAllowed().then((ok) => { store.set("sync.allowed", ok); return ok; },
         () => store.get("sync.allowed", null)),
@@ -1022,7 +1031,7 @@
     // This device's copy belongs to the account that made it [A's session expires, B signs in = A's answers stay out of B's row].
     if (store.get("sync.user", user.id) !== user.id) applySnapshot(blank());
     store.set("sync.user", user.id);
-    await sync(pulled);
+    await Promise.all([sync(pulled), study.start({ app, esc, onKey, onLeave: (fn) => teardown.push(fn), cleanup, backend, user, syncState }, pulledStudy)]);
     route();
   }
   boot();

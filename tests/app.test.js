@@ -59,8 +59,12 @@ async function open(cfg, hash = "") {
       signedUrls: async (paths) => { listed(); return new Map(paths.map((p) => [p, "content/" + p])); },
       loadProgress: async () => { down(); return JSON.parse(localStorage.getItem("__remote")) ?? cfg.remote ?? null; },
       saveProgress: async (id, data) => { down(); log.push({ save: structuredClone(data) }); localStorage.setItem("__remote", JSON.stringify(data)); },
+      loadStudy: async () => { down(); if (cfg.studyDown) throw new TypeError("Failed to fetch"); return JSON.parse(localStorage.getItem("__remoteStudy")) ?? cfg.remoteStudy ?? null; },
+      saveStudy: async (id, study) => { down(); log.push({ study: structuredClone(study) }); localStorage.setItem("__remoteStudy", JSON.stringify(study)); },
     };
   }, cfg);
+  // A fixed start time that then runs on [cfg.clock = 03:58 today, for the 4 am day].
+  if (cfg.clock) { await page.clock.install({ time: cfg.clock }); await page.clock.resume(); }
   await page.goto(base + hash);
   await page.waitForLoadState("networkidle");
   return page;
@@ -707,5 +711,248 @@ test("a second press while the strokes are still loading cancels them", async ()
   await page.waitForTimeout(200);
   assert.equal(await page.locator(".strokes").count(), 0);
   assert.equal(await toggle.textContent(), "Stroke order");
+  await page.close();
+});
+
+// ---------- Japanese section ----------
+// The vocabulary deck lives in its own `study` column because the deployed sync rewrites `data` with the kana keys only;
+// these drive the section against the fake backend: its tabs, the first day, the schedule an answer writes, practice
+// that must not write, and the deck following the account like the kana do.
+const { dayOf } = require("../srs.js");
+const day = dayOf(Date.now());
+const deckOf = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("hira.study") || "null"));
+const studySaves = (page) => page.evaluate(() => window.__log.filter((l) => l.study).map((l) => l.study));
+const reviewed = (over) => ({ st: "review", ivl: 1, ease: 2.5, due: day + 1, n: 1, lapses: 0, first: day, last: day, ...over });
+const deckWith = (cards) => ({ cards, settings: { newPerDay: 20, at: 0 }, savedAt: 1 });
+const answer = async (page, g) => { await page.click("#card"); await page.click(`[data-g='${g}']`); };
+
+test("the Japanese section has its own tabs, and the kana tabs stay as they were", async () => {
+  const page = await open(listed, "#words");
+  const tabs = () => page.locator("nav a:visible").evaluateAll((as) => as.map((a) => a.dataset.tab));
+  assert.deepEqual(await tabs(), ["words"]);
+  await page.click(".sections a[data-section-link='kana']");
+  assert.deepEqual(await tabs(), ["learn", "cards", "quiz", "sheets", "reading", "chart"]);
+  await page.close();
+});
+
+test("a fresh account is offered 20 new words, Japanese side first, with the reading over the kanji", async () => {
+  const page = await open(listed, "#words");
+  await page.locator("#new").waitFor();
+  assert.deepEqual([await page.textContent("#new"), await page.textContent("#due")], ["20", "0"]);
+  await page.click("#go");
+  assert.equal(await page.textContent("#left"), "20 left");
+  assert.equal(await page.locator(".face.front ruby rt").first().textContent(), "あき");
+  await page.close();
+});
+
+test("Good on a new word brings it back tomorrow and syncs the deck apart from the kana", async () => {
+  const page = await open(listed, "#words/review");
+  await page.locator(".face.front").waitFor();
+  await answer(page, 3);
+  const card = (await deckOf(page)).cards["秋|あき#r"];
+  assert.deepEqual([card.due, card.ivl, card.n], [day + 1, 1, 1]);
+  // Leaving a session part-way uploads at once rather than after the 20 s quiet spell.
+  await page.click("a[href='#words']");
+  await page.waitForFunction(() => window.__log.some((l) => l.study?.cards?.["秋|あき#r"]), null, { timeout: 3000 });
+  await page.close();
+});
+
+test("Again brings a word back three cards later in the same session", async () => {
+  const page = await open(listed, "#words/review");
+  await page.locator(".face.front").waitFor();
+  const first = await page.locator(".face.front").innerHTML();
+  await answer(page, 1);
+  for (let i = 0; i < 3; i++) {
+    assert.notEqual(await page.locator(".face.front").innerHTML(), first);
+    await answer(page, 3);
+  }
+  assert.equal(await page.locator(".face.front").innerHTML(), first);
+  assert.equal(await page.textContent("#left"), "17 left");
+  await page.close();
+});
+
+test("practice after the day's reviews never changes the deck", async () => {
+  const seed = deckWith({ "秋|あき#r": reviewed(), "足|あし#r": reviewed({ miss: day }) });
+  const page = await open({ ...listed, local: { "study.user": "u1", study: seed } }, "#words/practice/today");
+  await page.locator(".face.front").waitFor();
+  const before = (await deckOf(page)).cards;
+  await answer(page, 1);
+  while (!(await page.locator("h1", { hasText: "Practice done" }).count())) await answer(page, 3);
+  assert.deepEqual((await deckOf(page)).cards, before);
+  await page.close();
+});
+
+test("a deck from another device merges in card by card", async () => {
+  const page = await open({
+    ...listed,
+    remoteStudy: deckWith({ "秋|あき#r": reviewed({ n: 5, ivl: 9, due: day + 9 }) }),
+    local: { "study.user": "u1", study: deckWith({ "足|あし#r": reviewed(), "秋|あき#r": reviewed() }) },
+  }, "#words");
+  await page.waitForFunction(() => window.__log.some((l) => l.study), null, { timeout: 5000 });
+  const merged = (await studySaves(page)).at(-1).cards;
+  assert.deepEqual(Object.keys(merged).sort(), ["秋|あき#r", "足|あし#r"]);
+  assert.equal(merged["秋|あき#r"].n, 5);
+  await page.close();
+});
+
+test("a word's English side asks with its meaning and type the day after, and shows the word as the answer", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: deckWith({ "秋|あき#r": reviewed({ first: day - 1, last: day - 1, due: day }) }) } }, "#words/review");
+  await page.locator(".face.front ruby").waitFor();
+  await answer(page, 3);
+  assert.match(await page.textContent(".face.front"), /fall \(season\).*noun/s);
+  assert.equal(await page.locator(".face.front ruby").count(), 0);
+  await page.click("#card");
+  assert.equal(await page.locator(".face.back ruby rt").first().textContent(), "あき");
+  await page.close();
+});
+
+test("signing out takes the vocabulary deck off this device", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: deckWith({ "秋|あき#r": reviewed() }) } }, "#words");
+  await page.click("#signout");
+  await page.waitForSelector("#google");
+  assert.equal(await page.evaluate(() => localStorage.getItem("hira.study")), null);
+  await page.close();
+});
+
+test("another account signing in on this browser starts with an empty deck", async () => {
+  const page = await open({ ...listed, local: { "study.user": "someone-else", study: deckWith({ "秋|あき#r": reviewed() }), "sync.user": "someone-else" } }, "#words");
+  await page.locator("#new").waitFor();
+  assert.deepEqual((await deckOf(page)).cards, {});
+  assert.equal(await page.textContent("#new"), "20");
+  await page.close();
+});
+
+test("fewer new words a day means fewer new cards", async () => {
+  const page = await open(listed, "#words");
+  await page.selectOption("#per", "10");
+  assert.equal(await page.textContent("#new"), "10");
+  assert.equal((await deckOf(page)).settings.newPerDay, 10);
+  await page.close();
+});
+
+test("a word list that fails to load says so, and Try again loads it", async () => {
+  const p = await open(listed, "#learn");
+  let calls = 0;
+  await p.route("**/data/vocab.json", (r) => (++calls === 1 ? r.abort() : r.continue()));
+  await p.goto(base + "#words");
+  await p.locator("#retry").waitFor();
+  await p.click("#retry");
+  await p.locator("#new").waitFor();
+  assert.equal(calls, 2);
+  await p.close();
+});
+
+test("keys other than 1 to 4 on a shown answer do nothing and break nothing", async () => {
+  const page = await open(listed, "#words/review");
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  for (const key of ["Shift", "a", "5", "ArrowLeft"]) await page.keyboard.press(key);
+  await page.keyboard.press("3");
+  assert.deepEqual(errors, []);
+  assert.equal(await page.textContent("#left"), "19 left");
+  await page.close();
+});
+
+// The word list arrives after a wait, and leaving meanwhile must not pull you back [Words → Chart before vocab.json lands].
+test("leaving the Words page while the list loads stays on the page you went to", async () => {
+  const page = await open(listed, "#learn");
+  let release;
+  const held = new Promise((r) => { release = r; });
+  await page.route("**/data/vocab.json", async (r) => { await held; r.continue(); });
+  await page.goto(base + "#words");
+  await page.goto(base + "#chart");
+  release();
+  await page.waitForResponse("**/data/vocab.json");
+  await page.waitForTimeout(300);
+  assert.equal(await page.textContent("main h1"), "Kana chart");
+  assert.equal(await page.locator("#new").count(), 0);
+  await page.close();
+});
+
+// Another device's clock ahead left later answers here looking already sent [its push stamped 13:00, this answer 12:10].
+test("an answer made after syncing with a fast-clock device still asks before Sign out drops it", async () => {
+  const page = await open({ ...listed, remoteStudy: { ...deckWith({}), savedAt: Date.now() + 3600e3 } }, "#words/review");
+  await page.locator(".face.front").waitFor();
+  await page.evaluate(() => localStorage.setItem("__offline", "1"));
+  await answer(page, 3);
+  const asked = [];
+  page.on("dialog", (d) => { asked.push(d.message()); d.dismiss(); });
+  await page.click("#signout");
+  await page.waitForTimeout(500);
+  assert.equal(asked.length, 1);
+  assert.ok((await deckOf(page)).cards["秋|あき#r"]);
+  await page.close();
+});
+
+// Every answer pulled and pushed the whole deck [200 answers uploaded 65.6 MB].
+test("answers upload together rather than one by one, and a finished session uploads at once", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: { ...deckWith({}), settings: { newPerDay: 3, at: 1 } } } }, "#words/review");
+  await page.locator(".face.front").waitFor();
+  await page.waitForTimeout(300);
+  const before = (await studySaves(page)).length;
+  await answer(page, 3);
+  await answer(page, 3);
+  await page.waitForTimeout(2500);
+  assert.equal((await studySaves(page)).length, before);
+  await answer(page, 3);
+  await page.locator("h1", { hasText: "Done for today" }).waitFor();
+  await page.waitForFunction((n) => window.__log.filter((l) => l.study).length > n, before, { timeout: 3000 });
+  await page.close();
+});
+
+test("a session that runs past 4 am files its answers under the new day", async () => {
+  const start = new Date();
+  start.setHours(3, 58, 0, 0);
+  const page = await open({ ...listed, clock: start.getTime() }, "#words/review");
+  await page.locator(".face.front").waitFor();
+  await page.clock.setSystemTime(start.getTime() + 5 * 60e3);
+  await answer(page, 3);
+  assert.equal((await deckOf(page)).cards["秋|あき#r"].first, dayOf(start.getTime() + 5 * 60e3));
+  await page.close();
+});
+
+test("the sync note says Offline when only the deck failed to sync", async () => {
+  const page = await open({ ...listed, studyDown: true }, "#words");
+  await page.locator("#new").waitFor();
+  await page.waitForTimeout(300);
+  assert.match(await page.textContent("#sync-note"), /Offline/);
+  await page.close();
+});
+
+test("the end of a session counts the cards that got Again, not the presses", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: { ...deckWith({}), settings: { newPerDay: 1, at: 1 } } } }, "#words/review");
+  await page.locator(".face.front").waitFor();
+  await answer(page, 1);
+  await answer(page, 1);
+  await answer(page, 3);
+  assert.match(await page.textContent("main"), /1 card · 1 Again/);
+  await page.close();
+});
+
+test("practice buttons count the cards a round will show, both sides of a word", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: deckWith({ "秋|あき#r": reviewed(), "秋|あき#p": reviewed() }) } }, "#words");
+  await page.locator("#new").waitFor();
+  assert.match(await page.textContent("a[href='#words/practice/n5']"), /\(2\)/);
+  await page.close();
+});
+
+test("Enter on a focused grade button presses that button", async () => {
+  const page = await open(listed, "#words/review");
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  await page.focus("[data-g='4']");
+  await page.keyboard.press("Enter");
+  assert.equal(await page.textContent("#left"), "19 left");
+  assert.equal((await deckOf(page)).cards["秋|あき#r"].ivl, 4);
+  await page.close();
+});
+
+// A deck with no owner tag belongs to nobody, so it isn't handed to whoever signs in [B's row got A's 秋 with n 7].
+test("a deck left on this browser without an owner isn't handed to whoever signs in", async () => {
+  const page = await open({ ...listed, local: { study: deckWith({ "秋|あき#r": reviewed({ n: 7 }) }) } }, "#words");
+  await page.locator("#new").waitFor();
+  assert.deepEqual((await deckOf(page)).cards, {});
   await page.close();
 });
