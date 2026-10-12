@@ -1004,7 +1004,7 @@ test("a miss on the last kana leaves it for the Missed list instead of asking it
 });
 
 test("the quiz uses the shared-kana rule [や and きゃ never back to back]", async () => {
-  const page = await open(listed, "#quiz/y,y-k,y-sh/2");
+  const page = await open(listed, "#quiz/y,y-ky,y-sh/2");
   const seen = [];
   while (!(await page.locator("h1", { hasText: "Done!" }).count())) {
     const prog = await page.textContent("#prog");

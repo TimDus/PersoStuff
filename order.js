@@ -30,9 +30,9 @@
       }
       return out;
     }
-    // One kana at a time can end a round holding only clashing ones, so the best of a few tries is kept [12 ゃゅょ kana left at the end].
+    // One kana at a time can end a round holding only clashing ones, so the best of many tries is kept [や ゆ よ しゃ しゅ しょ: 1 try in 10 is clean].
     let best = once();
-    for (let tries = 1; tries < 30 && clashes(best); tries++) {
+    for (let tries = 1; tries < 500 && clashes(best); tries++) {
       const next = once();
       if (clashes(next) < clashes(best)) best = next;
     }

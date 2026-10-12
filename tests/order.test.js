@@ -136,6 +136,15 @@ test("a quiz never puts two kana that share a character back to back when it can
   }), { numRuns: 50 });
 });
 
+// や ゆ よ with しゃ しゅ しょ has only 30 clash-free orders, and 30 tries missed them in 1 quiz of 20 [しょ then しゃ].
+test("even a tight set gets a clash-free order when one exists", () => {
+  const list = pick("y", "y-sh");
+  for (let seed = 0; seed < 300; seed++) {
+    const q = spaced(list, 2, seeded(seed), shareKana);
+    assert.deepEqual(q.slice(1).flatMap((k, i) => (shareKana(q[i], k) ? [q[i].kana + k.kana] : [])), [], "seed " + seed);
+  }
+});
+
 test("a missed kana comes back away from any kana it shares a character with", () => {
   const list = pick("y", "k", ids("youon"));
   fc.assert(fc.property(fc.integer({ min: 0, max: 30 }), fc.integer(), (idx, seed) => {
