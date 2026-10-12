@@ -91,7 +91,7 @@
   Object.assign(SYL, { fa: "ふぁ", fi: "ふぃ", fe: "ふぇ", fo: "ふぉ" });
   add("x", "ぁぃぅぇぉ"); add("l", "ぁぃぅぇぉ");
   const VOWEL = /[aiueoy]/;
-  // Typed romaji into kana, leaving what isn't a syllable yet; `done` settles a last n [tan = たn while typing, たん once sent].
+  // Typed romaji into kana, leaving what isn't a syllable yet; `done` settles any n left waiting [tan = たn while typing, たん once sent].
   function toKana(s, done = false) {
     s = s.toLowerCase();
     let out = "";
@@ -106,8 +106,8 @@
           out += "ん"; i += VOWEL.test(s[i + 2] || "") ? 1 : 2; continue;
         }
         if (next && !VOWEL.test(next) && /[a-z]/.test(next)) { out += "ん"; i++; continue; }
-        // Sent, an n before kana is ん too [うんてnします = うんてんします].
-        if (!next || (done && !/[a-z']/.test(next))) { out += done ? "ん" : "n"; i++; continue; }
+        // Sent, an n before anything but a letter is ん too [うんてnします = うんてんします].
+        if (!next || (done && !/[a-z]/.test(next))) { out += done ? "ん" : "n"; i++; continue; }
       }
       // A doubled consonant is a small っ [itte = いって; tch as in matcha = っち].
       if (/[bcdfghjkmpqrstvwxyz]/.test(c) && (next === c || (c === "t" && next === "c"))) { out += "っ"; i++; continue; }

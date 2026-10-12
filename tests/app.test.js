@@ -1356,6 +1356,7 @@ test("a noun that takes する is asked with it and answered with it", async () 
   await page.type("#in", "denwashimasu");
   await page.press("#in", "Enter");
   assert.equal(await page.textContent("#ok"), String(+ok + 1));
+  assert.equal(await page.inputValue("#in"), "でんわします");
   await page.close();
 });
 
@@ -1446,9 +1447,11 @@ test("the kanji spelling from a Japanese keyboard counts as the answer", async (
   let want = await wantOf(page, await question(page));
   while (want.w === want.r) { await answerRight(page); want = await wantOf(page, await question(page)); }
   const ok = await page.textContent("#ok");
-  await page.fill("#in", want.w);
+  // With the space an IME leaves behind, and shown back in the spelling typed [食べます + a full-width space → 食べます].
+  await page.fill("#in", want.w + String.fromCharCode(0x3000));
   await page.press("#in", "Enter");
   await page.waitForFunction((n) => document.querySelector("#ok").textContent === String(+n + 1), ok, { timeout: 2000 });
+  assert.equal(await page.inputValue("#in"), want.w);
   await page.close();
 });
 

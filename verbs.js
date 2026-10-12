@@ -138,8 +138,8 @@
       if (accepts(q.want, input.value)) {
         right++;
         app.querySelector("#ok").textContent = right;
-        // Shown back as the word is written [tesutoshimasu → テストします, 電話します stays].
-        input.value = toKana(input.value, true) === q.want.w ? q.want.w : q.want.r;
+        // Shown back in the spelling typed, kanji or the reading [電話します stays; denwashimasu → でんわします, tesutoshimasu → テストします].
+        input.value = toKana(input.value.trim(), true) === q.want.w ? q.want.w : q.want.r;
         input.classList.add("right");
         settling = true;
         idx++;
