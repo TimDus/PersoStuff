@@ -64,7 +64,7 @@
       queue.splice(p1, 1);
     }
     // Once, at the best spot left: never beside itself, then past the gap, then off shared kana, then the farthest,
-    // the same ranking as `spaced` [あ か あ か あ か with か missed third: every spot touches a か, so 0].
+    // the same ranking as `spaced` [あ か あ か あ か with か missed at 2 of 6: every spot touches a か, so 0, and a later か is still to come].
     const pastGap = (p) => !queue.slice(Math.max(0, p - gap), p + gap).includes(k);
     const rank = (p) => (pastGap(p) ? 2 : 0) + (apart(p) ? 1 : 0);
     let last = -1;

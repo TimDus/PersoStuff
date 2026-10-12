@@ -175,8 +175,8 @@ test("any two columns at any rounds keep the gap with the shared-kana rule on", 
   }), { numRuns: 300 });
 });
 
-// Only the last kana may go unasked after a miss; mid-quiz it always comes back [しゃ+しょ drill dropped 3,031 of 3,628 misses].
-test("a miss with kana still to come always comes back, never right after itself", () => {
+// A miss goes unasked only while a later copy of it is still ahead [しゃ+しょ drill once dropped 3,031 of 3,628 misses].
+test("a miss always comes back while no copy of it is still ahead, never right after itself", () => {
   for (const groups of [["y-sh"], ["k", "y-ky"], ["y", "k", "y-ky", "y-sh"]]) {
     const list = pick(groups);
     fc.assert(fc.property(fc.integer(), fc.nat(), (seed, at) => {
@@ -206,7 +206,8 @@ function missLoop(list, rounds, seed, rate) {
     const k = q[idx], before = [...q];
     let free = false;
     for (let p = idx + 2; p <= before.length; p++) if (clear(before, p, k)) free = true;
-    requeue(q, idx, gap, rand, shareKana);
+    const back = requeue(q, idx, gap, rand, shareKana);
+    if (idx < before.length - 1 && !before.slice(idx + 1).includes(k)) assert.ok(back >= 1, `${k.kana} dropped at ${idx} with no copy ahead`);
     for (const i of inserted(before, q)) {
       const near = q.slice(Math.max(0, i - gap), i + gap + 1).filter((x) => x === k).length;
       if (free) assert.equal(near, 1, `${list.map((x) => x.kana).join("")} seed ${seed}: ${k.kana} put inside the gap at ${i} with room outside`);
@@ -216,7 +217,7 @@ function missLoop(list, rounds, seed, rate) {
 }
 
 test("a quiz full of misses never shows a kana twice in a row", () => {
-  for (const [groups, rounds] of [[["a", "k"], 3], [["y-sh"], 3], [["k", "y-ky"], 3], [["k-x-v", "k-w"], 5], [ids("youon"), 2], [["y", "k", "y-ky", "y-sh"], 2]]) {
+  for (const [groups, rounds] of [[["a", "k"], 3], [["k-x-t"], 3], [["y-sh"], 3], [["k", "y-ky"], 3], [["k-x-v", "k-w"], 5], [ids("youon"), 2], [["y", "k", "y-ky", "y-sh"], 2]]) {
     const list = pick(groups);
     for (let seed = 0; seed < 60; seed++) {
       const q = missLoop(list, rounds, seed, 0.4);
