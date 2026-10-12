@@ -44,6 +44,8 @@ async function open(cfg, hash = "") {
       Object.entries(cfg.local).forEach(([k, v]) => localStorage.setItem("hira." + k, JSON.stringify(v)));
       localStorage.setItem("__seeded", "1");
     }
+    // A fixed order for cases that type ahead [Math.random 0: #quiz/a,k/1 opens あ, い].
+    if (cfg.rand0) Math.random = () => 0;
     const log = (window.__log = []);
     const down = () => { if (cfg.offline || localStorage.getItem("__offline")) throw new TypeError("Failed to fetch"); };
     const listed = () => { down(); if (!cfg.allowed) throw new Error("Object not found"); };
@@ -1215,5 +1217,14 @@ test("the chart shows reading or writing, and a reset forgets the writing too", 
   const w = await deckWrite(page);
   assert.deepEqual(w.kana, {});
   assert.ok(w.resetAt > 5);
+  await page.close();
+});
+
+// Two answers typed in one burst left the second one carried into the box but never checked ["ai": い sat with "i" until Enter].
+test("a whole answer typed while the last one settles counts at once", async () => {
+  const page = await open({ ...listed, rand0: true }, "#quiz/a,k/1");
+  const [first, second] = await page.evaluate(() => HiraOrder.spaced(HIRAGANA.KANA.filter((k) => ["a", "k"].includes(k.group)), 1).slice(0, 2).map((k) => k.romaji));
+  await page.keyboard.type(first + second);
+  await page.waitForFunction(() => document.querySelector("#prog").textContent.startsWith("3 /"), null, { timeout: 2000 });
   await page.close();
 });

@@ -10,7 +10,7 @@
   const same = (a, b) => a === b;
 
   // Each item `rounds` times, the most-left first so a round's end never crowds the next one's start [お can't end round 1 and open round 2].
-  // `clash` keeps two items apart back to back, given up only when nothing else is left [the き column's きゃ きゅ きょ all share き].
+  // `clash` only breaks ties the round and gap rules leave open, so it never costs the gap [ヴ column with ワ ヲ ン: no clean order, gap kept].
   function spaced(items, rounds, rand = Math.random, clash = same) {
     const gap = gapFor(items.length);
     const clashes = (q) => q.slice(1).filter((k, i) => clash(q[i], k)).length;
@@ -20,11 +20,12 @@
       while (out.length < items.length * rounds) {
         const recent = gap ? out.slice(-gap) : [];
         const open = items.filter((k) => left.get(k) > 0 && !recent.includes(k));
-        const apart = open.filter((k) => !out.length || !clash(out.at(-1), k));
-        const pool = apart.length ? apart : open.length ? open : items.filter((k) => left.get(k) > 0);
+        const pool = open.length ? open : items.filter((k) => left.get(k) > 0);
         const most = Math.max(...pool.map((k) => left.get(k)));
         const top = pool.filter((k) => left.get(k) === most);
-        const k = top[Math.floor(rand() * top.length)];
+        const apart = top.filter((k) => !out.length || !clash(out.at(-1), k));
+        const choice = apart.length ? apart : top;
+        const k = choice[Math.floor(rand() * choice.length)];
         out.push(k);
         left.set(k, left.get(k) - 1);
       }
@@ -62,9 +63,15 @@
       if (p2 !== -1) { queue.splice(p2, 0, k); return 2; }
       queue.splice(p1, 1);
     }
-    // Too close to the end for the gap: the farthest spot still off its neighbours, or nowhere.
+    // No spot keeps both the gap and its neighbours apart: the farthest one off its neighbours, then mid-quiz the farthest past
+    // the gap, then the end; only a missed last kana has nowhere to go [しゃ+しょ drill: every miss still comes back].
     let last = firsts.at(-1) ?? -1;
     for (let p = queue.length; last === -1 && p > idx; p--) if (apart(p)) last = p;
+    if (last === -1 && idx < queue.length - 1) {
+      const pastGap = (p) => !queue.slice(Math.max(0, p - gap), p + gap).includes(k);
+      for (let p = queue.length; last === -1 && p > idx + 1; p--) if (pastGap(p)) last = p;
+      if (last === -1) last = queue.length;
+    }
     if (last === -1) return 0;
     queue.splice(last, 0, k);
     return 1;

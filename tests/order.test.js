@@ -154,3 +154,37 @@ test("a missed kana comes back away from any kana it shares a character with", (
     assert.deepEqual(pairs, []);
   }), { numRuns: 50 });
 });
+
+// The shared-kana rule ranked above the round and gap rules, so a mix with no clean order ended on five ヴ kana [ヴェ ヴェ].
+test("the round and gap rules outrank the shared-kana rule on mixes with no clean order", () => {
+  for (const groups of [["k-x-v", "k-w"], ["k-x-v", "w"], ["k-x-v", "y-ky"], ["k-x-v", "k-x-w"]]) {
+    const list = pick(groups);
+    for (let seed = 0; seed < 40; seed++) {
+      const q = spaced(list, 5, seeded(seed), shareKana);
+      assert.deepEqual(tooClose(q, gapFor(list.length)), [], `${groups} seed ${seed}: ${q.map((k) => k.kana).join(" ")}`);
+    }
+  }
+});
+
+test("any two columns at any rounds keep the gap with the shared-kana rule on", () => {
+  const all = window.HIRAGANA.groups.map((g) => g.id);
+  fc.assert(fc.property(fc.constantFrom(...all), fc.constantFrom(...all), fc.integer({ min: 1, max: 5 }), fc.integer(), (a, b, rounds, seed) => {
+    const list = pick([...new Set([a, b])]);
+    const q = spaced(list, rounds, seeded(seed), shareKana);
+    assert.deepEqual(tooClose(q, gapFor(list.length)), []);
+  }), { numRuns: 300 });
+});
+
+// Only the last kana may go unasked after a miss; mid-quiz it always comes back [しゃ+しょ drill dropped 3,031 of 3,628 misses].
+test("a miss with kana still to come always comes back, never right after itself", () => {
+  for (const groups of [["y-sh"], ["k", "y-ky"], ["y", "k", "y-ky", "y-sh"]]) {
+    const list = pick(groups);
+    fc.assert(fc.property(fc.integer(), fc.nat(), (seed, at) => {
+      const q = spaced(list, 3, seeded(seed), shareKana);
+      const idx = at % (q.length - 1);
+      const k = q[idx];
+      assert.ok(requeue(q, idx, gapFor(list.length), seeded(seed + 1), shareKana) >= 1, `${groups} idx ${idx}`);
+      assert.notEqual(q[idx + 1], k);
+    }), { numRuns: 100 });
+  }
+});

@@ -587,7 +587,7 @@
     const misses = new Map();
     // Each kana's correct answers in ms [か twice at 1.2s and 0.8s = [1200, 800]].
     const took = new Map();
-    // The box is never read-only, which would drop a phone keyboard: `settling` covers the beat after a right answer, `waiting` a miss.
+    // The box is never read-only, which drops a phone keyboard; flags hold it instead [`settling` for 160 ms after a right answer, `waiting` after a miss].
     let idx = 0, right = 0, wrong = 0, waiting = false, settling = false, carryFrom = 0, shownAt = 0;
     const start = Date.now();
 
@@ -616,6 +616,8 @@
       fb.innerHTML = "";
       waiting = false;
       shownAt = Date.now();
+      // A whole answer typed ahead counts at once ["ai" in one burst answers あ and い].
+      if (input.value && norm(input.value) === k.romaji) correct(k);
     }
     function correct(k) {
       record(k.kana, true);
@@ -653,11 +655,11 @@
       const k = queue[idx];
       norm(input.value) === k.romaji ? correct(k) : miss(k);
     });
-    // A missed answer stays put until Continue [typing over "zz" does nothing].
+    // A missed answer stays put until Continue [typing over "zz" does nothing; a Japanese keyboard's composing can't be blocked, and changes nothing].
     input.addEventListener("beforeinput", (e) => { if (waiting) e.preventDefault(); });
     // Buttons under a miss take no focus, so the answer box keeps the keyboard [Listen, Show illustration, Continue].
     fb.addEventListener("mousedown", (e) => { if (e.target.closest("button")) e.preventDefault(); });
-    // Enter still continues once focus has left the answer box [after pressing Show illustration].
+    // Enter still continues if focus ever leaves the answer box [a tap on the kana itself].
     onKey((e) => { if (waiting && e.key === "Enter" && e.target !== input && !e.target.closest("button")) show(); });
     function finish() {
       doneScreen({
