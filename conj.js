@@ -87,6 +87,9 @@
     SYL[cons + "a"] = base + "ゃ"; SYL[cons + "u"] = base + "ゅ"; SYL[cons + "o"] = base + "ょ";
   }
   SYL.je = "じぇ"; SYL.she = "しぇ"; SYL.che = "ちぇ";
+  // The small vowels katakana loanwords need [fakkusu = ふぁっくす, xa or la = ぁ].
+  Object.assign(SYL, { fa: "ふぁ", fi: "ふぃ", fe: "ふぇ", fo: "ふぉ" });
+  add("x", "ぁぃぅぇぉ"); add("l", "ぁぃぅぇぉ");
   const VOWEL = /[aiueoy]/;
   // Typed romaji into kana, leaving what isn't a syllable yet; `done` settles a last n [tan = たn while typing, たん once sent].
   function toKana(s, done = false) {
@@ -103,7 +106,8 @@
           out += "ん"; i += VOWEL.test(s[i + 2] || "") ? 1 : 2; continue;
         }
         if (next && !VOWEL.test(next) && /[a-z]/.test(next)) { out += "ん"; i++; continue; }
-        if (!next) { out += done ? "ん" : "n"; i++; continue; }
+        // Sent, an n before kana is ん too [うんてnします = うんてんします].
+        if (!next || (done && !/[a-z']/.test(next))) { out += done ? "ん" : "n"; i++; continue; }
       }
       // A doubled consonant is a small っ [itte = いって; tch as in matcha = っち].
       if (/[bcdfghjkmpqrstvwxyz]/.test(c) && (next === c || (c === "t" && next === "c"))) { out += "っ"; i++; continue; }
@@ -116,14 +120,14 @@
     return out;
   }
 
-  // Katakana as hiragana, since romaji only ever gives hiragana [テストします = てすとします].
+  // Katakana as hiragana, for answers romaji can only give in hiragana [テストします = てすとします].
   const hira = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
   // A typed answer against a form, in kana, romaji or the kanji spelling [書きます, かきます and kakimasu all count].
   const accepts = (want, typed) => {
     const t = typed.trim();
     if (!t) return false;
-    const kana = hira(toKana(t, true));
-    return kana === hira(want.r) || kana === hira(want.w);
+    const kana = toKana(t, true);
+    return [want.r, want.w, hira(want.r), hira(want.w)].includes(kana);
   };
 
   const api = { FORMS, base, conjugate, classOf, toKana, accepts };

@@ -138,7 +138,8 @@
       if (accepts(q.want, input.value)) {
         right++;
         app.querySelector("#ok").textContent = right;
-        input.value = toKana(input.value, true);
+        // Shown back as the word is written [tesutoshimasu → テストします, 電話します stays].
+        input.value = toKana(input.value, true) === q.want.w ? q.want.w : q.want.r;
         input.classList.add("right");
         settling = true;
         idx++;
@@ -157,7 +158,7 @@
       idx++;
       waiting = true;
     }
-    // Romaji before the caret turns into kana as it's typed, except while a Japanese keyboard is composing [たべ|ました + ra = たべら|ました].
+    // Romaji before the caret turns into kana as it's typed, except while a Japanese keyboard is composing [anna before します = あんな|します].
     input.addEventListener("compositionstart", () => { composing = true; });
     input.addEventListener("compositionend", () => { composing = false; });
     input.addEventListener("beforeinput", (e) => { if (waiting || settling) e.preventDefault(); });

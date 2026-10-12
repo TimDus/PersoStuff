@@ -1152,8 +1152,8 @@ test("a kana written stroke by stroke counts as written, kept apart from reading
   await page.close();
 });
 
-// Writing and verb bests share one store in the deck, each under its own name [write.best["a,i/1"], verbs.best["masu|verb|10"]].
-test("a writing best is kept in the deck apart from the verb drills' bests", async () => {
+// The shared drill store only; no test finishes a whole-category writing run [write.best["a,k,s,t,n,h,m,y,r,w/1"]].
+test("the deck's drill store keeps writing bests apart from the verb drills' bests", async () => {
   const page = await open(listed, "#quiz");
   await page.locator("#go").waitFor();
   const got = await page.evaluate(() => {
@@ -1356,6 +1356,27 @@ test("a noun that takes する is asked with it and answered with it", async () 
   await page.type("#in", "denwashimasu");
   await page.press("#in", "Enter");
   assert.equal(await page.textContent("#ok"), String(+ok + 1));
+  await page.close();
+});
+
+// Only a bare noun gets the + する, and a katakana answer typed in romaji is shown back in katakana [練習する: suru verb; tesutoshimasu → テストします].
+test("the type line and a right answer read as the word does", async () => {
+  const page = await open({ ...listed, local: { ...verbsSel({ count: 20 }), "study.user": "u1", study: deckWith({ "テスト|テスト#r": reviewed() }) } }, "#verbs/run");
+  await page.locator(".verb-q").waitFor();
+  const types = {};
+  while (!(await page.locator("h1", { hasText: "Done!" }).count())) {
+    const q = await question(page);
+    types[q.k] = await page.textContent("#type");
+    if (q.k === "テスト|テスト") {
+      await page.type("#in", "tesutoshimasu");
+      await page.press("#in", "Enter");
+      assert.equal(await page.inputValue("#in"), "テストします");
+      await page.waitForFunction(() => document.querySelector("#in")?.value !== "テストします" || document.querySelector("h1")?.textContent === "Done!");
+    } else await answerRight(page);
+  }
+  assert.equal(types["テスト|テスト"], "noun + する");
+  assert.equal(types["練習する|れんしゅうする"], "suru verb");
+  assert.equal(types["言う|いう"], "godan verb");
   await page.close();
 });
 
