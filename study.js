@@ -1,7 +1,7 @@
 // The Japanese section: JLPT vocabulary on Anki-style reviews, both directions, synced to its own column [progress.study, beside the kana in progress.data].
 (function () {
   const { dayOf, grade, preview, queue, mergeStudy } = window.HiraSRS;
-  const { same } = window.HiraSync;
+  const { same, bump } = window.HiraSync;
   let shell = null;
   let words = null;
   let loading = null;
@@ -294,6 +294,26 @@
       deck = blank();
     },
     flush: () => sync(),
+    // Writing progress and bests, kept in the deck so they sync with it [write.kana["か"] = { box: 3, right: 4, wrong: 1 }].
+    write: {
+      of: (kana) => deck.write?.kana?.[kana],
+      best: (key) => deck.write?.best?.[key],
+      record(kana, ok) {
+        const w = (deck.write ||= { kana: {}, best: {}, resetAt: 0 });
+        bump(w.kana[kana] ||= { box: 0, right: 0, wrong: 0 }, ok);
+        save();
+      },
+      setBest(key, best) {
+        (deck.write ||= { kana: {}, best: {}, resetAt: 0 }).best[key] = best;
+        save();
+      },
+      // Newer than any writing reset this device has seen, whatever its clock says [last reset 1000, clock reads 900 = 1001].
+      reset() {
+        deck.write = { kana: {}, best: {}, resetAt: Math.max(Date.now(), (deck.write?.resetAt || 0) + 1) };
+        save();
+        return sync();
+      },
+    },
     unsynced: () => local().savedAt > pushedAt(),
   };
 })();

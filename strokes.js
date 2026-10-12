@@ -41,5 +41,5 @@
     b.textContent = "Hide stroke order";
   });
 
-  window.HiraStrokes = { button };
+  window.HiraStrokes = { button, load };
 })();

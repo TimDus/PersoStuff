@@ -1,5 +1,6 @@
 // Vocabulary scheduling after Anki's SM-2, pure so node can test it [a new word on Good is due tomorrow, on Easy in four days].
 (function (root) {
+  const { mergeWrite } = typeof module !== "undefined" ? require("./sync.js") : root.HiraSync;
   const DAY = 86400e3;
   // Days since the epoch in local time, starting at 4 am so a late-night session counts as the same day [03:59 is still yesterday].
   const dayOf = (ms, tzOffsetMin = new Date(ms).getTimezoneOffset()) => Math.floor((ms - tzOffsetMin * 60e3 - 4 * 3600e3) / DAY);
@@ -67,7 +68,7 @@
     const text = (x) => JSON.stringify(Object.keys(x).sort().map((f) => [f, x[f]]));
     return text(c) > text(cur);
   };
-  // Two devices' decks into one: cards by `wins`, settings from the later change, and any other key whole from the newer side
+  // Two devices' decks into one: cards by `wins`, settings from the later change, writing by `mergeWrite`, and any other key whole from the newer side
   // so a later section's data outlives a tab that predates it [a verb-drill key written by the next version].
   function mergeStudy(a, b) {
     const sides = [a, b].filter((s) => s && typeof s === "object").sort((x, y) => (x.savedAt || 0) - (y.savedAt || 0));
@@ -77,7 +78,8 @@
       for (const [key, c] of Object.entries(s.cards || {})) if (!cards[key] || wins(c, cards[key])) cards[key] = c;
     }
     const settings = sides.map((s) => s.settings).filter(Boolean).sort((x, y) => (y.at || 0) - (x.at || 0))[0] || { newPerDay: 20, at: 0 };
-    return { ...out, cards, settings, savedAt: Math.max(0, ...sides.map((s) => s.savedAt || 0)) };
+    const write = mergeWrite(a?.write, b?.write);
+    return { ...out, cards, settings, ...(write && { write }), savedAt: Math.max(0, ...sides.map((s) => s.savedAt || 0)) };
   }
 
   const api = { dayOf, grade, preview, queue, mergeStudy };

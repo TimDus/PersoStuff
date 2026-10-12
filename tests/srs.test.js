@@ -155,3 +155,15 @@ test("two copies differing anywhere settle on one, not just in the ranked fields
   const b = { st: "learn", ivl: 0, ease: 2.5, due: 100, n: 1, lapses: 0, first: 100, last: 100 };
   assert.deepEqual(mergeStudy({ cards: { k: a } }, { cards: { k: b } }).cards.k, mergeStudy({ cards: { k: b } }, { cards: { k: a } }).cards.k);
 });
+
+// Writing progress rides in the deck, so the deck's merge-the-newer-side-whole would let one device's writing overwrite the other's.
+test("writing progress merges kana by kana with the kana rules, and its own reset drops an older copy", () => {
+  const phone = { cards: {}, savedAt: 9, write: { kana: { か: { box: 2, right: 9, wrong: 3 } }, best: { "a/1": { ms: 9000, acc: 100 } }, resetAt: 0 } };
+  const pc = { cards: {}, savedAt: 5, write: { kana: { か: { box: 4, right: 3, wrong: 0 }, き: { box: 1, right: 0, wrong: 1 } }, best: { "a/1": { ms: 5000, acc: 100 } }, resetAt: 0 } };
+  const m = mergeStudy(phone, pc);
+  assert.deepEqual(m.write.kana, { か: { box: 2, right: 9, wrong: 3 }, き: { box: 1, right: 0, wrong: 1 } });
+  assert.deepEqual(m.write.best, { "a/1": { ms: 5000, acc: 100 } });
+  const reset = { cards: {}, savedAt: 3, write: { kana: {}, best: {}, resetAt: 7 } };
+  assert.deepEqual(mergeStudy(phone, reset).write, { kana: {}, best: {}, resetAt: 7 });
+  assert.equal(mergeStudy({ cards: {}, savedAt: 1 }, null).write, undefined, "a deck that never wrote gets no write key");
+});

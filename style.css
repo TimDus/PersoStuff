@@ -312,3 +312,20 @@ body[data-section="japanese"] footer .credits-ja { display: block; }
 .grades button { min-width: 5rem; }
 .grades small { opacity: .8; font-size: .75rem; }
 a.btn.disabled { opacity: .45; pointer-events: none; }
+
+/* Two-way switch in the look of the Kana / Japanese one [Read or Write, Per stroke or Whole kana]. */
+.seg { display: inline-flex; gap: .2rem; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: .15rem; }
+.seg button { background: none; border: 0; color: var(--muted); padding: .25rem .8rem; border-radius: 999px; font-size: .9rem; }
+.seg button.on { background: var(--panel); color: var(--ink); font-weight: 600; box-shadow: var(--shadow); }
+
+/* Writing pad, in KanjiVG's 109-unit box per character [きゃ is two cells side by side]. */
+.write-prompt { text-align: center; font-size: 2.2rem; line-height: 1.2; }
+.pad { width: min(300px, 100%); height: auto; touch-action: none; user-select: none; -webkit-user-select: none;
+  background: var(--panel); border-radius: 12px; cursor: crosshair; }
+.pad.wide { width: min(520px, 100%); }
+.pad .guide rect { fill: none; stroke: var(--line); stroke-width: .6; }
+.pad .guide path { fill: none; stroke: var(--line); stroke-width: .5; stroke-dasharray: 2 2; }
+.pad .hint path { fill: none; stroke: var(--accent); stroke-opacity: .35; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+.pad .ink *, .pad .live { fill: none; stroke: var(--ink); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.pad .ink .bad { stroke: var(--bad); }
+.pad.right .ink * { stroke: var(--good); }

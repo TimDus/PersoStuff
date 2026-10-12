@@ -1095,3 +1095,125 @@ test("a sentence typed in romaji marks the kana where it goes wrong, and counts 
   assert.equal(await page.inputValue("#typed"), "");
   await page.close();
 });
+
+// Writing: the mouse traces KanjiVG's own strokes over the pad [あ's 3 paths, box units turned into screen pixels].
+const padKana = (page) => page.getAttribute("#say [data-say]", "data-say");
+const strokesOf = (page, kana) => page.evaluate(async (kana) => {
+  const all = await HiraStrokes.load();
+  return [...kana].flatMap((c, j) => all[c].d.map((d) => HiraWrite.pathPoints(d).map(([x, y]) => [x + 109 * j, y])));
+}, kana);
+async function drawStroke(page, pts, dx = 0, dy = 0) {
+  const r = await page.locator("#pad").boundingBox();
+  const w = (await page.evaluate(() => document.querySelector("#pad").viewBox.baseVal.width));
+  const at = ([x, y]) => [r.x + ((x + dx) / w) * r.width, r.y + ((y + dy) / 109) * r.height];
+  await page.mouse.move(...at(pts[0]));
+  await page.mouse.down();
+  for (const p of pts.slice(1)) await page.mouse.move(...at(p));
+  await page.mouse.up();
+}
+const writeKana = async (page) => { for (const s of await strokesOf(page, await padKana(page))) await drawStroke(page, s); };
+const deckWrite = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("hira.study") || "{}").write);
+const nextKana = (page, prog) => page.waitForFunction((p) => document.querySelector("h1")?.textContent === "Done!" || document.querySelector("#prog")?.textContent !== p, prog);
+
+test("the Write switch on the quiz page starts a writing run of the picked kana", async () => {
+  const page = await open(listed, "#quiz");
+  await page.click("[data-mode='write']");
+  assert.match(await page.textContent("#lead"), /stroke order/);
+  await page.click("[data-none='hiragana']");
+  await page.click(".chip >> text=あいうえお");
+  await page.click("#go");
+  assert.match(decodeURIComponent(page.url()), /#write\/a\/1$/);
+  await page.locator("#pad rect").first().waitFor();
+  assert.equal(await page.textContent("#script"), "hiragana");
+  assert.equal(await page.getAttribute("nav a.active", "data-tab"), "quiz");
+  await page.close();
+});
+
+test("a kana written stroke by stroke counts as written, kept apart from reading, and uploads at the end", async () => {
+  const page = await open(listed, "#write/a/1");
+  await page.locator("#pad rect").first().waitFor();
+  const done = [];
+  while (await page.locator("#pad").count()) {
+    const prog = await page.textContent("#prog");
+    done.push(await padKana(page));
+    await writeKana(page);
+    await nextKana(page, prog);
+  }
+  assert.equal(await page.textContent("h1"), "Done!");
+  assert.match(await page.textContent(".stats"), /100%/);
+  const w = await deckWrite(page);
+  assert.deepEqual(Object.keys(w.kana).sort(), [...done].sort());
+  assert.deepEqual(w.kana[done[0]], { box: 2, right: 1, wrong: 0 });
+  assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("hira.progress") || "{}")), {}, "reading progress untouched");
+  // The deck's own upload waits 20 s, so a run that didn't flush would only show up long after this [5 s here].
+  await page.waitForFunction(() => window.__log.some((l) => l.study?.write?.kana && Object.keys(l.study.write.kana).length === 5), null, { timeout: 5000 });
+  await page.close();
+});
+
+test("a stroke missed three times shows faintly to trace, and the kana counts as a miss", async () => {
+  const page = await open(listed, "#write/a/1");
+  await page.locator("#pad rect").first().waitFor();
+  const kana = await padKana(page);
+  const [first, ...rest] = await strokesOf(page, kana);
+  await drawStroke(page, first, 0, 40);
+  await drawStroke(page, first, 0, 40);
+  assert.equal(await page.locator("#pad .hint path").count(), 0, "two misses give no hint yet");
+  await drawStroke(page, first, 0, 40);
+  assert.equal(await page.locator("#pad .hint path").count(), 1);
+  await page.click("[data-check='stroke']");
+  assert.equal(await page.locator("#pad .hint path").count(), 1, "pressing the mode already on starts nothing over");
+  await drawStroke(page, first);
+  assert.equal(await page.locator("#pad .hint path").count(), 0, "the hint goes once the stroke is drawn");
+  for (const s of rest) await drawStroke(page, s);
+  await page.locator("#next").waitFor();
+  assert.deepEqual((await deckWrite(page)).kana[kana], { box: 1, right: 0, wrong: 1 });
+  assert.equal(await page.textContent("#bad"), "1");
+  await page.close();
+});
+
+test("checking a whole kana takes every stroke in order, and a wrong one shows the outline", async () => {
+  const page = await open({ ...listed, local: { "write.check": "whole" } }, "#write/a/1");
+  await page.locator("#pad rect").first().waitFor();
+  let kana = await padKana(page);
+  const strokes = await strokesOf(page, kana);
+  for (const s of [...strokes].reverse()) await drawStroke(page, s);
+  await page.click("#done");
+  assert.equal(await page.locator("#pad .hint path").count(), strokes.length);
+  assert.ok(await page.locator("#pad .ink .bad").count() > 0);
+  assert.equal((await deckWrite(page)).kana[kana].wrong, 1);
+  await page.click("#next");
+  kana = await padKana(page);
+  const prog = await page.textContent("#prog");
+  for (const s of await strokesOf(page, kana)) await drawStroke(page, s);
+  assert.equal(await page.locator("#pad .ink polyline").count(), (await strokesOf(page, kana)).length, "nothing is judged before Check");
+  await page.keyboard.press("Enter");
+  await nextKana(page, prog);
+  assert.deepEqual((await deckWrite(page)).kana[kana], { box: 2, right: 1, wrong: 0 });
+  await page.close();
+});
+
+test("a combination is written in two cells, the small kana in the second", async () => {
+  const page = await open(listed, "#write/y-ky/1");
+  await page.locator("#pad rect").first().waitFor();
+  assert.equal(await page.locator("#pad .guide rect").count(), 2);
+  const kana = await padKana(page);
+  const prog = await page.textContent("#prog");
+  await writeKana(page);
+  await nextKana(page, prog);
+  assert.deepEqual((await deckWrite(page)).kana[kana], { box: 2, right: 1, wrong: 0 });
+  await page.close();
+});
+
+test("the chart shows reading or writing, and a reset forgets the writing too", async () => {
+  const page = await open({ ...listed, remoteStudy: { cards: {}, savedAt: 5, write: { kana: { か: { box: 4, right: 5, wrong: 0 } }, best: {}, resetAt: 0 } } }, "#chart");
+  assert.equal(await page.getAttribute("td[data-kana='か']", "class"), "box-0");
+  await page.click("#chart-mode [data-mode='write']");
+  assert.equal(await page.getAttribute("td[data-kana='か']", "class"), "box-4");
+  page.on("dialog", (d) => d.accept());
+  await page.click("#reset");
+  assert.equal(await page.getAttribute("td[data-kana='か']", "class"), "box-0");
+  const w = await deckWrite(page);
+  assert.deepEqual(w.kana, {});
+  assert.ok(w.resetAt > 5);
+  await page.close();
+});

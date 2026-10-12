@@ -1,6 +1,6 @@
 (function () {
   const { groups, KANA, LESSONS, KATA_LESSONS, SMALL_TSU, LONG_VOWELS, ids, main } = window.HIRAGANA;
-  const { clipPath, imagePath, merge, same, wholeCategories } = window.HiraSync;
+  const { clipPath, imagePath, bump, merge, same, wholeCategories } = window.HiraSync;
   const { gapFor, spaced, requeue, slowest, shareKana } = window.HiraOrder;
   const backend = window.HIRA_BACKEND;
   // Worksheets and sentences arrive from the private bucket after sign-in [empty until then, or when offline].
@@ -56,11 +56,10 @@
     },
   };
 
-  // Mastery per kana, 0 unseen to 5 mastered [a miss drops any box back to 1].
+  // Reading mastery per kana, 0 unseen to 5 mastered [writing keeps its own in the deck, study.write].
   let progress = store.get("progress", {});
   function record(kana, ok) {
-    const p = progress[kana] || (progress[kana] = { box: 0, right: 0, wrong: 0 });
-    if (ok) { p.right++; p.box = Math.min(5, Math.max(2, p.box + 1)); } else { p.wrong++; p.box = 1; }
+    bump(progress[kana] || (progress[kana] = { box: 0, right: 0, wrong: 0 }), ok);
     store.set("progress", progress);
   }
   const boxOf = (kana) => progress[kana]?.box || 0;
@@ -254,14 +253,15 @@
     document.body.appendChild(back);
   }
   function kanaModal(k) {
-    const p = progress[k.kana];
+    const p = progress[k.kana], w = study.write.of(k.kana);
     openModal(`
       <div class="kana">${esc(k.kana)}</div>
       <div class="big-number">${esc(k.romaji)} ${speakBtn(k.kana)}</div>
       <p>${esc(k.mnemonic)}</p>
       ${k.lookalike ? `<p class="muted small">Look-alike: ${esc(k.lookalike)}</p>` : ""}
       ${artBtn(k.kana)}${strokeBtn(k.kana)}
-      <p class="muted small">${p ? `${p.right} right · ${p.wrong} wrong` : "Not practised yet"}</p>`);
+      <p class="muted small">Reading: ${p ? `${p.right} right · ${p.wrong} wrong` : "not practised yet"}<br>
+        Writing: ${w ? `${w.right} right · ${w.wrong} wrong` : "not practised yet"}</p>`);
   }
 
   // Column chooser shared by flashcards and quiz, hiragana above katakana [all of Main = 46 kana].
@@ -538,10 +538,17 @@
     }
     const selected = new Set(store.get("quiz.sel", main));
     let r = store.get("quiz.rounds", 1);
+    let mode = store.get("quiz.mode", "read");
+    const LEAD = {
+      read: `Type the romaji for each kana. Right answers move on by themselves; press <span class="kbd">Enter</span> to give up on one.
+        Misses come back later in the round. Go for speed once you're accurate.`,
+      write: `Write each kana from its romaji, with a finger or the mouse, in stroke order. Get a stroke wrong three times and it shows
+        faintly to trace, and the kana comes back later in the round.`,
+    };
     app.innerHTML = `
       <h1>Quiz</h1>
-      <p class="lead">Type the romaji for each kana. Right answers move on by themselves; press <span class="kbd">Enter</span> to give up on one.
-        Misses come back later in the round. Go for speed once you're accurate.</p>
+      <div class="seg" id="mode" style="margin-bottom:.8rem"><button data-mode="read">Read</button><button data-mode="write">Write</button></div>
+      <p class="lead" id="lead"></p>
       <div class="panel"><div id="pick"></div>
         <div class="row" style="margin-top:1.2rem">
           <label>Rounds <select id="rounds">${[1, 2, 3, 5].map((n) => `<option ${n === r ? "selected" : ""}>${n}</option>`).join("")}</select></label>
@@ -553,14 +560,23 @@
       const n = kanaOf([...selected]).length;
       app.querySelector("#count").textContent = `${n} kana × ${r}`;
       app.querySelector("#go").disabled = !n;
-      const best = store.get("quiz.best", {})[key()];
+      const best = mode === "write" ? study.write.best(key()) : store.get("quiz.best", {})[key()];
+      app.querySelector("#lead").innerHTML = LEAD[mode];
+      app.querySelectorAll("#mode button").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
       app.querySelector("#best").textContent = !keepBest(key()) ? (n ? "Times are kept for whole categories only" : "")
         : best ? `Best: ${fmtTime(best.ms)} at ${best.acc}%` : "";
       store.set("quiz.sel", [...selected]);
     };
     app.querySelector("#pick").appendChild(picker(selected, update));
     app.querySelector("#rounds").addEventListener("change", (e) => { r = +e.target.value; store.set("quiz.rounds", r); update(); });
-    app.querySelector("#go").addEventListener("click", () => { location.hash = `#quiz/${key()}`; });
+    app.querySelector("#mode").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-mode]");
+      if (!b) return;
+      mode = b.dataset.mode;
+      store.set("quiz.mode", mode);
+      update();
+    });
+    app.querySelector("#go").addEventListener("click", () => { location.hash = `#${mode === "write" ? "write" : "quiz"}/${key()}`; });
     update();
   }
 
@@ -644,46 +660,227 @@
     // Enter still continues once focus has left the answer box [after pressing Show illustration].
     onKey((e) => { if (waiting && e.key === "Enter" && e.target !== input && !e.target.closest("button")) show(); });
     function finish() {
-      const ms = Date.now() - start;
-      const acc = Math.round((right / (right + wrong)) * 100);
-      let note = "";
-      if (bestKey) {
-        const bests = store.get("quiz.best", {});
-        const prev = bests[bestKey];
-        if (!prev || acc > prev.acc || (acc === prev.acc && ms < prev.ms)) {
-          bests[bestKey] = { ms, acc };
-          store.set("quiz.best", bests);
-          note = prev ? `<span class="badge">New best!</span> previous ${fmtTime(prev.ms)} at ${prev.acc}%` : "First run — now beat it.";
-        } else note = `Best: ${fmtTime(prev.ms)} at ${prev.acc}%`;
-      }
-      const sorted = [...misses].sort((a, b) => b[1] - a[1]);
-      const mean = (ms) => ms.reduce((a, b) => a + b, 0) / ms.length;
-      // A drill of every kana is just Again [a 4-kana quiz's slowest 75% is 3 of them, so it stays].
-      const drills = slowest(new Map([...took].map(([k, ms]) => [k, mean(ms)])), sorted.map(([k]) => k)).filter((d) => d.items.length < list.length);
-      app.innerHTML = `
-        <div class="panel" style="text-align:center;max-width:560px;margin:2rem auto">
-          <h1>Done!</h1>
-          <div class="stats" style="margin:1rem 0">
-            <div><div class="big-number">${fmtTime(ms)}</div>time</div>
-            <div><div class="big-number">${acc}%</div>accuracy</div>
-            <div><div class="big-number">${total}</div>kana</div>
-          </div>
-          <p class="muted">${note}</p>
-          ${sorted.length ? `<h2>Missed</h2><div class="miss-list" style="justify-content:center">${sorted.map(([k, n]) =>
-            `<span class="miss">${esc(k.kana)}<small>${esc(k.romaji)}${n > 1 ? ` ×${n}` : ""}</small></span>`).join("")}</div>` : ""}
-          <div class="row" style="justify-content:center;margin-top:1.2rem">
-            <button id="re">Again</button>
-            ${sorted.length ? `<button class="ghost" id="miss">Drill the missed ones</button>` : ""}
-            <a class="btn ghost" href="#quiz">Other kana</a>
-          </div>
-          ${drills.length ? `<h2>Drill on time</h2><div class="row" style="justify-content:center">${drills.map((d, i) =>
-            `<button class="ghost slow" data-i="${i}">${sorted.length ? "Missed + slowest" : "Slowest"} ${d.share * 100}% <small class="muted">${d.items.length} kana</small></button>`).join("")}</div>` : ""}
-          </div>`;
-      app.querySelector("#re").addEventListener("click", () => runQuiz(list, rounds, bestKey));
-      app.querySelector("#miss")?.addEventListener("click", () => runQuiz(sorted.map(([k]) => k), 3, null));
-      app.querySelectorAll(".slow").forEach((b) => b.addEventListener("click", () => runQuiz(drills[b.dataset.i].items, 3, null)));
+      doneScreen({
+        start, right, wrong, total, list, misses, took, again: () => runQuiz(list, rounds, bestKey), drill: (items) => runQuiz(items, 3, null),
+        best: bestKey && { get: () => store.get("quiz.best", {})[bestKey], set: (b) => store.set("quiz.best", { ...store.get("quiz.best", {}), [bestKey]: b }) },
+      });
     }
     show();
+  }
+
+  // The end of a run, reading or writing [a writing run's best goes to the deck, a reading run's to quiz.best].
+  function doneScreen({ start, right, wrong, total, list, misses, took, best, again, drill }) {
+    const ms = Date.now() - start;
+    const acc = Math.round((right / (right + wrong)) * 100);
+    let note = "";
+    if (best) {
+      const prev = best.get();
+      if (!prev || acc > prev.acc || (acc === prev.acc && ms < prev.ms)) {
+        best.set({ ms, acc });
+        note = prev ? `<span class="badge">New best!</span> previous ${fmtTime(prev.ms)} at ${prev.acc}%` : "First run — now beat it.";
+      } else note = `Best: ${fmtTime(prev.ms)} at ${prev.acc}%`;
+    }
+    const sorted = [...misses].sort((a, b) => b[1] - a[1]);
+    const mean = (ms) => ms.reduce((a, b) => a + b, 0) / ms.length;
+    // A drill of every kana is just Again [a 4-kana quiz's slowest 75% is 3 of them, so it stays].
+    const drills = slowest(new Map([...took].map(([k, ms]) => [k, mean(ms)])), sorted.map(([k]) => k)).filter((d) => d.items.length < list.length);
+    app.innerHTML = `
+      <div class="panel" style="text-align:center;max-width:560px;margin:2rem auto">
+        <h1>Done!</h1>
+        <div class="stats" style="margin:1rem 0">
+          <div><div class="big-number">${fmtTime(ms)}</div>time</div>
+          <div><div class="big-number">${acc}%</div>accuracy</div>
+          <div><div class="big-number">${total}</div>kana</div>
+        </div>
+        <p class="muted">${note}</p>
+        ${sorted.length ? `<h2>Missed</h2><div class="miss-list" style="justify-content:center">${sorted.map(([k, n]) =>
+          `<span class="miss">${esc(k.kana)}<small>${esc(k.romaji)}${n > 1 ? ` ×${n}` : ""}</small></span>`).join("")}</div>` : ""}
+        <div class="row" style="justify-content:center;margin-top:1.2rem">
+          <button id="re">Again</button>
+          ${sorted.length ? `<button class="ghost" id="miss">Drill the missed ones</button>` : ""}
+          <a class="btn ghost" href="#quiz">Other kana</a>
+        </div>
+        ${drills.length ? `<h2>Drill on time</h2><div class="row" style="justify-content:center">${drills.map((d, i) =>
+          `<button class="ghost slow" data-i="${i}">${sorted.length ? "Missed + slowest" : "Slowest"} ${d.share * 100}% <small class="muted">${d.items.length} kana</small></button>`).join("")}</div>` : ""}
+        </div>`;
+    app.querySelector("#re").addEventListener("click", again);
+    app.querySelector("#miss")?.addEventListener("click", () => drill(sorted.map(([k]) => k)));
+    app.querySelectorAll(".slow").forEach((b) => b.addEventListener("click", () => drill(drills[b.dataset.i].items)));
+  }
+
+  // ---------- Writing ----------
+  function viewWrite([sel, rounds]) {
+    if (!sel || !kanaOf(sel.split(",")).length) return location.replace("#quiz");
+    const key = `${sel}/${+rounds || 1}`;
+    runWrite(kanaOf(sel.split(",")), Math.max(1, +rounds || 1), keepBest(key) ? key : null);
+  }
+
+  // A run of kana written from their romaji, judged against KanjiVG [あ: Per stroke judges each of 3 as it lands, Whole kana all 3 on Check].
+  function runWrite(list, rounds, bestKey) {
+    cleanup();
+    const { pathPoints, strokeMatches, grade, written } = window.HiraWrite;
+    const queue = spaced(list, rounds, Math.random, shareKana);
+    const total = queue.length, gap = gapFor(list.length);
+    const misses = new Map(), took = new Map();
+    let idx = 0, right = 0, wrong = 0, shownAt = 0, all = null, gone = false;
+    let check = store.get("write.check", "stroke");
+    // The kana on the pad and how far along it is [next 2, tries 1 = two strokes down, one miss on the third].
+    let k = null, targets = [], n = 1, drawn = [], next = 0, tries = 0, hinted = false, waiting = false, pts = null;
+    const start = Date.now();
+    teardown.push(() => { gone = true; });
+
+    app.innerHTML = `
+      <div class="row"><a href="#quiz">← Choose kana</a><span class="spacer"></span>
+        <span class="seg" id="checkmode"><button data-check="stroke">Per stroke</button><button data-check="whole">Whole kana</button></span>
+        <span class="progress-line" id="prog"></span></div>
+      <div class="stage">
+        <div class="write-prompt"><b id="romaji">…</b> <span id="say"></span><div class="muted small" id="script"></div></div>
+        <svg class="pad" id="pad"></svg>
+        <div class="row" id="acts"></div>
+        <div class="feedback" id="fb"></div>
+        <div class="stats"><span>✓ <b id="ok">0</b></span><span>✗ <b id="bad">0</b></span><span>⏱ <b id="time">0:00</b></span></div>
+      </div>`;
+    const pad = app.querySelector("#pad"), fb = app.querySelector("#fb"), acts = app.querySelector("#acts");
+    every(500, () => { const t = app.querySelector("#time"); if (t) t.textContent = fmtTime(Date.now() - start); });
+    const points = (p) => p.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+    const line = (p, cls) => `<polyline class="${cls}" points="${points(p)}"/>`;
+    const path = (t, cls) => `<path class="${cls}" d="${t.d}" transform="translate(${109 * t.j} 0)"/>`;
+    const layer = (name) => pad.querySelector(`.${name}`);
+
+    function drawChecks() {
+      app.querySelectorAll("#checkmode button").forEach((b) => b.classList.toggle("on", b.dataset.check === check));
+      acts.innerHTML = check === "stroke"
+        ? `<button class="ghost" id="hint">Hint</button>`
+        : `<button class="ghost" id="undo">Undo</button><button class="ghost" id="clear">Clear</button><button id="done">Check <span class="kbd">Enter</span></button>`;
+      acts.querySelector("#hint")?.addEventListener("click", hint);
+      acts.querySelector("#undo")?.addEventListener("click", () => { drawn.pop(); inkDrawn(); });
+      acts.querySelector("#clear")?.addEventListener("click", () => { drawn = []; inkDrawn(); });
+      acts.querySelector("#done")?.addEventListener("click", checkWhole);
+    }
+    // A new pad for the kana, or the same kana afresh after the check mode changed [きゃ = two 109-unit cells side by side].
+    function reset() {
+      const chars = [...k.kana];
+      n = chars.length;
+      targets = chars.flatMap((c, j) => all[c].d.map((d) => ({ d, j, pts: pathPoints(d).map(([x, y]) => [x + 109 * j, y]) })));
+      drawn = []; next = 0; tries = 0; hinted = false; waiting = false; pts = null;
+      pad.setAttribute("viewBox", `0 0 ${109 * n} 109`);
+      pad.setAttribute("class", `pad${n > 1 ? " wide" : ""}`);
+      pad.innerHTML = `<g class="guide">${chars.map((_, j) => `<rect x="${109 * j + 1}" y="1" width="107" height="107" rx="6"/>
+        <path d="M${109 * j + 54.5} 5V104M${109 * j + 5} 54.5H${109 * j + 104}"/>`).join("")}</g>
+        <g class="hint"></g><g class="ink"></g><polyline class="live" points=""/>`;
+      fb.innerHTML = "";
+      drawChecks();
+    }
+    function show() {
+      if (idx >= queue.length) return finish();
+      k = queue[idx];
+      app.querySelector("#romaji").textContent = k.romaji;
+      app.querySelector("#say").innerHTML = speakBtn(k.kana);
+      app.querySelector("#script").textContent = k.script;
+      app.querySelector("#prog").textContent = `${idx + 1} / ${queue.length}`;
+      reset();
+      shownAt = Date.now();
+    }
+    const inkDrawn = () => { layer("ink").innerHTML = drawn.map((p) => line(p, "mine")).join(""); };
+    // The next stroke faintly, to trace, and the kana then counts as a miss [3 misses on one stroke show it too].
+    function hint() {
+      if (waiting || check !== "stroke") return;
+      hinted = true;
+      layer("hint").innerHTML = path(targets[next], "");
+    }
+    function strokeDone(p) {
+      if (check === "whole") { drawn.push(p); return inkDrawn(); }
+      const t = targets[next];
+      if (strokeMatches(p, t.pts)) {
+        layer("ink").insertAdjacentHTML("beforeend", path(t, "mine"));
+        layer("hint").innerHTML = "";
+        next++; tries = 0;
+        if (next === targets.length) kanaDone(!hinted);
+        return;
+      }
+      layer("ink").insertAdjacentHTML("beforeend", line(p, "bad"));
+      const el = layer("ink").lastElementChild;
+      after(350, () => el.remove());
+      if (++tries >= 3) hint();
+    }
+    function checkWhole() {
+      if (waiting || !drawn.length) return;
+      if (written(drawn, targets.map((t) => t.pts))) return kanaDone(true);
+      const marks = grade(drawn, targets.map((t) => t.pts));
+      layer("ink").innerHTML = drawn.map((p, i) => line(p, marks[i] ? "mine" : "bad")).join("");
+      layer("hint").innerHTML = targets.map((t) => path(t, "")).join("");
+      kanaDone(false);
+    }
+    function kanaDone(ok) {
+      waiting = true;
+      study.write.record(k.kana, ok);
+      idx++;
+      if (ok) {
+        right++;
+        took.set(k, [...(took.get(k) || []), Date.now() - shownAt]);
+        app.querySelector("#ok").textContent = right;
+        pad.classList.add("right");
+        return after(400, show);
+      }
+      wrong++;
+      misses.set(k, (misses.get(k) || 0) + 1);
+      app.querySelector("#bad").textContent = wrong;
+      requeue(queue, idx - 1, gap, Math.random, shareKana);
+      fb.innerHTML = `<div class="ans">${esc(k.kana)} ${speakBtn(k.kana)}</div>${strokeBtn(k.kana)}
+        <button class="ghost" id="next" style="margin-top:.5rem">Continue <span class="kbd">Enter</span></button>`;
+      fb.querySelector("#next").addEventListener("click", show);
+    }
+
+    // Box units from a pointer [the middle of a 300px pad = 54.5].
+    const at = (e) => {
+      const r = pad.getBoundingClientRect();
+      return [((e.clientX - r.left) / r.width) * 109 * n, ((e.clientY - r.top) / r.height) * 109];
+    };
+    const live = () => pad.querySelector(".live");
+    pad.addEventListener("pointerdown", (e) => {
+      if (waiting || !k) return;
+      e.preventDefault();
+      pad.setPointerCapture(e.pointerId);
+      pts = [at(e)];
+    });
+    pad.addEventListener("pointermove", (e) => {
+      if (!pts) return;
+      pts.push(at(e));
+      live().setAttribute("points", points(pts));
+    });
+    const lift = (keep) => {
+      if (!pts) return;
+      const p = pts;
+      pts = null;
+      live().setAttribute("points", "");
+      if (keep) strokeDone(p);
+    };
+    pad.addEventListener("pointerup", () => lift(true));
+    pad.addEventListener("pointercancel", () => lift(false));
+    app.querySelector("#checkmode").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-check]");
+      if (!b || b.dataset.check === check) return;
+      check = b.dataset.check;
+      store.set("write.check", check);
+      if (waiting || !k) drawChecks(); else reset();
+    });
+    onKey((e) => {
+      if (e.target.closest("button, a") && e.key === "Enter") return;
+      if (e.key === "Enter") { e.preventDefault(); if (waiting) show(); else if (check === "whole") checkWhole(); }
+      else if (e.key === "Backspace" && check === "whole" && !waiting) { e.preventDefault(); drawn.pop(); inkDrawn(); }
+    });
+    function finish() {
+      study.flush();
+      doneScreen({
+        start, right, wrong, total, list, misses, took, again: () => runWrite(list, rounds, bestKey), drill: (items) => runWrite(items, 3, null),
+        best: bestKey && { get: () => study.write.best(bestKey), set: (b) => study.write.setBest(bestKey, b) },
+      });
+    }
+    window.HiraStrokes.load().then((data) => { all = data; if (!gone) show(); }, () => {
+      if (gone) return;
+      fb.innerHTML = `<p class="muted">Can't load the stroke data.</p><button class="ghost" id="retry">Try again</button>`;
+      fb.querySelector("#retry").addEventListener("click", () => runWrite(list, rounds, bestKey));
+    });
   }
 
   // ---------- Worksheets ----------
@@ -943,8 +1140,11 @@
   // ---------- Chart ----------
   function viewChart() {
     const VOWEL = { a: 0, i: 1, u: 2, e: 3, o: 4 };
+    // Reading or writing mastery, each kept apart [か read at box 4, never written = box 0 here].
+    const mode = store.get("chart.mode", "read");
+    const box = mode === "write" ? (kana) => study.write.of(kana)?.box || 0 : boxOf;
     const cell = (k) => k
-      ? `<td class="box-${boxOf(k.kana)}" data-kana="${esc(k.kana)}"><span class="kana">${esc(k.kana)}</span><small>${esc(k.romaji)}</small></td>`
+      ? `<td class="box-${box(k.kana)}" data-kana="${esc(k.kana)}"><span class="kana">${esc(k.kana)}</span><small>${esc(k.romaji)}</small></td>`
       : `<td class="empty"></td>`;
     // One row per group; a kana whose spot is taken opens another row [シェ, ジェ and チェ all sit under e].
     const table = (script, kind, width, slot) => `<div class="chart-wrap"><table class="chart">${groups.filter((g) => g.kind === kind && g.script === script).map((g) => {
@@ -958,10 +1158,11 @@
     }).join("")}</table></div>`;
     const bySound = (k) => VOWEL[k.romaji.slice(-1)];
     const byYouon = (k) => ({ a: 0, u: 1, o: 2 })[k.romaji.slice(-1)];
-    const mastered = (script) => `${KANA.filter((k) => k.script === script && boxOf(k.kana) >= 3).length} of ${KANA.filter((k) => k.script === script).length} known`;
+    const mastered = (script) => `${KANA.filter((k) => k.script === script && box(k.kana) >= 3).length} of ${KANA.filter((k) => k.script === script).length} known`;
     app.innerHTML = `
       <h1>Kana chart</h1>
       <p class="lead">Every kana, coloured by how well you know it. Click one for its mnemonic.</p>
+      <div class="seg" id="chart-mode" style="margin-bottom:1rem"><button data-mode="read" class="${mode === "read" ? "on" : ""}">Reading</button><button data-mode="write" class="${mode === "write" ? "on" : ""}">Writing</button></div>
       <div class="legend"><span class="box-0"></span> new <span class="box-1"></span> missed lately
         <span class="box-2"></span><span class="box-3"></span><span class="box-4"></span><span class="box-5"></span> known → solid</div>
       <h2>Hiragana <span class="muted small">· ${mastered("hiragana")}</span></h2>
@@ -978,8 +1179,15 @@
         <button class="ghost" id="reset">Reset my progress</button>
       </div>`;
     app.querySelectorAll("[data-kana]").forEach((el) => el.addEventListener("click", () => kanaModal(byKana.get(el.dataset.kana))));
+    app.querySelector("#chart-mode").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-mode]");
+      if (!b) return;
+      store.set("chart.mode", b.dataset.mode);
+      viewChart();
+    });
     app.querySelector("#reset").addEventListener("click", () => {
-      if (!confirm("Forget all progress, quiz bests and worksheet scores on every device?")) return;
+      if (!confirm("Forget all progress, quiz bests, worksheet scores and writing on every device?")) return;
+      study.write.reset();
       const now = Date.now();
       // Newer than any reset this device has seen, whatever its clock says [last reset 1000, clock reads 900 = 1001].
       applySnapshot({ ...blank(), savedAt: now, resetAt: Math.max(now, store.get("sync.resetAt", 0) + 1) });
@@ -999,7 +1207,7 @@
   setFont(store.get("font", false));
 
   const study = window.HiraStudy;
-  const routes = { learn: viewLearn, cards: viewCards, quiz: viewQuiz, sheets: viewSheets, reading: viewReading, chart: viewChart, ...study.routes };
+  const routes = { learn: viewLearn, cards: viewCards, quiz: viewQuiz, write: viewWrite, sheets: viewSheets, reading: viewReading, chart: viewChart, ...study.routes };
   // Runs the teardown of whatever was on screen [a finished quiz's clock stops, a left review uploads].
   function cleanup() {
     document.querySelectorAll(".modal-back").forEach((m) => m.remove());
@@ -1015,7 +1223,7 @@
     if (view === "reading" && !lastPage.startsWith("#reading")) readingFrom = lastPage.startsWith("#learn") ? lastPage : "";
     lastPage = view === "learn" ? location.hash || "#learn" : location.hash;
     document.body.dataset.section = view in study.routes ? "japanese" : "kana";
-    document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.dataset.tab === view));
+    document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.dataset.tab === (view === "write" ? "quiz" : view)));
     routes[view](rest);
     scrollTo(0, 0);
   }
