@@ -41,7 +41,7 @@
   }
 
   // Puts the kana at idx back twice, 6–8 and 15–20 on, or once at the farthest fit when two won't fit [missed at 30 of 33 = once, last].
-  // Where no spot keeps it off a clashing neighbour it isn't put back, and 0 says so [the last kana of the quiz].
+  // Never right beside itself; with no such spot it isn't put back and 0 says so [the last kana of the quiz has only that spot].
   function requeue(queue, idx, gap, rand = Math.random, clash = same) {
     const k = queue[idx];
     const apart = (p) => !clash(queue[p - 1], k) && (p >= queue.length || !clash(queue[p], k));
@@ -63,14 +63,14 @@
       if (p2 !== -1) { queue.splice(p2, 0, k); return 2; }
       queue.splice(p1, 1);
     }
-    // No spot keeps both the gap and its neighbours apart: the farthest one off its neighbours, then mid-quiz the farthest past
-    // the gap, then the end; only a missed last kana has nowhere to go [しゃ+しょ drill: every miss still comes back].
-    let last = firsts.at(-1) ?? -1;
-    for (let p = queue.length; last === -1 && p > idx; p--) if (apart(p)) last = p;
-    if (last === -1 && idx < queue.length - 1) {
-      const pastGap = (p) => !queue.slice(Math.max(0, p - gap), p + gap).includes(k);
-      for (let p = queue.length; last === -1 && p > idx + 1; p--) if (pastGap(p)) last = p;
-      if (last === -1) last = queue.length;
+    // Once, at the best spot left: never beside itself, then past the gap, then off shared kana, then the farthest,
+    // the same ranking as `spaced` [あ か あ か あ か with か missed third: every spot touches a か, so 0].
+    const pastGap = (p) => !queue.slice(Math.max(0, p - gap), p + gap).includes(k);
+    const rank = (p) => (pastGap(p) ? 2 : 0) + (apart(p) ? 1 : 0);
+    let last = -1;
+    for (let p = queue.length; p > idx; p--) {
+      if (queue[p - 1] === k || queue[p] === k) continue;
+      if (last === -1 || rank(p) > rank(last)) last = p;
     }
     if (last === -1) return 0;
     queue.splice(last, 0, k);

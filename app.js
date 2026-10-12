@@ -655,7 +655,7 @@
       const k = queue[idx];
       norm(input.value) === k.romaji ? correct(k) : miss(k);
     });
-    // A missed answer stays put until Continue [typing over "zz" does nothing; a Japanese keyboard's composing can't be blocked, and changes nothing].
+    // A missed answer stays put until Continue [typing over "zz" is blocked; a phone keyboard's composing still shows, "zz" + "xy", but the quiz ignores it].
     input.addEventListener("beforeinput", (e) => { if (waiting) e.preventDefault(); });
     // Buttons under a miss take no focus, so the answer box keeps the keyboard [Listen, Show illustration, Continue].
     fb.addEventListener("mousedown", (e) => { if (e.target.closest("button")) e.preventDefault(); });
