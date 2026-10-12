@@ -68,7 +68,7 @@
     const text = (x) => JSON.stringify(Object.keys(x).sort().map((f) => [f, x[f]]));
     return text(c) > text(cur);
   };
-  // Two devices' decks into one: cards by `wins`, settings from the later change, writing by `mergeWrite`, and any other key whole from the newer side
+  // Two devices' decks into one: cards by `wins`, settings from the later change, writing and verb drills by `mergeWrite`, any other key whole from the newer side
   // so a later section's data outlives a tab that predates it [a verb-drill key written by the next version].
   function mergeStudy(a, b) {
     const sides = [a, b].filter((s) => s && typeof s === "object").sort((x, y) => (x.savedAt || 0) - (y.savedAt || 0));
@@ -79,7 +79,9 @@
     }
     const settings = sides.map((s) => s.settings).filter(Boolean).sort((x, y) => (y.at || 0) - (x.at || 0))[0] || { newPerDay: 20, at: 0 };
     const write = mergeWrite(a?.write, b?.write);
-    return { ...out, cards, settings, ...(write && { write }), savedAt: Math.max(0, ...sides.map((s) => s.savedAt || 0)) };
+    // Verb drills keep the same shape as writing [kana keyed by form: masu, te; best keyed by selection: masu|verb].
+    const verbs = mergeWrite(a?.verbs, b?.verbs);
+    return { ...out, cards, settings, ...(write && { write }), ...(verbs && { verbs }), savedAt: Math.max(0, ...sides.map((s) => s.savedAt || 0)) };
   }
 
   const api = { dayOf, grade, preview, queue, mergeStudy };

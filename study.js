@@ -314,6 +314,23 @@
         return sync();
       },
     },
+    // What the Verbs tab needs from the Words side [the word list, the shell, and whether a word was met in Words].
+    shell: () => shell,
+    words: () => (words ? Promise.resolve(words) : loadWords()),
+    met: (k) => !!deck.cards[k + "#r"],
+    // Verb drill answers per form and bests per selection, in the deck so they sync [verbs.kana.masu = { box: 3, right: 4, wrong: 1 }].
+    verbs: {
+      best: (key) => deck.verbs?.best?.[key],
+      record(form, ok) {
+        const v = (deck.verbs ||= { kana: {}, best: {}, resetAt: 0 });
+        bump(v.kana[form] ||= { box: 0, right: 0, wrong: 0 }, ok);
+        save();
+      },
+      setBest(key, best) {
+        (deck.verbs ||= { kana: {}, best: {}, resetAt: 0 }).best[key] = best;
+        save();
+      },
+    },
     unsynced: () => local().savedAt > pushedAt(),
   };
 })();

@@ -731,7 +731,7 @@ const answer = async (page, g) => { await page.click("#card"); await page.click(
 test("the Japanese section has its own tabs, and the kana tabs stay as they were", async () => {
   const page = await open(listed, "#words");
   const tabs = () => page.locator("nav a:visible").evaluateAll((as) => as.map((a) => a.dataset.tab));
-  assert.deepEqual(await tabs(), ["words"]);
+  assert.deepEqual(await tabs(), ["words", "verbs"]);
   await page.click(".sections a[data-section-link='kana']");
   assert.deepEqual(await tabs(), ["learn", "cards", "quiz", "sheets", "reading", "chart"]);
   await page.close();
@@ -1226,5 +1226,132 @@ test("a whole answer typed while the last one settles counts at once", async () 
   const [first, second] = await page.evaluate(() => HiraOrder.spaced(HIRAGANA.KANA.filter((k) => ["a", "k"].includes(k.group)), 1).slice(0, 2).map((k) => k.romaji));
   await page.keyboard.type(first + second);
   await page.waitForFunction(() => document.querySelector("#prog").textContent.startsWith("3 /"), null, { timeout: 2000 });
+  await page.close();
+});
+
+// ---------- Verbs ----------
+// A conjugation drill grades the learner, so these drive it end to end: the met words it promises, romaji turning into
+// kana and counting as the answer, a miss showing the right form and coming back, adjectives on request, and the best
+// score kept in the synced deck rather than on one device.
+// Romaji for a kana answer, the way a learner types it [かいて = kaite, よんで = yonde, いって = itte].
+const romajiFor = (page, kana) => page.evaluate((s) => {
+  const table = new Map(HIRAGANA.KANA.filter((k) => k.script === "hiragana").map((k) => [k.kana, k.romaji]));
+  let out = "";
+  for (let i = 0; i < s.length; i++) {
+    if (s[i + 1] && table.has(s.slice(i, i + 2))) { out += table.get(s.slice(i, i + 2)); i++; continue; }
+    if (s[i] === "っ") { const next = table.get(s.slice(i + 1, i + 3)) || table.get(s[i + 1]); out += next[0] === "c" ? "t" : next[0]; continue; }
+    if (s[i] === "ん") { out += /^[aiueoy]/.test(table.get(s[i + 1]) || "") ? "n'" : "n"; continue; }
+    out += table.get(s[i]) ?? s[i];
+  }
+  return out;
+}, kana);
+const question = (page) => page.evaluate(() => {
+  const q = document.querySelector(".verb-q");
+  return { k: q.dataset.k, form: q.dataset.form };
+});
+const wantOf = (page, q) => page.evaluate(async ({ k, form }) => {
+  const words = await (await fetch("data/vocab.json")).json();
+  return HiraConj.conjugate(words.find((w) => w.k === k), form);
+}, q);
+const verbsSel = (sel) => ({ "verbs.sel": { forms: ["masu"], kinds: ["verb"], count: 10, ...sel } });
+async function answerRight(page) {
+  const prog = await page.textContent("#prog");
+  await page.type("#in", await romajiFor(page, (await wantOf(page, await question(page))).r));
+  await page.press("#in", "Enter");
+  await page.waitForFunction((p) => document.querySelector("h1")?.textContent === "Done!" || document.querySelector("#prog")?.textContent !== p, prog);
+}
+
+test("the Verbs tab drills met verbs in the chosen form, romaji turning into kana as it's typed", async () => {
+  const page = await open({ ...listed, local: { ...verbsSel({}), "study.user": "u1", study: deckWith({ "食べる|たべる#r": reviewed() }) } }, "#verbs/run");
+  await page.locator(".verb-q").waitFor();
+  assert.deepEqual(await page.locator("nav a:visible").evaluateAll((as) => as.map((a) => a.dataset.tab)), ["words", "verbs"]);
+  await page.type("#in", "tabe");
+  assert.equal(await page.inputValue("#in"), "たべ");
+  await page.fill("#in", "");
+  const seen = [];
+  while (!(await page.locator("h1", { hasText: "Done!" }).count())) {
+    const q = await question(page);
+    seen.push(q.k + " " + q.form);
+    assert.equal(q.form, "masu");
+    await answerRight(page);
+  }
+  assert.equal(seen.length, 10);
+  assert.ok(seen.includes("食べる|たべる masu"), seen.join(", "));
+  assert.match(await page.textContent("main"), /100%/);
+  await page.close();
+});
+
+test("a wrong form shows the right one in its spelling and comes back later in the drill", async () => {
+  const page = await open({ ...listed, local: verbsSel({}) }, "#verbs/run");
+  await page.locator(".verb-q").waitFor();
+  const first = await question(page);
+  const want = await wantOf(page, first);
+  await page.type("#in", "zzz");
+  await page.press("#in", "Enter");
+  assert.match(await page.textContent("#fb"), new RegExp(want.w));
+  await page.press("#in", "Enter");
+  const later = [];
+  while (!(await page.locator("h1", { hasText: "Done!" }).count())) {
+    later.push(JSON.stringify(await question(page)));
+    await answerRight(page);
+  }
+  assert.ok(later.includes(JSON.stringify(first)), "the missed form came back");
+  await page.close();
+});
+
+test("adjectives are drilled when ticked [高い → plain negative = 高くない]", async () => {
+  const page = await open({ ...listed, local: verbsSel({ forms: ["nai"], kinds: ["adj-i"] }) }, "#verbs/run");
+  await page.locator(".verb-q").waitFor();
+  assert.equal(await page.textContent("#type"), "い-adjective");
+  const want = await wantOf(page, await question(page));
+  assert.match(want.r, /くない$/);
+  await page.close();
+});
+
+test("a finished drill keeps its best for that choice of forms, in the synced deck", async () => {
+  const page = await open({ ...listed, local: verbsSel({}) }, "#verbs/run");
+  await page.locator(".verb-q").waitFor();
+  while (!(await page.locator("h1", { hasText: "Done!" }).count())) await answerRight(page);
+  const best = await page.evaluate(() => JSON.parse(localStorage.getItem("hira.study")).verbs.best["masu|verb"]);
+  assert.equal(best.acc, 100);
+  await page.waitForFunction(() => window.__log.some((l) => l.study?.verbs?.best?.["masu|verb"]), null, { timeout: 3000 });
+  await page.close();
+});
+
+test("the drill's answer box keeps focus through a right answer, a miss and Continue", async () => {
+  const page = await open({ ...listed, local: verbsSel({}) }, "#verbs/run");
+  await page.locator(".verb-q").waitFor();
+  await page.evaluate(() => {
+    window.__blurs = 0;
+    document.querySelector("#in").addEventListener("blur", () => window.__blurs++);
+  });
+  await answerRight(page);
+  await page.type("#in", "zzz");
+  await page.press("#in", "Enter");
+  await page.click("#next");
+  assert.deepEqual(await page.evaluate(() => [window.__blurs, document.activeElement.id]), [0, "in"]);
+  await page.close();
+});
+
+// A Japanese keyboard hands over the kanji spelling, which counts like the kana [食べます for 食べる → polite].
+test("the kanji spelling from a Japanese keyboard counts as the answer", async () => {
+  const page = await open({ ...listed, local: verbsSel({}) }, "#verbs/run");
+  await page.locator(".verb-q").waitFor();
+  // Past any kana-only word, whose spelling is its kana [する].
+  let want = await wantOf(page, await question(page));
+  while (want.w === want.r) { await answerRight(page); want = await wantOf(page, await question(page)); }
+  const ok = await page.textContent("#ok");
+  await page.fill("#in", want.w);
+  await page.press("#in", "Enter");
+  await page.waitForFunction((n) => document.querySelector("#ok").textContent === String(+n + 1), ok, { timeout: 2000 });
+  await page.close();
+});
+
+test("a drill question shows the word's meaning, so a kana-only verb says which one it is", async () => {
+  const page = await open({ ...listed, local: verbsSel({}) }, "#verbs/run");
+  await page.locator(".verb-q").waitFor();
+  const k = (await question(page)).k;
+  const m = await page.evaluate(async (key) => (await (await fetch("data/vocab.json")).json()).find((w) => w.k === key).m, k);
+  assert.equal(await page.textContent("#meaning"), m);
   await page.close();
 });

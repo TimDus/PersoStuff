@@ -120,8 +120,8 @@ test("a device with no study data yet doesn't empty the other's deck", () => {
 
 // A later section stores its own key under `study`; a tab on this version must carry it through, not strip it [study.kanji].
 test("keys the merge doesn't know survive it, taken from the newer side", () => {
-  const m = mergeStudy({ cards: {}, kanji: { a: 1 }, savedAt: 5 }, { cards: {}, kanji: { a: 2 }, verbs: [1], savedAt: 9 });
-  assert.deepEqual([m.kanji, m.verbs], [{ a: 2 }, [1]]);
+  const m = mergeStudy({ cards: {}, kanji: { a: 1 }, savedAt: 5 }, { cards: {}, kanji: { a: 2 }, grammar: [1], savedAt: 9 });
+  assert.deepEqual([m.kanji, m.grammar], [{ a: 2 }, [1]]);
   assert.deepEqual(mergeStudy({ cards: {}, kanji: { a: 1 }, savedAt: 5 }, null).kanji, { a: 1 });
 });
 
@@ -166,4 +166,14 @@ test("writing progress merges kana by kana with the kana rules, and its own rese
   const reset = { cards: {}, savedAt: 3, write: { kana: {}, best: {}, resetAt: 7 } };
   assert.deepEqual(mergeStudy(phone, reset).write, { kana: {}, best: {}, resetAt: 7 });
   assert.equal(mergeStudy({ cards: {}, savedAt: 1 }, null).write, undefined, "a deck that never wrote gets no write key");
+});
+
+// Verb drill bests and per-form answers sit under `study.verbs`, merged like the writing quiz's rather than taken whole from the newer side.
+test("verb drill scores from two devices are both kept, the better best winning", () => {
+  const a = { cards: {}, savedAt: 5, verbs: { kana: { masu: { box: 2, right: 3, wrong: 0 } }, best: { "masu|verb": { ms: 9000, acc: 90 } }, resetAt: 0 } };
+  const b = { cards: {}, savedAt: 9, verbs: { kana: { te: { box: 1, right: 1, wrong: 2 } }, best: { "masu|verb": { ms: 7000, acc: 100 }, "te|verb": { ms: 5000, acc: 80 } }, resetAt: 0 } };
+  const m = mergeStudy(b, a).verbs;
+  assert.deepEqual(Object.keys(m.kana).sort(), ["masu", "te"]);
+  assert.deepEqual(m.best["masu|verb"], { ms: 7000, acc: 100 });
+  assert.deepEqual(Object.keys(m.best).sort(), ["masu|verb", "te|verb"]);
 });

@@ -329,3 +329,11 @@ a.btn.disabled { opacity: .45; pointer-events: none; }
 .pad .ink *, .pad .live { fill: none; stroke: var(--ink); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
 .pad .ink .bad { stroke: var(--bad); }
 .pad.right .ink * { stroke: var(--good); }
+
+/* Verb drill: the word with its reading, then the form asked [食べる · ichidan verb · polite past]. */
+.verb-q { text-align: center; }
+.verb-q .word { font-size: 2.6rem; line-height: 1.7; }
+.verb-q rt { font-size: .38em; color: var(--muted); }
+.verb-q .form { font-size: 1.3rem; font-weight: 700; color: var(--accent); margin-top: .3rem; }
+.verb-misses { display: grid; gap: .3rem; text-align: left; max-width: 26rem; margin: 0 auto; }
+.verb-misses rt { font-size: .5em; color: var(--muted); }
