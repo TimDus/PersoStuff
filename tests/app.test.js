@@ -745,7 +745,9 @@ const deckOf = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("hi
 const studySaves = (page) => page.evaluate(() => window.__log.filter((l) => l.study).map((l) => l.study));
 const reviewed = (over) => ({ st: "review", ivl: 1, ease: 2.5, due: day + 1, n: 1, lapses: 0, first: day, last: day, ...over });
 const deckWith = (cards) => ({ cards, settings: { newPerDay: 20, at: 0 }, savedAt: 1 });
-const answer = async (page, g) => { await page.click("#card"); await page.click(`[data-g='${g}']`); };
+// New words open as an introduction with a single Got it, and are asked a few cards later [a fresh deck: 4 introductions, then 秋 asked].
+const pastIntros = async (page) => { while (await page.locator("#got").count()) await page.click("#got"); };
+const answer = async (page, g) => { await pastIntros(page); await page.click("#card"); await page.click(`[data-g='${g}']`); };
 
 test("the Japanese section has its own tabs, and the kana tabs stay as they were", async () => {
   const page = await open(listed, "#words");
@@ -766,6 +768,28 @@ test("a fresh account is offered 20 new words, Japanese side first, with the kan
   await page.close();
 });
 
+// A new word was asked cold, before the learner had ever seen it; KanjiMemorize shows it first, and so does this now.
+test("a new word opens with its answer and Got it and is asked for real a few cards on; its English side never opens that way", async () => {
+  const page = await open(listed, "#words/review");
+  await page.locator("#got").waitFor();
+  assert.match(await page.textContent(".face.front"), /秋/);
+  assert.equal(await page.locator(".face.back").isVisible(), true);
+  assert.equal(await page.locator("[data-g]").count(), 0);
+  await page.keyboard.press(" ");
+  assert.doesNotMatch(await page.textContent(".face.front"), /秋/);
+  await pastIntros(page);
+  assert.match(await page.textContent(".face.front"), /秋/);
+  assert.equal(await page.locator(".face.back").isVisible(), false);
+  assert.equal(await page.locator("[data-g]").count(), 4);
+  assert.equal((await deckOf(page))?.cards?.["秋|あき#r"], undefined);
+  await page.close();
+  const met = await open({ ...listed, local: { "study.user": "u1", study: deckWith({ "秋|あき#r": reviewed({ first: day - 1, last: day - 1, due: day + 5 }) }) } }, "#words/review");
+  await met.locator(".face.front").waitFor();
+  assert.match(await met.textContent(".face.front"), /fall \(season\)/);
+  assert.equal(await met.locator("#got").count(), 0);
+  await met.close();
+});
+
 test("Good on a new word brings it back tomorrow and syncs the deck apart from the kana", async () => {
   const page = await open(listed, "#words/review");
   await page.locator(".face.front").waitFor();
@@ -781,6 +805,7 @@ test("Good on a new word brings it back tomorrow and syncs the deck apart from t
 test("Again brings a word back three cards later in the same session", async () => {
   const page = await open(listed, "#words/review");
   await page.locator(".face.front").waitFor();
+  await pastIntros(page);
   const first = await page.locator(".face.front").innerHTML();
   await answer(page, 1);
   for (let i = 0; i < 3; i++) {
@@ -893,6 +918,7 @@ test("keys other than 1 to 4 on a shown answer do nothing and break nothing", as
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.locator(".face.front").waitFor();
+  await pastIntros(page);
   await page.click("#card");
   for (const key of ["Shift", "a", "5", "ArrowLeft"]) await page.keyboard.press(key);
   await page.keyboard.press("3");
@@ -987,6 +1013,7 @@ test("practice buttons count the cards a round will show, both sides of a word",
 test("Enter on a focused grade button presses that button", async () => {
   const page = await open(listed, "#words/review");
   await page.locator(".face.front").waitFor();
+  await pastIntros(page);
   await page.click("#card");
   await page.focus("[data-g='4']");
   await page.keyboard.press("Enter");

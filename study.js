@@ -158,31 +158,42 @@
   }
 
   // A run of cards: flip, then answer; `buttons` are [label, key, value] and `answer` says whether the card comes back this run.
-  function runCards({ items, title, buttons, answer, done }) {
+  function runCards({ items, title, buttons, answer, done, intro = () => false }) {
     shell.cleanup();
     const run = [...items];
-    let flipped = false;
+    // Words shown once this run [Got it on 秋 = 秋 asked for real 3 cards on].
+    const met = new Set();
+    let flipped = false, showing = false;
     function draw() {
       if (!run.length) return done();
       const it = run[0];
       flipped = false;
+      showing = intro(it) && !met.has(it.key);
       const { front, back } = faces(it);
       shell.app.innerHTML = `
         <div class="row"><a href="#words">← Words</a><span class="spacer"></span>
           <span class="muted small">${esc(title)}</span>
           <span class="progress-line" id="left">${run.length} left</span></div>
         <div class="stage vocab ${it.dir === "p" ? "produce" : ""}">
-          <div class="vcard" id="card"><div class="face front">${front}
-            <div class="hint"><span class="key-only">click or <span class="kbd">space</span></span><span class="touch-only">tap</span> to show the answer</div></div>
-            <div class="face back" hidden>${back}</div></div>
-          <div class="row grades">${buttons(it).map(([label, key, value, sub]) => `
+          <div class="vcard ${showing ? "flipped" : ""}" id="card"><div class="face front">${front}
+            <div class="hint">${showing ? "New word: read it through, it's asked in a moment"
+              : `<span class="key-only">click or <span class="kbd">space</span></span><span class="touch-only">tap</span> to show the answer`}</div></div>
+            <div class="face back" ${showing ? "" : "hidden"}>${back}</div></div>
+          <div class="row grades">${showing ? `<button class="good" id="got">Got it <span class="kbd">space</span></button>` : buttons(it).map(([label, key, value, sub]) => `
             <button class="${value === 1 ? "bad" : value >= 3 ? "good" : "ghost"}" data-g="${value}" disabled>${label}${sub ? ` <small>${sub}</small>` : ""} <span class="kbd">${key}</span></button>`).join("")}</div>
         </div>`;
       shell.app.querySelector("#card").addEventListener("click", (e) => { if (!e.target.closest("[data-say]")) flip(); });
       shell.app.querySelectorAll("[data-g]").forEach((b) => b.addEventListener("click", () => pick(+b.dataset.g)));
+      shell.app.querySelector("#got")?.addEventListener("click", gotIt);
+    }
+    function gotIt() {
+      const it = run.shift();
+      met.add(it.key);
+      run.splice(Math.min(3, run.length), 0, it);
+      draw();
     }
     function flip() {
-      if (flipped) return;
+      if (flipped || showing) return;
       flipped = true;
       shell.app.querySelector("#card").classList.add("flipped");
       shell.app.querySelector(".face.back").hidden = false;
@@ -201,7 +212,7 @@
         // A focused button or link takes its own key [Enter on a focused Easy grades Easy, not flips].
         if (e.target.closest("button, a")) return;
         e.preventDefault();
-        flip();
+        showing ? gotIt() : flip();
         return;
       }
       const b = flipped && /^[1-4]$/.test(e.key) && shell.app.querySelector(`.grades button:nth-child(${e.key})`);
@@ -216,6 +227,8 @@
     const again = new Set();
     runCards({
       items, title: "Review",
+      // A word's first sight shows its answer; the English side comes a day after it was met [秋#r new = shown, 秋#p never].
+      intro: (it) => it.dir === "r" && !deck.cards[it.key],
       buttons: (it) => {
         const [a, h, g, e] = preview(deck.cards[it.key], today()).map(days);
         return [["Again", 1, 1, a], ["Hard", 2, 2, h], ["Good", 3, 3, g], ["Easy", 4, 4, e]];
