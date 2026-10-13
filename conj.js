@@ -51,7 +51,7 @@
   function conjugate(word, form) {
     const cls = classOf(word);
     if (!cls || !FORMS.some((f) => f.id === form)) return null;
-    // A word part or a spelling without its kana ending has nothing to type or to change [～だす; 堅 read かたい → くない].
+    // A word part or a spelling without its kana ending has nothing to type or to change [～だす; the list's old 堅 read かたい gave 堅くない].
     if (/^[～〜]/.test(word.w) || (/^(v1|v5|adj-i)/.test(cls) && word.w.slice(-1) !== word.r.slice(-1))) return null;
     const { w, r } = base(word);
     const swap = (cut, add) => ({ w: w.slice(0, w.length - cut) + add, r: r.slice(0, r.length - cut) + add });

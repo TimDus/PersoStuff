@@ -45,14 +45,19 @@ function rowWords(w, r) {
   }
   return [{ w, r, suru }];
 }
+// The list's dated or cut-short spellings as written today [終る = 終わる, 伯父 read おじさん = 伯父さん, 堅 read かたい = 固い].
+const SPELL = { 終る: "終わる", 曲る: "曲がる", 落る: "落ちる", 楽む: "楽しむ", 落す: "落とす", 下る: "下がる", さ来年: "再来年", 舟: "船", 真中: "真ん中",
+  伯父: "伯父さん", 堅: "固い", 御飯: "ご飯", 朝御飯: "朝ご飯", 昼御飯: "昼ご飯", 晩御飯: "晩ご飯" };
+// A second spelling of a word already on the list [在る and 有る are one JMdict entry, ある].
+const SKIP = new Set(["在る|ある"]);
 const words = [];
 const seen = new Set();
 for (const lv of [5, 4]) {
   for (const line of read("jlpt", `n${lv}.csv`).split(/\r?\n/).slice(1).filter(Boolean)) {
     const [w0, r0, m] = csvRow(line);
-    for (const { w, r, suru } of rowWords(w0, r0)) {
-      const k = `${w}|${r}`;
-      if (seen.has(k)) continue;
+    for (const { w: listed, r, suru } of rowWords(w0, r0)) {
+      const w = SPELL[listed] || listed, k = `${w}|${r}`;
+      if (seen.has(k) || SKIP.has(k)) continue;
       seen.add(k);
       words.push({ k, w, r, m, lv, suru });
     }
@@ -105,6 +110,8 @@ for (const word of words) {
   word.f = isKana(w) ? Math.min(score(e), ...cands.map((x) => rank(x.rebs.find((y) => y.text === r).pri))) : score(e);
   // A suru verb conjugates as する whatever its noun's first sense says [勉強 is n, 勉強する is vs].
   word.pos = word.suru ? ["vs", ...e.senses[0].pos.filter((p) => p !== "vs")] : e.senses[0].pos;
+  // JMdict's "usually written in kana" on the word's first sense [沢山 is mostly たくさん].
+  word.uk = !isKana(w) && e.senses[0].uk;
 }
 
 // Word types a learner names, from JMdict's part-of-speech codes [v5u = godan verb].
@@ -163,7 +170,7 @@ const out = words.map((x) => {
   ex = ex.sort((a, b) => text.get(a.jid).length - text.get(b.jid).length)
     .filter((s, i, all) => all.findIndex((t) => text.get(t.jid) === text.get(s.jid)) === i)
     .slice(0, 2).map((s) => [text.get(s.jid), text.get(s.eid)]);
-  return { k: x.k, w: x.w, r: x.r, m: x.m, t: typeOf(x.pos), pos: x.pos, lv: x.lv, f: x.f, fu: furigana(x.w, x.r), ex };
+  return { k: x.k, w: x.w, r: x.r, m: x.m, t: typeOf(x.pos), pos: x.pos, lv: x.lv, f: x.f, fu: furigana(x.w, x.r), ex, ...(x.uk && { uk: 1 }) };
 });
 // Most common first within a level, the list's own order breaking ties [N5 before any N4].
 const order = new Map(out.map((x, i) => [x, i]));

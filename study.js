@@ -5,7 +5,7 @@
   let shell = null;
   let words = null;
   let loading = null;
-  // Fetched on the first visit and kept [data/vocab.json, 1,385 words, 369 KB].
+  // Fetched on the first visit and kept [data/vocab.json, 1,384 words, 371 KB].
   const loadWords = () => (loading ||= fetch("data/vocab.json")
     .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
     .then((list) => (words = list))
@@ -151,7 +151,8 @@
     const w = it.word;
     const word = `<div class="word jp">${ruby(w)}</div>`;
     const meaning = `<div class="meaning">${esc(w.m)}</div><div class="muted small">${esc(w.t || "word")} · N${w.lv}</div>`;
-    const back = `${speak(w.r)} ${it.dir === "r" ? meaning : word}${examples(w)}`;
+    const kana = w.uk ? `<div class="muted small">Usually written in kana: <span class="jp">${esc(w.r)}</span></div>` : "";
+    const back = `${speak(w.r)} ${it.dir === "r" ? meaning : word}${kana}${examples(w)}`;
     return { front: it.dir === "r" ? word : meaning, back: it.dir === "r" ? back : `${back}<div class="muted small">${esc(w.m)}</div>` };
   }
 
@@ -182,6 +183,7 @@
     function flip() {
       if (flipped) return;
       flipped = true;
+      shell.app.querySelector("#card").classList.add("flipped");
       shell.app.querySelector(".face.back").hidden = false;
       shell.app.querySelector(".hint").hidden = true;
       shell.app.querySelectorAll("[data-g]").forEach((b) => { b.disabled = false; });

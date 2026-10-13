@@ -316,6 +316,8 @@ body[data-section="japanese"] footer .credits-ja { display: block; }
 .vcard .word { font-family: var(--jp); font-size: 3rem; line-height: 1.7; }
 .vcard .face.back .word { font-size: 2.2rem; }
 .vcard rt { font-size: .38em; color: var(--muted); }
+/* Furigana stay hidden until the card turns, holding their space [会う shows 会 alone, あ appears on the flip]. */
+.vcard:not(.flipped) rt { visibility: hidden; }
 .vcard .meaning { font-size: 1.4rem; font-weight: 600; }
 .examples { margin-top: .8rem; border-top: 1px solid var(--line); padding-top: .6rem; display: grid; gap: .5rem; text-align: left; width: 100%; }
 .ex .jp { font-size: 1.1rem; }

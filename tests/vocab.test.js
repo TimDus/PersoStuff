@@ -7,8 +7,19 @@ const by = (k) => vocab.find((w) => w.k === k);
 
 test("every N5 and N4 word is there once, all of N5 before any of N4", () => {
   assert.equal(new Set(vocab.map((w) => w.k)).size, vocab.length);
-  assert.deepEqual([vocab.filter((w) => w.lv === 5).length, vocab.filter((w) => w.lv === 4).length], [717, 668]);
-  assert.equal(vocab.findIndex((w) => w.lv === 4), 717);
+  assert.deepEqual([vocab.filter((w) => w.lv === 5).length, vocab.filter((w) => w.lv === 4).length], [716, 668]);
+  assert.equal(vocab.findIndex((w) => w.lv === 4), 716);
+});
+
+test("the list's dated spellings are written as today, and a second spelling of one word is dropped [終る = 終わる, 在る = 有る]", () => {
+  assert.deepEqual(["終る|おわる", "落す|おとす", "下る|さがる", "伯父|おじさん", "堅|かたい", "御飯|ごはん", "在る|ある"].filter(by), []);
+  assert.deepEqual(["終わる|おわる", "落とす|おとす", "下がる|さがる", "伯父さん|おじさん", "固い|かたい", "ご飯|ごはん", "有る|ある"].filter((k) => !by(k)), []);
+  assert.deepEqual(by("終わる|おわる").fu, [["終", "お"], ["わる"]]);
+});
+
+test("a kanji spelling JMdict says is usually kana is marked, a kana word never is [沢山 = たくさん]", () => {
+  assert.deepEqual([by("沢山|たくさん").uk, by("下さい|ください").uk, by("秋|あき").uk], [1, 1, undefined]);
+  assert.deepEqual(vocab.filter((w) => w.uk && !/[一-鿿々]/.test(w.w)).map((w) => w.k), []);
 });
 
 test("furigana spells the word back exactly and sits only on kanji [会う = 会 with あ, then う]", () => {

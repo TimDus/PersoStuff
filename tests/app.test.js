@@ -756,7 +756,7 @@ test("the Japanese section has its own tabs, and the kana tabs stay as they were
   await page.close();
 });
 
-test("a fresh account is offered 20 new words, Japanese side first, with the reading over the kanji", async () => {
+test("a fresh account is offered 20 new words, Japanese side first, with the kanji's reading ready to show", async () => {
   const page = await open(listed, "#words");
   await page.locator("#new").waitFor();
   assert.deepEqual([await page.textContent("#new"), await page.textContent("#due")], ["20", "0"]);
@@ -824,6 +824,23 @@ test("a word's English side asks with its meaning and type the day after, and sh
   assert.equal(await page.locator(".face.front ruby").count(), 0);
   await page.click("#card");
   assert.equal(await page.locator(".face.back ruby rt").first().textContent(), "あき");
+  await page.close();
+});
+
+// Furigana on the Japanese side gave the reading away before the learner had to recall it [秋 with あき over it].
+test("a word's reading stays hidden until the card turns, and a usually-kana word says so on the back", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: deckWith({ "沢山|たくさん#r": reviewed({ first: day - 1, last: day - 1, due: day }) }) } }, "#words/review");
+  const rt = page.locator(".face.front ruby rt").first();
+  await rt.waitFor({ state: "attached" });
+  assert.equal(await rt.evaluate((r) => getComputedStyle(r).visibility), "hidden");
+  await page.click("#card");
+  assert.equal(await rt.evaluate((r) => getComputedStyle(r).visibility), "visible");
+  assert.match(await page.textContent(".face.back"), /Usually written in kana: たくさん/);
+  await page.click("[data-g='3']");
+  await answer(page, 3);
+  await page.click("#card");
+  assert.match(await page.textContent(".face.front"), /秋/);
+  assert.doesNotMatch(await page.textContent(".face.back"), /Usually written in kana/);
   await page.close();
 });
 

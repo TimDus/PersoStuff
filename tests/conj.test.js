@@ -99,7 +99,7 @@ test("a bare noun from the list that takes する conjugates with it", () => {
 test("word parts and spellings without their kana ending give no questions", () => {
   const parts = WORDS.filter((w) => /^[～〜]/.test(w.w));
   assert.ok(parts.some((w) => w.w === "～だす"));
-  for (const w of [...parts, listed("堅")]) for (const f of FORMS) assert.equal(conjugate(w, f.id), null, w.w + " " + f.id);
+  for (const w of [...parts, v("堅", "かたい", "adj-i")]) for (const f of FORMS) assert.equal(conjugate(w, f.id), null, w.w + " " + f.id);
   assert.equal(conjugate(listed("大切"), "ta").w, "大切だった", "a な-adjective's spelling never ends in kana");
 });
 
