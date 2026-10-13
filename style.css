@@ -163,11 +163,12 @@ button.bad { background: var(--bad); border-color: var(--bad); }
 .tok { cursor: pointer; border-radius: 6px; position: relative; display: inline-block; line-height: 1.6; padding: 0 1px; }
 .tok:hover { background: var(--accent-soft); }
 /* Typed letters sit above each kana and its romaji below [ta typed over た, ta shown under it]. */
-.tok[data-t]::before, .tok.peek::after, .show-all .tok[data-r]::after {
+.tok .tt, .tok.peek::after, .show-all .tok[data-r]::after {
   position: absolute; left: 50%; transform: translateX(-50%);
   font: 600 .85rem system-ui, sans-serif; white-space: nowrap; line-height: 1;
 }
-.tok[data-t]::before { content: attr(data-t); top: -.6em; color: var(--ink); }
+.tok .tt { top: -.6em; color: var(--ink); }
+.typing.right .tt { color: var(--good); }
 .tok.peek::after, .show-all .tok[data-r]::after { content: attr(data-r); bottom: -.6em; color: var(--accent); }
 .dots { display: flex; gap: .3rem; flex-wrap: wrap; }
 .dot { width: 1.6rem; height: 1.6rem; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); font-size: .75rem; cursor: pointer; padding: 0; color: var(--muted); }
@@ -175,7 +176,14 @@ button.bad { background: var(--bad); border-color: var(--bad); }
 .dot.here { border-color: var(--accent); border-width: 2px; color: var(--accent); }
 .romaji-line { color: var(--muted); font-size: 1.1rem; margin-top: .5rem; }
 .tok.off { background: var(--bad-soft); box-shadow: inset 0 -3px 0 var(--bad); }
-.sentence-input { width: 100%; font-size: 1.2rem; text-align: left; margin-top: .8rem; }
+/* The box the sentence is typed into, kept unseen over it [16px so iOS doesn't zoom on focus]. */
+.typing { position: relative; border-radius: 10px; padding: 0 .4rem; cursor: text; border: 2px solid transparent; }
+.typing:focus-within { border-color: var(--accent); }
+.typing.right { border-color: var(--good); background: var(--good-soft); }
+.sentence-input { position: absolute; top: 0; left: 0; width: 100%; height: 1px; font-size: 16px; opacity: 0; pointer-events: none; border: 0; padding: 0; caret-color: transparent; }
+.caret { display: none; width: 2px; height: 1em; margin: 0 -1px; vertical-align: -.1em; background: var(--accent); animation: blink 1s steps(1) infinite; }
+.typing:focus-within .caret { display: inline-block; }
+@keyframes blink { 50% { opacity: 0; } }
 
 /* Chart */
 .chart { border-collapse: separate; border-spacing: .35rem; margin: 0 auto; }

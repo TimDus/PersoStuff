@@ -1057,13 +1057,15 @@
         </div>
         <div class="dots">${list.map((_, j) => `<button class="dot ${done.has(`${sheet}-${j}`) ? "done" : ""} ${j === i ? "here" : ""}" data-j="${j}">${j + 1}</button>`).join("")}</div>
         <div class="panel" style="margin-top:1rem">
-          <div class="sentence ${showAll ? "show-all" : ""}" id="sent">${tokens(text).map((t) =>
-            [...t].some(isKana) ? `<span class="tok" data-r="${esc(toRomaji(t))}">${esc(t)}</span>` : esc(t)).join("")}</div>
+          <div class="typing ${typedOk ? "right" : ""}" id="typing">
+            <input class="sentence-input" id="typed" value="${esc(typed)}" autocomplete="off" autocapitalize="off" autocorrect="off"
+              spellcheck="false" enterkeyhint="done" aria-label="The sentence in romaji">
+            <div class="sentence ${showAll ? "show-all" : ""}" id="sent">${tokens(text).map((t) =>
+              [...t].some(isKana) ? `<span class="tok" data-r="${esc(toRomaji(t))}" data-k="${esc(t)}"><span class="tt"></span>${esc(t)}</span>` : esc(t)).join("")}</div>
+          </div>
           ${showAll ? `<div class="romaji-line">${esc(toRomaji(text))}</div>` : ""}
+          <p class="muted small" id="typed-fb">Tap the sentence and type it in romaji, then Enter. Tap a typed kana to go back to it.</p>
           ${kata ? "" : `<p class="muted small">Romaji here is letter by letter: as particles, は is said <b>wa</b>, へ is said <b>e</b> and を is said <b>o</b>.</p>`}
-          <input class="quiz-input sentence-input ${typedOk ? "right" : ""}" id="typed" value="${esc(typed)}" autocomplete="off" autocapitalize="off" autocorrect="off"
-            spellcheck="false" enterkeyhint="done" placeholder="Type it in romaji, then Enter">
-          <div class="romaji-line" id="typed-fb"></div>
         </div>
         <div class="row" style="margin-top:1rem">
           <button class="ghost" id="prev" ${i === 0 ? "disabled" : ""}>← Prev</button>
@@ -1075,19 +1077,38 @@
         </div>
         <p class="muted small" style="margin-top:1.5rem">Want more? Tofugu suggests <a href="https://www3.nhk.or.jp/news/easy/" target="_blank" rel="noopener">NHK News Web Easy</a>
           and graded readers once these feel easy.</p>`;
-      app.querySelector("#sent").addEventListener("click", (e) => {
+      const box = app.querySelector("#typed");
+      // A typed kana puts the caret after its letters, an untyped one shows its romaji [tap し in "watash" = caret after "watash"].
+      app.querySelector("#typing").addEventListener("click", (e) => {
         const t = e.target.closest(".tok");
+        box.focus();
         if (!t) return;
+        const toks = [...app.querySelectorAll(".tok")], j = toks.indexOf(t);
+        const total = letters(typed).length;
+        const start = toks.slice(0, j).reduce((s, x) => s + letters(x.dataset.r).length, 0);
+        if (start < total) {
+          const end = j === toks.length - 1 ? total : Math.min(total, start + letters(t.dataset.r).length);
+          const at = rawAt(end);
+          box.setSelectionRange(at, at);
+          return spread();
+        }
         t.classList.toggle("peek");
-        if (clipFor(t.textContent)) say(t.textContent);
+        if (clipFor(t.dataset.k)) say(t.dataset.k);
       });
       app.querySelectorAll(".dot").forEach((d) => d.addEventListener("click", () => go(+d.dataset.j)));
       app.querySelector("#prev").addEventListener("click", () => go(i - 1));
       app.querySelector("#next").addEventListener("click", () => go(i + 1));
       app.querySelector("#all").addEventListener("click", toggle);
       app.querySelector("#read").addEventListener("click", markRead);
-      const box = app.querySelector("#typed");
-      box.addEventListener("input", () => { typed = box.value; typedOk = false; box.classList.remove("right", "wrong"); spread(); });
+      box.addEventListener("input", () => {
+        typed = box.value; typedOk = false;
+        app.querySelector("#typing").classList.remove("right");
+        spread();
+      });
+      // Arrow keys and Home move the caret without an input event [← twice in "watashi" = caret between s and h].
+      box.addEventListener("keydown", () => setTimeout(spread));
+      box.addEventListener("focus", spread);
+      box.setSelectionRange(typed.length, typed.length);
       spread();
       box.addEventListener("keydown", (e) => {
         if (e.key !== "Enter") return;
@@ -1097,14 +1118,28 @@
       });
     }
     const letters = (r) => r.toLowerCase().replace(/[^a-z]/g, "");
-    // The typed letters over the kana they spell, by each kana's letter count [watashi = wa, ta, shi; letters past the end sit on the last kana].
+    // Where the n-th typed letter ends in the raw text [n 2 in "wa ta" = 2, n 3 = 4, past the space].
+    function rawAt(n) {
+      let at = 0;
+      for (let seen = 0; at < typed.length && seen < n; at++) if (/[a-z]/i.test(typed[at])) seen++;
+      return at;
+    }
+    // The typed letters over the kana they spell, by each kana's letter count, the caret among them [watashi = wa, ta, shi; letters past the end sit on the last kana].
     function spread() {
+      const box = app.querySelector("#typed");
+      if (!box) return;
       const toks = [...app.querySelectorAll(".tok")];
-      let rest = letters(typed);
+      const caret = letters(typed.slice(0, box.selectionStart ?? typed.length)).length;
+      let rest = letters(typed), from = 0;
       toks.forEach((t, j) => {
         const n = j === toks.length - 1 ? rest.length : letters(t.dataset.r).length;
-        if (rest) t.dataset.t = rest.slice(0, n); else delete t.dataset.t;
-        rest = rest.slice(n);
+        const here = rest.slice(0, n), tt = t.querySelector(".tt");
+        // The caret sits on the kana whose letters it ends [caret 2 in "wata" = after wa, not before ta].
+        const mine = caret === 0 ? j === 0 : caret > from && caret <= from + here.length;
+        tt.textContent = "";
+        if (mine) tt.append(here.slice(0, caret - from), Object.assign(document.createElement("i"), { className: "caret" }), here.slice(caret - from));
+        else tt.textContent = here;
+        rest = rest.slice(n); from += here.length;
       });
     }
     // Typed romaji against the letter-by-letter reading, letters only [いっしゅうかん、 = "isshuukan", the comma and spaces don't count].
@@ -1119,8 +1154,6 @@
         app.querySelector("#typed").focus();
         return;
       }
-      const box = app.querySelector("#typed");
-      box.classList.add("wrong");
       app.querySelector("#typed-fb").textContent = "Not quite: it goes off at the marked kana.";
       // The kana where the typing first goes wrong, the last one when it runs on [さんじ typed as "sanzi" marks じ].
       let at = 0;
