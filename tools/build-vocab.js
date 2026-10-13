@@ -1,4 +1,4 @@
-// Builds data/vocab.json: the JLPT N5 and N4 words with JMdict's word type and frequency, furigana, and up to two Tatoeba examples [会う|あう = godan verb, nf26].
+// Builds data/vocab.json: the JLPT N5 and N4 words with JMdict's word type and frequency, furigana with KANJIDIC2's kanji level, and up to two Tatoeba examples [会う|あう = godan verb, nf26].
 // Usage: node tools/build-vocab.js _data data/vocab.json
 const fs = require("fs");
 const path = require("path");
@@ -124,16 +124,26 @@ const typeOf = (pos) => {
   return pos.length ? "word" : "";
 };
 
+// Each kanji's level on today's N scale, from KANJIDIC2's pre-2010 JLPT levels, 0 for none [old 4 = N5, old 3 = N4; 沢 is old 1].
+const OLD_TO_N = { 4: 5, 3: 4, 2: 2, 1: 1 };
+const kanjiLevel = new Map();
+for (const m of read("kanjidic", "kanjidic2.xml").matchAll(/<literal>([^<]+)<\/literal>[\s\S]*?<\/character>/g)) {
+  const old = m[0].match(/<jlpt>(\d)<\/jlpt>/);
+  kanjiLevel.set(m[1], old ? OLD_TO_N[old[1]] : 0);
+}
+// A kanji run's level is its hardest kanji's, 々 repeating the one before [写真 = N4, 時々 = N5, 沢山 = 0].
+const runLevel = (s) => Math.min(...[...s].filter((c) => c !== "々").map((c) => kanjiLevel.get(c) || 0));
+
 const toHira = (s) => [...s].map((c) => (/[ァ-ヶ]/.test(c) ? String.fromCodePoint(c.codePointAt(0) - 0x60) : c)).join("");
 const KANJI = /[一-鿿々]+/;
-// Furigana over each kanji run, the rest matched letter for letter against the reading [会う + あう = 会(あ)う; ～円 = ～ then 円(えん)].
+// Furigana over each kanji run with the run's level, the rest matched letter for letter against the reading [会う + あう = 会(あ)う at N5; ～円 = ～ then 円(えん)].
 function furigana(w, r) {
   const runs = w.match(/[一-鿿々]+|[^一-鿿々]+/g);
   if (!runs.some((s) => KANJI.test(s))) return [[w]];
   const lit = (s) => toHira(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const m = toHira(r).match(new RegExp("^" + runs.map((s) => (KANJI.test(s) ? "(.+?)" : `(${lit(s)})`)).join("") + "$"));
-  if (!m) return [[w, r]];
-  return runs.map((s, i) => (KANJI.test(s) ? [s, m[i + 1]] : [s]));
+  if (!m) return [[w, r, runLevel(w.match(/[一-鿿々]/g).join(""))]];
+  return runs.map((s, i) => (KANJI.test(s) ? [s, m[i + 1], runLevel(s)] : [s]));
 }
 
 // Tatoeba sentences whose index names the word, shortest first [会う: 駅で会いましょう。].

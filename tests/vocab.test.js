@@ -14,7 +14,7 @@ test("every N5 and N4 word is there once, all of N5 before any of N4", () => {
 test("the list's dated spellings are written as today, and a second spelling of one word is dropped [終る = 終わる, 在る = 有る]", () => {
   assert.deepEqual(["終る|おわる", "落す|おとす", "下る|さがる", "伯父|おじさん", "堅|かたい", "御飯|ごはん", "在る|ある"].filter(by), []);
   assert.deepEqual(["終わる|おわる", "落とす|おとす", "下がる|さがる", "伯父さん|おじさん", "固い|かたい", "ご飯|ごはん", "有る|ある"].filter((k) => !by(k)), []);
-  assert.deepEqual(by("終わる|おわる").fu, [["終", "お"], ["わる"]]);
+  assert.deepEqual(by("終わる|おわる").fu, [["終", "お", 4], ["わる"]]);
 });
 
 test("a kanji spelling JMdict says is usually kana is marked, a kana word never is [沢山 = たくさん]", () => {
@@ -25,7 +25,12 @@ test("a kanji spelling JMdict says is usually kana is marked, a kana word never 
 test("furigana spells the word back exactly and sits only on kanji [会う = 会 with あ, then う]", () => {
   assert.deepEqual(vocab.filter((w) => w.fu.map((s) => s[0]).join("") !== w.w).map((w) => w.k), []);
   assert.deepEqual(vocab.filter((w) => w.fu.some(([t, rt]) => rt && !/[一-鿿々]/.test(t))).map((w) => w.k), []);
-  assert.deepEqual(by("会う|あう").fu, [["会", "あ"], ["う"]]);
+  assert.deepEqual(by("会う|あう").fu, [["会", "あ", 5], ["う"]]);
+});
+
+test("each furigana carries its kanji's level, the hardest kanji in a run deciding [写真 = N4, 時々 = N5, 沢山 = old level 1]", () => {
+  assert.deepEqual(vocab.flatMap((w) => w.fu.filter(([, rt, lv]) => rt && ![0, 1, 2, 4, 5].includes(lv))).map(([t]) => t), []);
+  assert.deepEqual(["学生|がくせい", "写真|しゃしん", "時々|ときどき", "沢山|たくさん"].map((k) => by(k).fu[0][2]), [5, 4, 5, 1]);
 });
 
 test("a word's examples use its own kanji, and a counter only after a number [no circle under ～円]", () => {

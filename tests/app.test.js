@@ -827,20 +827,28 @@ test("a word's English side asks with its meaning and type the day after, and sh
   await page.close();
 });
 
-// Furigana on the Japanese side gave the reading away before the learner had to recall it [秋 with あき over it].
-test("a word's reading stays hidden until the card turns, and a usually-kana word says so on the back", async () => {
-  const page = await open({ ...listed, local: { "study.user": "u1", study: deckWith({ "沢山|たくさん#r": reviewed({ first: day - 1, last: day - 1, due: day }) }) } }, "#words/review");
+// Furigana on the Japanese side gave the reading away before the learner had to recall it [学生 with がくせい over it],
+// yet hiding every one asked for readings of kanji years above the word [写真 at N5, both kanji N4].
+test("a reading at the word's level stays hidden until the card turns, one above it shows from the start", async () => {
+  const due = (d) => reviewed({ first: day - 3, last: day - 3, due: d });
+  const study = deckWith({ "学生|がくせい#r": due(day - 2), "写真|しゃしん#r": due(day - 1), "沢山|たくさん#r": due(day) });
+  const page = await open({ ...listed, local: { "study.user": "u1", study } }, "#words/review");
   const rt = page.locator(".face.front ruby rt").first();
+  const shown = () => rt.evaluate((r) => getComputedStyle(r).visibility);
   await rt.waitFor({ state: "attached" });
-  assert.equal(await rt.evaluate((r) => getComputedStyle(r).visibility), "hidden");
+  assert.match(await page.textContent(".face.front"), /学生/);
+  assert.equal(await shown(), "hidden");
   await page.click("#card");
-  assert.equal(await rt.evaluate((r) => getComputedStyle(r).visibility), "visible");
-  assert.match(await page.textContent(".face.back"), /Usually written in kana: たくさん/);
-  await page.click("[data-g='3']");
-  await answer(page, 3);
-  await page.click("#card");
-  assert.match(await page.textContent(".face.front"), /秋/);
+  assert.equal(await shown(), "visible");
   assert.doesNotMatch(await page.textContent(".face.back"), /Usually written in kana/);
+  await page.click("[data-g='3']");
+  assert.match(await page.textContent(".face.front"), /写真/);
+  assert.equal(await shown(), "visible");
+  await answer(page, 3);
+  assert.match(await page.textContent(".face.front"), /沢山/);
+  assert.equal(await shown(), "visible");
+  await page.click("#card");
+  assert.match(await page.textContent(".face.back"), /Usually written in kana: たくさん/);
   await page.close();
 });
 

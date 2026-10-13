@@ -5,7 +5,7 @@
   let shell = null;
   let words = null;
   let loading = null;
-  // Fetched on the first visit and kept [data/vocab.json, 1,384 words, 371 KB].
+  // Fetched on the first visit and kept [data/vocab.json, 1,384 words, 374 KB].
   const loadWords = () => (loading ||= fetch("data/vocab.json")
     .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
     .then((list) => (words = list))
@@ -58,7 +58,8 @@
   addEventListener("online", () => { if (shell?.user) sync(); });
 
   const esc = (s) => shell.esc(s);
-  const ruby = (w) => w.fu.map(([text, rt]) => (rt ? `<ruby>${esc(text)}<rt>${esc(rt)}</rt></ruby>` : esc(text))).join("");
+  // Furigana, the ones over kanji at the word's level marked to be recalled [学生 at N5: asked; 写真's kanji are N4: given].
+  const ruby = (w) => w.fu.map(([text, rt, lv]) => (rt ? `<ruby>${esc(text)}<rt${lv >= w.lv ? ' class="ask"' : ""}>${esc(rt)}</rt></ruby>` : esc(text))).join("");
   const speak = (text) => `<button class="speak" data-say="${esc(text)}" title="Listen">🔊</button>`;
   const examples = (w) => (w.ex.length ? `<div class="examples">${w.ex.map(([jp, en]) => `
     <div class="ex"><span class="jp">${esc(jp)}</span> ${speak(jp)}<div class="muted small">${esc(en)}</div></div>`).join("")}</div>` : "");
