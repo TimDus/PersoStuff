@@ -350,3 +350,13 @@ a.btn.disabled { opacity: .45; pointer-events: none; }
 .verb-q .form { font-size: 1.3rem; font-weight: 700; color: var(--accent); margin-top: .3rem; }
 .verb-misses { display: grid; gap: .3rem; text-align: left; max-width: 26rem; margin: 0 auto; }
 .verb-misses rt { font-size: .5em; color: var(--muted); }
+/* Particle gaps: the sentence over its English, the gap a box the answer drops into [私＿学生です → 私は学生です]. */
+.gap-q { text-align: center; }
+.gap-q .sentence-jp { font-size: 1.9rem; line-height: 2.2; }
+.gap-q rt, .verb-misses .gap-q rt { font-size: .45em; color: var(--muted); }
+.gap { display: inline-block; min-width: 1.4em; padding: 0 .2em; margin: 0 .1em; border-bottom: 3px solid var(--accent); color: var(--muted); line-height: 1.3; }
+.gap.filled { color: var(--good); border-color: var(--good); font-weight: 700; }
+.gap-opts { justify-content: center; margin-top: 1rem; }
+.gap-opt { font-size: 1.4rem; min-width: 5rem; }
+.gap-opt.right { background: var(--good-soft); border-color: var(--good); color: var(--good); }
+.gap-opt.wrong { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }

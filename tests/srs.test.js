@@ -177,3 +177,13 @@ test("verb drill scores from two devices are both kept, the better best winning"
   assert.deepEqual(m.best["masu|verb"], { ms: 7000, acc: 100 });
   assert.deepEqual(Object.keys(m.best).sort(), ["masu|verb", "te|verb"]);
 });
+
+// Particle drill bests sit under `study.particles`; taken whole from the newer side, a slower newer run would undo a faster older one.
+test("particle drill bests from two devices are both kept, the better best winning even from the older side", () => {
+  const older = { cards: {}, savedAt: 5, particles: { kana: {}, best: { 10: { ms: 30000, acc: 100 }, 40: { ms: 99000, acc: 90 } }, resetAt: 0 } };
+  const newer = { cards: {}, savedAt: 9, particles: { kana: {}, best: { 10: { ms: 50000, acc: 90 }, 20: { ms: 60000, acc: 95 } }, resetAt: 0 } };
+  const m = mergeStudy(newer, older).particles;
+  assert.deepEqual(m.best[10], { ms: 30000, acc: 100 });
+  assert.deepEqual(Object.keys(m.best).sort(), ["10", "20", "40"]);
+  assert.equal(mergeStudy({ cards: {}, savedAt: 1 }, null).particles, undefined, "a deck that never drilled particles gets no key");
+});

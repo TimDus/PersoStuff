@@ -342,6 +342,7 @@
     words: () => (words ? Promise.resolve(words) : loadWords()),
     met: (k) => !!deck.cards[k + "#r"],
     verbs: drill("verbs"),
+    particles: drill("particles"),
     unsynced: () => local().savedAt > pushedAt(),
   };
 })();

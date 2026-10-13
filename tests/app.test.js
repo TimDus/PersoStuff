@@ -752,7 +752,7 @@ const answer = async (page, g) => { await pastIntros(page); await page.click("#c
 test("the Japanese section has its own tabs, and the kana tabs stay as they were", async () => {
   const page = await open(listed, "#words");
   const tabs = () => page.locator("nav a:visible").evaluateAll((as) => as.map((a) => a.dataset.tab));
-  assert.deepEqual(await tabs(), ["words", "verbs"]);
+  assert.deepEqual(await tabs(), ["words", "verbs", "particles"]);
   await page.click(".sections a[data-section-link='kana']");
   assert.deepEqual(await tabs(), ["learn", "cards", "quiz", "sheets", "reading", "chart"]);
   await page.close();
@@ -1376,10 +1376,46 @@ async function answerRight(page) {
   await page.waitForFunction((p) => document.querySelector("h1")?.textContent === "Done!" || document.querySelector("#prog")?.textContent !== p, prog);
 }
 
+// The Particles tab: a sentence's gap answered by a choice, a miss shown and asked again, and the best kept in the synced deck.
+const { SENTENCES } = require("../particles.js");
+const gapCard = async (page) => SENTENCES[+(await page.getAttribute(".gap-q", "data-id"))];
+const choose = async (page, right) => {
+  const c = await gapCard(page), prog = await page.textContent("#prog");
+  const opts = await page.locator(".gap-opt").evaluateAll((bs) => bs.map((b) => b.dataset.p));
+  const i = opts.findIndex((p) => c.ok.includes(p) === right);
+  await page.keyboard.press(String(i + 1));
+  return { c, prog, picked: opts[i] };
+};
+test("a particle gap takes a right choice, shows and requeues a wrong one, and keeps the best in the deck", async () => {
+  const page = await open(listed, "#particles/run");
+  await page.locator(".gap-q").waitFor();
+  assert.equal(await page.textContent("#prog"), "1 / 10");
+  const first = await choose(page, true);
+  assert.equal(await page.textContent("#ok"), "1");
+  assert.equal(await page.textContent(".gap.filled"), first.picked);
+  await page.waitForFunction((p) => document.querySelector("#prog").textContent !== p, first.prog);
+  const miss = await choose(page, false);
+  assert.equal(await page.textContent("#bad"), "1");
+  assert.ok(miss.c.ok.includes(await page.textContent(".feedback .ans")));
+  assert.match(await page.getAttribute(`.gap-opt[data-p="${miss.picked}"]`, "class"), /\bwrong\b/);
+  await page.keyboard.press("Enter");
+  assert.equal(await page.textContent("#prog"), "3 / 11");
+  let seenAgain = false;
+  while (!(await page.locator("h1", { hasText: "Done!" }).count())) {
+    const { c, prog } = await choose(page, true);
+    if (c === miss.c) seenAgain = true;
+    await page.waitForFunction((p) => document.querySelector("h1")?.textContent === "Done!" || document.querySelector("#prog")?.textContent !== p, prog);
+  }
+  assert.ok(seenAgain, "the missed sentence came back");
+  const best = (await deckOf(page)).particles.best["10"];
+  assert.equal(best.acc, 91);
+  await page.close();
+});
+
 test("the Verbs tab drills met verbs in the chosen form, romaji turning into kana as it's typed", async () => {
   const page = await open({ ...listed, local: { ...verbsSel({}), "study.user": "u1", study: deckWith({ "食べる|たべる#r": reviewed() }) } }, "#verbs/run");
   await page.locator(".verb-q").waitFor();
-  assert.deepEqual(await page.locator("nav a:visible").evaluateAll((as) => as.map((a) => a.dataset.tab)), ["words", "verbs"]);
+  assert.deepEqual(await page.locator("nav a:visible").evaluateAll((as) => as.map((a) => a.dataset.tab)), ["words", "verbs", "particles"]);
   await page.type("#in", "tabe");
   assert.equal(await page.inputValue("#in"), "たべ");
   await page.fill("#in", "");
