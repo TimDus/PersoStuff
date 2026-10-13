@@ -1,8 +1,7 @@
 // The Verbs tab: conjugation drills on the list's verbs and adjectives, met words first [食べる → polite past = 食べました].
 (function () {
   const { FORMS, base, conjugate, classOf, toKana, accepts } = window.HiraConj;
-  const { better } = window.HiraSync;
-  const { spaced, requeue, gapFor } = window.HiraOrder;
+  const { spaced, gapFor } = window.HiraOrder;
   const study = window.HiraStudy;
   // A drill draws on at least this many words, topped up from the most common [3 verbs met = 12 more from the top of N5].
   const POOL = 15;
@@ -99,113 +98,38 @@
   }
 
   function run(words, sel, given) {
-    const { app, onKey, cleanup } = study.shell();
-    cleanup();
     const queue = given ? spaced(given, 1, Math.random, sameWord) : questions(words, sel);
     if (!queue.length) { location.hash = "#verbs"; return; }
-    const gap = gapFor(new Set(queue.map((q) => q.word)).size);
-    const missed = [];
-    // The box is never read-only, which would drop a phone keyboard: `settling` covers the beat after a right answer, `waiting` a miss.
-    let idx = 0, right = 0, wrong = 0, waiting = false, settling = false, composing = false;
-    const start = Date.now();
-    app.innerHTML = `
-      <div class="row"><a href="#verbs">← Choose forms</a><span class="spacer"></span><span class="progress-line" id="prog"></span></div>
-      <div class="stage">
-        <div class="verb-q"><div class="word jp" id="word"></div><div class="muted" id="type"></div><div class="muted small" id="meaning"></div><div class="form" id="form"></div></div>
-        <input class="quiz-input jp" id="in" lang="ja" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="romaji or kana">
-        <div class="feedback" id="fb"></div>
-        <div class="stats"><span>✓ <b id="ok">0</b></span><span>✗ <b id="bad">0</b></span></div>
-      </div>`;
-    const input = app.querySelector("#in"), fb = app.querySelector("#fb");
-    function show() {
-      // Cleared before Done so a later Enter there finds nothing to continue [it redrew Done at 0:04, 0:05, 0:07].
-      waiting = false; settling = false;
-      if (idx >= queue.length) return finish();
-      const q = queue[idx];
-      app.querySelector("#word").innerHTML = shown(q.word);
-      app.querySelector("#type").textContent = q.word.t + (base(q.word).w !== q.word.w ? " + する" : "");
-      // The meaning says which word is meant where the kana alone doesn't [はく: to put on, not to vomit].
-      app.querySelector("#meaning").textContent = q.word.m;
-      app.querySelector("#form").textContent = label(q.form);
-      app.querySelector("#prog").textContent = `${idx + 1} / ${queue.length}`;
-      app.querySelector(".verb-q").dataset.k = q.word.k;
-      app.querySelector(".verb-q").dataset.form = q.form;
-      input.value = ""; input.className = "quiz-input jp"; input.focus();
-      fb.innerHTML = "";
-    }
-    function submit() {
-      const q = queue[idx];
-      if (accepts(q.want, input.value)) {
-        right++;
-        app.querySelector("#ok").textContent = right;
-        // Shown back in the spelling typed, kanji or the reading [電話します stays; denwashimasu → でんわします, tesutoshimasu → テストします].
-        input.value = toKana(input.value.trim(), true) === q.want.w ? q.want.w : q.want.r;
+    const { app } = study.shell();
+    HiraDrill.run({
+      queue, gap: gapFor(new Set(queue.map((q) => q.word)).size), clash: sameWord, typed: true,
+      back: { href: "#verbs", label: "← Choose forms" }, done: { href: "#verbs", label: "Choose forms" },
+      card: `<div class="verb-q"><div class="word jp" id="word"></div><div class="muted" id="type"></div><div class="muted small" id="meaning"></div><div class="form" id="form"></div></div>`,
+      show(q) {
+        app.querySelector("#word").innerHTML = shown(q.word);
+        app.querySelector("#type").textContent = q.word.t + (base(q.word).w !== q.word.w ? " + する" : "");
+        // The meaning says which word is meant where the kana alone doesn't [はく: to put on, not to vomit].
+        app.querySelector("#meaning").textContent = q.word.m;
+        app.querySelector("#form").textContent = label(q.form);
+        app.querySelector(".verb-q").dataset.k = q.word.k;
+        app.querySelector(".verb-q").dataset.form = q.form;
+      },
+      judge: (q, typed) => (accepts(q.want, typed) ? q.want : null),
+      right(q, want, typed, { input }) {
+        // Shown back in the spelling typed [電話します stays; denwashimasu → でんわします, tesutoshimasu → テストします].
+        input.value = toKana(typed.trim(), true) === want.w ? want.w : want.r;
         input.classList.add("right");
-        settling = true;
-        idx++;
-        // Only while this run is still on screen [left for Words in the 350 ms = nothing drawn there].
-        setTimeout(() => { if (settling && input.isConnected) show(); }, 350);
-        return;
-      }
-      wrong++;
-      missed.push(q);
-      app.querySelector("#bad").textContent = wrong;
-      input.classList.add("wrong");
-      fb.innerHTML = `<div class="ans jp">${esc(q.want.w)}${q.want.w !== q.want.r ? ` <small>${esc(q.want.r)}</small>` : ""}</div>
-        <button class="ghost" id="next" style="margin-top:.5rem">Continue <span class="kbd">Enter</span></button>`;
-      fb.querySelector("#next").addEventListener("click", show);
-      requeue(queue, idx, gap, Math.random, sameWord);
-      idx++;
-      waiting = true;
-    }
-    // Romaji before the caret turns into kana as it's typed, except while a Japanese keyboard is composing [anna before します = あんな|します].
-    input.addEventListener("compositionstart", () => { composing = true; });
-    input.addEventListener("compositionend", () => { composing = false; });
-    input.addEventListener("beforeinput", (e) => { if (waiting || settling) e.preventDefault(); });
-    input.addEventListener("input", () => {
-      if (composing) return;
-      const at = input.selectionStart, head = toKana(input.value.slice(0, at));
-      if (head === input.value.slice(0, at)) return;
-      input.value = head + input.value.slice(at);
-      input.setSelectionRange(head.length, head.length);
+        return 350;
+      },
+      wrong(q, typed, { input }) {
+        input.classList.add("wrong");
+        return `<div class="ans jp">${esc(q.want.w)}${q.want.w !== q.want.r ? ` <small>${esc(q.want.r)}</small>` : ""}</div>`;
+      },
+      missLine: (q) => `<span class="jp">${shown(q.word)}</span> · ${esc(label(q.form))} → <b class="jp">${esc(q.want.w)}</b>`,
+      best: given ? null : { key: selKey(sel), store: study.verbs },
+      again: () => run(words, sel, given),
+      drillMissed: (misses) => run(words, sel, misses),
     });
-    input.addEventListener("keydown", (e) => {
-      if (e.key !== "Enter" || e.isComposing) return;
-      e.preventDefault();
-      if (waiting) return show();
-      if (!settling && input.value.trim()) submit();
-    });
-    fb.addEventListener("mousedown", (e) => { if (e.target.closest("button")) e.preventDefault(); });
-    onKey((e) => { if (waiting && e.key === "Enter" && e.target !== input && !e.target.closest("button")) show(); });
-    function finish() {
-      const ms = Date.now() - start;
-      const acc = Math.round((right / (right + wrong)) * 100);
-      let note = "";
-      if (!given) {
-        const key = selKey(sel), prev = study.verbs.best(key);
-        if (!prev || better(prev, { ms, acc }) !== prev) {
-          study.verbs.setBest(key, { ms, acc });
-          note = prev ? `New best! Previous ${fmt(prev.ms)} at ${prev.acc}%` : "First run — now beat it.";
-        } else note = `Best: ${fmt(prev.ms)} at ${prev.acc}%`;
-      }
-      // A finished drill uploads at once, like a finished review [a new best reaches the other devices now, not in 20 s].
-      study.flush();
-      app.innerHTML = `
-        <div class="panel" style="text-align:center;max-width:560px;margin:2rem auto">
-          <h1>Done!</h1>
-          <div class="stats" style="margin:1rem 0"><div><div class="big-number">${fmt(ms)}</div>time</div><div><div class="big-number">${acc}%</div>accuracy</div></div>
-          <p class="muted">${note}</p>
-          ${missed.length ? `<h2>Missed</h2><div class="verb-misses">${missed.map((q) => `<div><span class="jp">${shown(q.word)}</span> · ${esc(label(q.form))} → <b class="jp">${esc(q.want.w)}</b></div>`).join("")}</div>` : ""}
-          <div class="row" style="justify-content:center;margin-top:1.2rem">
-            <button id="re">Again</button>
-            ${missed.length ? `<button class="ghost" id="miss">Drill the missed ones</button>` : ""}
-            <a class="btn ghost" href="#verbs">Choose forms</a>
-          </div>
-        </div>`;
-      app.querySelector("#re").addEventListener("click", () => run(words, sel, given));
-      app.querySelector("#miss")?.addEventListener("click", () => run(words, sel, [...new Set(missed)]));
-    }
-    show();
   }
 
   study.routes.verbs = viewVerbs;

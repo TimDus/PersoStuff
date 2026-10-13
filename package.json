@@ -7,6 +7,7 @@
     "upload-content": "node tools/upload-content.js",
     "build-strokes": "node tools/build-strokes.js _data/kanjivg/main/kanji data/strokes.json",
     "build-vocab": "node tools/build-vocab.js _data data/vocab.json",
+    "build-grammar": "node tools/build-grammar.js _data data/vocab.json data/grammar.json",
     "verify-db": "bash tools/psql.sh -q -f supabase/verify.sql"
   },
   "devDependencies": {

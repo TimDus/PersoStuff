@@ -360,3 +360,19 @@ a.btn.disabled { opacity: .45; pointer-events: none; }
 .gap-opt { font-size: 1.4rem; min-width: 5rem; }
 .gap-opt.right { background: var(--good-soft); border-color: var(--good); color: var(--good); }
 .gap-opt.wrong { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
+/* Grammar: the gap holds a whole form, so it stretches and keeps its readings [話してください over はな]. */
+.gr-q { text-align: center; max-width: 40rem; }
+.gr-q .sentence-jp { font-size: 1.7rem; line-height: 2.4; }
+.gr-q rt, .gr-ex rt, .verb-misses rt { font-size: .45em; color: var(--muted); }
+.gr-q .gap { min-width: 3em; }
+.gr-q:not(.answered) rt.ask { visibility: hidden; }
+.gr-q #hint { font-size: 1.2rem; margin-top: .4rem; }
+.gr-q #hint rt { font-size: .5em; }
+.gr-ex { font-size: 1.15rem; line-height: 2.1; }
+.gr-group h2 { margin-top: 1.6rem; }
+.gr-list { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.gr-point { text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: .2rem; padding: .7rem .9rem; }
+.gr-point:hover { border-color: var(--accent); }
+.gr-point .jp { font-size: 1.2rem; }
+.gr-attach { margin: 0 0 .4rem; }
+.gr-explain { max-width: 46rem; }

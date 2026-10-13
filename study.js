@@ -1,6 +1,6 @@
 // The Japanese section: JLPT vocabulary on Anki-style reviews, both directions, synced to its own column [progress.study, beside the kana in progress.data].
 (function () {
-  const { dayOf, grade, preview, queue, mergeStudy } = window.HiraSRS;
+  const { dayOf, grade, preview, queue, mergeStudy, DRILLS } = window.HiraSRS;
   const { same, bump } = window.HiraSync;
   let shell = null;
   let words = null;
@@ -341,8 +341,7 @@
     needWords,
     words: () => (words ? Promise.resolve(words) : loadWords()),
     met: (k) => !!deck.cards[k + "#r"],
-    verbs: drill("verbs"),
-    particles: drill("particles"),
+    ...Object.fromEntries(DRILLS.filter((name) => name !== "write").map((name) => [name, drill(name)])),
     unsynced: () => local().savedAt > pushedAt(),
   };
 })();

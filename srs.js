@@ -68,8 +68,10 @@
     const text = (x) => JSON.stringify(Object.keys(x).sort().map((f) => [f, x[f]]));
     return text(c) > text(cur);
   };
-  // Two devices' decks into one: cards by `wins`, settings from the later change, writing, verb and particle drills by `mergeWrite`, any other key whole from the newer side
-  // so a later section's data outlives a tab that predates it [a grammar key written by the next version].
+  // The deck keys that hold a drill's progress and bests, merged best by best; study.js makes one store per name [grammar = study.grammar].
+  const DRILLS = ["write", "verbs", "particles", "grammar"];
+  // Two devices' decks into one: cards by `wins`, settings from the later change, writing and the drills by `mergeWrite`, any other key whole from the newer side
+  // so a later section's data outlives a tab that predates it [a kanji key written by the next version].
   function mergeStudy(a, b) {
     const sides = [a, b].filter((s) => s && typeof s === "object").sort((x, y) => (x.savedAt || 0) - (y.savedAt || 0));
     const out = Object.assign({}, ...sides);
@@ -78,13 +80,12 @@
       for (const [key, c] of Object.entries(s.cards || {})) if (!cards[key] || wins(c, cards[key])) cards[key] = c;
     }
     const settings = sides.map((s) => s.settings).filter(Boolean).sort((x, y) => (y.at || 0) - (x.at || 0))[0] || { newPerDay: 20, at: 0 };
-    const write = mergeWrite(a?.write, b?.write);
-    // Verb and particle drills keep the same shape as writing [best keyed by selection and count: masu|verb|20, or 20; kana stays {}].
-    const verbs = mergeWrite(a?.verbs, b?.verbs), particles = mergeWrite(a?.particles, b?.particles);
-    return { ...out, cards, settings, ...(write && { write }), ...(verbs && { verbs }), ...(particles && { particles }), savedAt: Math.max(0, ...sides.map((s) => s.savedAt || 0)) };
+    // Every drill keeps the same shape as writing [best keyed by selection and count: masu|verb|20, 20, tai,tekudasai|10; kana stays {}].
+    const drills = Object.fromEntries(DRILLS.map((name) => [name, mergeWrite(a?.[name], b?.[name])]).filter(([, d]) => d));
+    return { ...out, cards, settings, ...drills, savedAt: Math.max(0, ...sides.map((s) => s.savedAt || 0)) };
   }
 
-  const api = { dayOf, grade, preview, queue, mergeStudy };
+  const api = { dayOf, grade, preview, queue, mergeStudy, DRILLS };
   if (typeof module !== "undefined") module.exports = api;
   else root.HiraSRS = api;
 })(this);

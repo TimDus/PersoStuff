@@ -57,6 +57,17 @@
     ["{東京|とうきょう}は{大阪|おおさか}＿{大|おお}きいです。", ["より"], "Tokyo is bigger than Osaka.", ["も"]],
     ["コーヒーと{紅茶|こうちゃ}と、どちら＿{好|す}きですか。", ["が"], "Which do you like better, coffee or tea?", ["を", "も"]],
     ["{一人|ひとり}＿{旅行|りょこう}しました。", ["で"], "I travelled alone.", ["が", "は", "も"]],
+    ["{私|わたし}の{父|ちち}＿{医者|いしゃ}です。", ["も"], "My father is a doctor too.", ["は", "が"]],
+    ["{弟|おとうと}はりんご＿バナナも{食|た}べません。", ["も"], "My younger brother eats neither apples nor bananas.", ["と", "や", "は"]],
+    ["{明日|あした}＿{雨|あめ}でしょう。", ["も"], "It will probably rain tomorrow too.", ["は", "が"]],
+    ["{机|つくえ}の{上|うえ}にペン＿ノートなどがあります。", ["や"], "There are pens, notebooks and other things on the desk.", ["と", "の", "も"]],
+    ["{休|やす}みの{日|ひ}は{本|ほん}＿{雑誌|ざっし}を{読|よ}みます。", ["や"], "On my days off I read things like books and magazines.", ["と", "も", "の"]],
+    ["{公園|こうえん}には{犬|いぬ}＿{猫|ねこ}などがいます。", ["や"], "There are dogs, cats and other animals in the park.", ["と", "も", "の"]],
+    ["{冷蔵庫|れいぞうこ}に{卵|たまご}＿{牛乳|ぎゅうにゅう}などがあります。", ["や"], "There are eggs, milk and such in the fridge.", ["と", "も", "の"]],
+    ["{私|わたし}は{母|はは}＿{買|か}い{物|もの}に{行|い}きました。", ["と"], "I went shopping with my mother.", ["は", "も", "の"]],
+    ["{兄|あに}＿{姉|あね}がいます。", ["と"], "I have an older brother and an older sister.", ["や", "も", "の", "は"]],
+    ["{東京|とうきょう}＿{大|おお}きい{町|まち}です。", ["は"], "Tokyo is a big city.", ["が", "も"]],
+    ["{日曜日|にちようび}＿{休|やす}みます。", ["は"], "On Sundays I take the day off.", ["に", "も"]],
   ].map(([s, ok, en, near], id) => ({ id, s, ok, en, near }));
 
   // A card's four choices in a shuffled order: one right particle and three that fit no reading [バス＿行きます: で, を, と, の].

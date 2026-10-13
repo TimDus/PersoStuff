@@ -120,8 +120,8 @@ test("a device with no study data yet doesn't empty the other's deck", () => {
 
 // A later section stores its own key under `study`; a tab on this version must carry it through, not strip it [study.kanji].
 test("keys the merge doesn't know survive it, taken from the newer side", () => {
-  const m = mergeStudy({ cards: {}, kanji: { a: 1 }, savedAt: 5 }, { cards: {}, kanji: { a: 2 }, grammar: [1], savedAt: 9 });
-  assert.deepEqual([m.kanji, m.grammar], [{ a: 2 }, [1]]);
+  const m = mergeStudy({ cards: {}, kanji: { a: 1 }, savedAt: 5 }, { cards: {}, kanji: { a: 2 }, listening: [1], savedAt: 9 });
+  assert.deepEqual([m.kanji, m.listening], [{ a: 2 }, [1]]);
   assert.deepEqual(mergeStudy({ cards: {}, kanji: { a: 1 }, savedAt: 5 }, null).kanji, { a: 1 });
 });
 
@@ -186,4 +186,14 @@ test("particle drill bests from two devices are both kept, the better best winni
   assert.deepEqual(m.best[10], { ms: 30000, acc: 100 });
   assert.deepEqual(Object.keys(m.best).sort(), ["10", "20", "40"]);
   assert.equal(mergeStudy({ cards: {}, savedAt: 1 }, null).particles, undefined, "a deck that never drilled particles gets no key");
+});
+
+// Grammar drill bests sit under `study.grammar`, merged like the particle drill's for the same reason.
+test("grammar drill bests from two devices are both kept, the better best winning even from the older side", () => {
+  const older = { cards: {}, savedAt: 5, grammar: { kana: {}, best: { "tai,tekudasai|10": { ms: 30000, acc: 100 }, "node|20": { ms: 99000, acc: 90 } }, resetAt: 0 } };
+  const newer = { cards: {}, savedAt: 9, grammar: { kana: {}, best: { "tai,tekudasai|10": { ms: 50000, acc: 90 }, "teiru|10": { ms: 60000, acc: 95 } }, resetAt: 0 } };
+  const m = mergeStudy(newer, older).grammar;
+  assert.deepEqual(m.best["tai,tekudasai|10"], { ms: 30000, acc: 100 });
+  assert.deepEqual(Object.keys(m.best).sort(), ["node|20", "tai,tekudasai|10", "teiru|10"]);
+  assert.equal(mergeStudy({ cards: {}, savedAt: 1 }, null).grammar, undefined, "a deck that never drilled grammar gets no key");
 });
