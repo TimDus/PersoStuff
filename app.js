@@ -1087,7 +1087,8 @@
       app.querySelector("#all").addEventListener("click", toggle);
       app.querySelector("#read").addEventListener("click", markRead);
       const box = app.querySelector("#typed");
-      box.addEventListener("input", () => { typed = box.value; typedOk = false; box.classList.remove("right", "wrong"); });
+      box.addEventListener("input", () => { typed = box.value; typedOk = false; box.classList.remove("right", "wrong"); spread(); });
+      spread();
       box.addEventListener("keydown", (e) => {
         if (e.key !== "Enter") return;
         e.preventDefault();
@@ -1095,9 +1096,19 @@
         checkTyped();
       });
     }
+    const letters = (r) => r.toLowerCase().replace(/[^a-z]/g, "");
+    // The typed letters over the kana they spell, by each kana's letter count [watashi = wa, ta, shi; letters past the end sit on the last kana].
+    function spread() {
+      const toks = [...app.querySelectorAll(".tok")];
+      let rest = letters(typed);
+      toks.forEach((t, j) => {
+        const n = j === toks.length - 1 ? rest.length : letters(t.dataset.r).length;
+        if (rest) t.dataset.t = rest.slice(0, n); else delete t.dataset.t;
+        rest = rest.slice(n);
+      });
+    }
     // Typed romaji against the letter-by-letter reading, letters only [いっしゅうかん、 = "isshuukan", the comma and spaces don't count].
     function checkTyped() {
-      const letters = (r) => r.toLowerCase().replace(/[^a-z]/g, "");
       const want = letters(toRomaji(list[i])), got = letters(typed);
       if (!got) return;
       if (got === want) {

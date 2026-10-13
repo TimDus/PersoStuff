@@ -162,10 +162,13 @@ button.bad { background: var(--bad); border-color: var(--bad); }
 .sentence { font-family: var(--jp); font-size: 2rem; line-height: 2.6; word-break: break-all; }
 .tok { cursor: pointer; border-radius: 6px; position: relative; display: inline-block; line-height: 1.6; padding: 0 1px; }
 .tok:hover { background: var(--accent-soft); }
-.tok.peek::after, .show-all .tok[data-r]::after {
-  content: attr(data-r); position: absolute; left: 50%; top: -1.05em; transform: translateX(-50%);
-  font: 600 .85rem system-ui, sans-serif; color: var(--accent); white-space: nowrap;
+/* Typed letters sit above each kana and its romaji below [ta typed over た, ta shown under it]. */
+.tok[data-t]::before, .tok.peek::after, .show-all .tok[data-r]::after {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  font: 600 .85rem system-ui, sans-serif; white-space: nowrap; line-height: 1;
 }
+.tok[data-t]::before { content: attr(data-t); top: -.6em; color: var(--ink); }
+.tok.peek::after, .show-all .tok[data-r]::after { content: attr(data-r); bottom: -.6em; color: var(--accent); }
 .dots { display: flex; gap: .3rem; flex-wrap: wrap; }
 .dot { width: 1.6rem; height: 1.6rem; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); font-size: .75rem; cursor: pointer; padding: 0; color: var(--muted); }
 .dot.done { background: var(--good-soft); border-color: var(--good); color: var(--good); }

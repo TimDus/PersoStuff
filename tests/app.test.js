@@ -1103,6 +1103,8 @@ test("a sentence typed in romaji marks the kana where it goes wrong, and counts 
   const answer = (await page.$$eval(".tok", (ts) => ts.map((t) => t.dataset.r).join(" ")));
   assert.match(answer, /^wa ta shi no ko do mo ha /);
   await page.fill("#typed", "watashinokodomowa");
+  assert.deepEqual(await page.$$eval(".tok", (ts) => ts.slice(0, 8).map((t) => t.dataset.t)), ["wa", "ta", "shi", "no", "ko", "do", "mo", "wa"]);
+  assert.equal(await page.$eval(".tok", (t) => getComputedStyle(t, "::before").content), '"wa"');
   await page.press("#typed", "Enter");
   assert.equal(await page.textContent(".tok.off"), "は");
   assert.equal(await page.locator(".dot.done").count(), 0);
