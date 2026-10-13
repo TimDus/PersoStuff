@@ -2,6 +2,7 @@
 // Usage: node tools/build-vocab.js _data data/vocab.json
 const fs = require("fs");
 const path = require("path");
+const MEANING = require("./meanings.js");
 
 const [dataDir, outFile] = process.argv.slice(2);
 if (!outFile) {
@@ -180,7 +181,7 @@ const out = words.map((x) => {
   ex = ex.sort((a, b) => text.get(a.jid).length - text.get(b.jid).length)
     .filter((s, i, all) => all.findIndex((t) => text.get(t.jid) === text.get(s.jid)) === i)
     .slice(0, 2).map((s) => [text.get(s.jid), text.get(s.eid)]);
-  return { k: x.k, w: x.w, r: x.r, m: x.m, t: typeOf(x.pos), pos: x.pos, lv: x.lv, f: x.f, fu: furigana(x.w, x.r), ex, ...(x.uk && { uk: 1 }) };
+  return { k: x.k, w: x.w, r: x.r, m: MEANING[x.k] || x.m, t: typeOf(x.pos), pos: x.pos, lv: x.lv, f: x.f, fu: furigana(x.w, x.r), ex, ...(x.uk && { uk: 1 }) };
 });
 // Most common first within a level, the list's own order breaking ties [N5 before any N4].
 const order = new Map(out.map((x, i) => [x, i]));

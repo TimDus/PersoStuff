@@ -17,6 +17,18 @@ test("the list's dated spellings are written as today, and a second spelling of 
   assert.deepEqual(by("終わる|おわる").fu, [["終", "お", 4], ["わる"]]);
 });
 
+// The English side asks for a word from its meaning, so two words with one meaning both count as right ["red": 赤 and 赤い].
+test("no two words share an English line or its first sense, and every rewrite names a listed word", () => {
+  const first = (m) => m.split(/[,;]/)[0].trim().toLowerCase();
+  for (const key of [(w) => w.m.toLowerCase(), (w) => first(w.m)]) {
+    const seen = new Map();
+    for (const w of vocab) seen.set(key(w), [...(seen.get(key(w)) || []), w.k]);
+    assert.deepEqual([...seen.values()].filter((ks) => ks.length > 1), []);
+  }
+  assert.deepEqual(Object.keys(require("../tools/meanings.js")).filter((k) => !by(k)), []);
+  assert.deepEqual([by("赤|あか").m, by("赤い|あかい").m], ["red (the colour)", "red"]);
+});
+
 test("a kanji spelling JMdict says is usually kana is marked, a kana word never is [沢山 = たくさん]", () => {
   assert.deepEqual([by("沢山|たくさん").uk, by("下さい|ください").uk, by("秋|あき").uk], [1, 1, undefined]);
   assert.deepEqual(vocab.filter((w) => w.uk && !/[一-鿿々]/.test(w.w)).map((w) => w.k), []);
