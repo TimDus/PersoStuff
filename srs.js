@@ -70,19 +70,26 @@
   };
   // The deck keys that hold a drill's progress and bests, merged best by best; study.js makes one store per name [grammar = study.grammar].
   const DRILLS = ["write", "verbs", "particles", "grammar"];
-  // Two devices' decks into one: cards by `wins`, settings from the later change, writing and the drills by `mergeWrite`, any other key whole from the newer side
-  // so a later section's data outlives a tab that predates it [a kanji key written by the next version].
-  function mergeStudy(a, b) {
-    const sides = [a, b].filter((s) => s && typeof s === "object").sort((x, y) => (x.savedAt || 0) - (y.savedAt || 0));
-    const out = Object.assign({}, ...sides);
+  // Cards by `wins` over sides oldest first [a card on one side only is kept].
+  const mergeCards = (sides) => {
     const cards = {};
     for (const s of sides) {
       for (const [key, c] of Object.entries(s.cards || {})) if (!cards[key] || wins(c, cards[key])) cards[key] = c;
     }
-    const settings = sides.map((s) => s.settings).filter(Boolean).sort((x, y) => (y.at || 0) - (x.at || 0))[0] || { newPerDay: 20, at: 0 };
+    return cards;
+  };
+  // The settings changed last [newPerDay 10 at 9 beats 20 at 5].
+  const latest = (sides, fallback) => sides.map((s) => s.settings).filter(Boolean).sort((x, y) => (y.at || 0) - (x.at || 0))[0] || fallback;
+  // Two devices' decks into one: word and kanji cards by `wins`, settings from the later change, writing and the drills by `mergeWrite`, any other key whole
+  // from the newer side so a later section's data outlives a tab that predates it [a listening key written by the next version].
+  function mergeStudy(a, b) {
+    const sides = [a, b].filter((s) => s && typeof s === "object").sort((x, y) => (x.savedAt || 0) - (y.savedAt || 0));
+    const out = Object.assign({}, ...sides);
     // Every drill keeps the same shape as writing [best keyed by selection and count: masu|verb|20, 20, tai,tekudasai|10; kana stays {}].
     const drills = Object.fromEntries(DRILLS.map((name) => [name, mergeWrite(a?.[name], b?.[name])]).filter(([, d]) => d));
-    return { ...out, cards, settings, ...drills, savedAt: Math.max(0, ...sides.map((s) => s.savedAt || 0)) };
+    const ks = sides.map((s) => s.kanji).filter((k) => k && typeof k === "object");
+    const kanji = ks.length ? { kanji: { ...Object.assign({}, ...ks), cards: mergeCards(ks), settings: latest(ks, { newPerDay: 10, at: 0 }) } } : {};
+    return { ...out, cards: mergeCards(sides), settings: latest(sides, { newPerDay: 20, at: 0 }), ...drills, ...kanji, savedAt: Math.max(0, ...sides.map((s) => s.savedAt || 0)) };
   }
 
   const api = { dayOf, grade, preview, queue, mergeStudy, DRILLS };

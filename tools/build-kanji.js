@@ -1,4 +1,4 @@
-// Builds data/kanji.json (KANJIDIC2's meanings, stroke count and level) and data/kanji-strokes.json (KanjiVG's strokes and components) for every kanji in the word list [大 = "large, big", 3 strokes, N5].
+// Builds data/kanji.json (KANJIDIC2's meanings, stroke count and level, KanjiVG's components) and data/kanji-strokes.json (KanjiVG's strokes) for every kanji in the word list [大 = "large, big", 3 strokes, N5].
 // Usage: node tools/build-kanji.js _data data/vocab.json data
 const fs = require("fs");
 const path = require("path");
@@ -23,8 +23,13 @@ for (const m of fs.readFileSync(path.join(dataDir, "kanjidic", "kanjidic2.xml"),
   kanji[m[1]] = { m: meanings.join(", "), sc: +m[0].match(/<stroke_count>(\d+)<\/stroke_count>/)[1], lv: old ? OLD_TO_N[old[1]] : 0 };
 }
 
-// A tenth of a unit in the 109-unit box is below a pixel at any size the site draws [740 KB unrounded].
-const round = (d) => d.replace(/-?\d*\.\d+/g, (n) => String(Math.round(+n * 10) / 10));
+const missing = listed.filter((c) => !kanji[c]);
+if (missing.length) throw new Error(`KANJIDIC2 has no ${missing.join("")}`);
+
+// A tenth of a unit in the 109-unit box, rejoined after rounding as a minus that rounds away was the only separator
+// [2.7-0.04 = 2.7,0, not 2.70; relative curves drift at most 0.36 units, 0.4 px in the 120 px stroke order; 740 KB unrounded].
+const round = (d) => d.replace(/([a-zA-Z])([^a-zA-Z]*)/g, (_, cmd, args) => cmd + (args.match(/-?(?:\d+\.?\d*|\.\d+)/g) || [])
+  .map((n) => String(Math.round(+n * 10) / 10 || 0)).reduce((s, n, i) => s + (i && n[0] !== "-" ? "," : "") + n, ""));
 const strokes = {};
 for (const c of listed) {
   const file = path.join(dataDir, "kanjivg", "main", "kanji", `${c.codePointAt(0).toString(16).padStart(5, "0")}.svg`);
@@ -43,10 +48,9 @@ for (const c of listed) {
     if (el && inside && !c_.includes(el)) c_.push(el);
     open.push(el || null);
   }
-  strokes[c] = { d, n, c: c_ };
+  strokes[c] = { d, n };
+  kanji[c].c = c_;
 }
-const missing = listed.filter((c) => !kanji[c]);
-if (missing.length) throw new Error(`KANJIDIC2 has no ${missing.join("")}`);
 const off = listed.filter((c) => strokes[c].d.length !== kanji[c].sc);
 
 fs.mkdirSync(outDir, { recursive: true });

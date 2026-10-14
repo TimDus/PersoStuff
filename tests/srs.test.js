@@ -118,11 +118,26 @@ test("a device with no study data yet doesn't empty the other's deck", () => {
   assert.deepEqual(mergeStudy({}, side({ "a#r": card }, { newPerDay: 20, at: 1 })).cards, { "a#r": card });
 });
 
-// A later section stores its own key under `study`; a tab on this version must carry it through, not strip it [study.kanji].
+// A later section stores its own key under `study`; a tab on this version must carry it through, not strip it [study.listening].
 test("keys the merge doesn't know survive it, taken from the newer side", () => {
-  const m = mergeStudy({ cards: {}, kanji: { a: 1 }, savedAt: 5 }, { cards: {}, kanji: { a: 2 }, listening: [1], savedAt: 9 });
-  assert.deepEqual([m.kanji, m.listening], [{ a: 2 }, [1]]);
-  assert.deepEqual(mergeStudy({ cards: {}, kanji: { a: 1 }, savedAt: 5 }, null).kanji, { a: 1 });
+  const m = mergeStudy({ cards: {}, reading: { a: 1 }, savedAt: 5 }, { cards: {}, reading: { a: 2 }, listening: [1], savedAt: 9 });
+  assert.deepEqual([m.reading, m.listening], [{ a: 2 }, [1]]);
+  assert.deepEqual(mergeStudy({ cards: {}, reading: { a: 1 }, savedAt: 5 }, null).reading, { a: 1 });
+});
+
+// Kanji cards ride in `study.kanji`; taken whole from the newer side, one device's reviews would wipe the other's.
+test("kanji cards merge card by card and their settings by the later change", () => {
+  const few = { st: "review", ivl: 4, ease: 2.5, due: 104, n: 2, lapses: 0, first: 90, last: 100 };
+  const many = { ...few, n: 5, last: 101 };
+  const phone = { cards: {}, savedAt: 9, kanji: { cards: { 学: few, 生: few }, settings: { newPerDay: 5, at: 3 } } };
+  const pc = { cards: {}, savedAt: 4, kanji: { cards: { 学: many, 大: few }, settings: { newPerDay: 20, at: 8 }, note: "pc" } };
+  for (const m of [mergeStudy(phone, pc), mergeStudy(pc, phone)]) {
+    assert.deepEqual(m.kanji.cards, { 学: many, 生: few, 大: few });
+    assert.deepEqual(m.kanji.settings, { newPerDay: 20, at: 8 });
+    assert.equal(m.kanji.note, "pc", "a field the merge doesn't know is carried");
+  }
+  assert.deepEqual(mergeStudy({ cards: {}, savedAt: 1 }, pc).kanji.cards, { 学: many, 大: few });
+  assert.equal(mergeStudy({ cards: {}, savedAt: 1 }, null).kanji, undefined, "a deck that never studied kanji gets no kanji key");
 });
 
 test("two copies of a card with the same answers and day settle on the same one whichever side merges", () => {

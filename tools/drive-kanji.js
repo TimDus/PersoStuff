@@ -1,8 +1,8 @@
-// A word card's kanji note, its popup and the word's recording at 1280, 390 and 360 px against a fake backend.
+// A word card's kanji note, its popup, the word's recording and the Kanji tab (hub, a Draw-mode card, a kanji's page) at 1280, 390 and 360 px against a fake backend.
 // It exists because the tests drive one note line at a time, while the phone shows three for 大学生 beside the examples,
 // and a popup over a review is where a stacked second popup and keys grading the card underneath both turned up.
 // Read the screenshots; report.txt has page width against viewport (equal = nothing overflows), the note lines,
-// the stroke count drawn in the popup and the recording's HTTP status and duration.
+// the stroke count drawn in the popup and the recording's HTTP status and duration; the hub's 778-kanji grid and the drawing pad are the parts a phone squeezes.
 // Usage: node tools/drive-kanji.js . <out dir>
 const http = require("http"), fs = require("fs"), path = require("path");
 const [root, out] = process.argv.slice(2).map((p) => path.resolve(p));
@@ -13,9 +13,10 @@ fs.mkdirSync(out, { recursive: true });
 
 const day = dayOf(Date.now());
 const card = (first, due) => ({ st: "review", ivl: 3, ease: 2.5, due, n: 2, lapses: 0, first, last: first });
-// 大学生 due today, with met words for each of its kanji [大 in 大人 and 大切, 学 in 学校, 生 in 先生].
+// 大学生 due today, with met words for each of its kanji [大 in 大人 and 大切, 学 in 学校, 生 in 先生], and 生's kanji card due so the Draw card is asked, not introduced.
 const deck = { cards: { "大学生|だいがくせい#r": card(day - 5, day), "大人|おとな#r": card(day - 4, day + 3), "大切|たいせつ#r": card(day - 3, day + 3),
-  "学校|がっこう#r": card(day - 2, day + 3), "先生|せんせい#r": card(day - 1, day + 3) }, settings: { newPerDay: 20, at: 0 }, savedAt: 1 };
+  "学校|がっこう#r": card(day - 2, day + 3), "先生|せんせい#r": card(day - 1, day + 3) }, settings: { newPerDay: 20, at: 0 }, savedAt: 1,
+  kanji: { cards: { 生: card(day - 4, day) }, settings: { newPerDay: 10, at: 0 } } };
 
 (async () => {
   const server = http.createServer((req, res) => {
@@ -63,6 +64,31 @@ const deck = { cards: { "大学生|だいがくせい#r": card(day - 5, day), "�
     await page.locator(".modal .strokes path").nth(7).waitFor();
     report.push(`${name} popup width ${await width()}, strokes ${await page.locator(".modal .strokes path").count()}, words ${await page.locator(".modal .kw-row").count()} (${await page.locator(".modal .kw-row:not(.unmet)").count()} met)`);
     await page.screenshot({ path: path.join(out, `${name}-popup.png`) });
+    await page.keyboard.press("Escape");
+    await page.goto(base + "#kanji");
+    await page.locator("#k-new").waitFor();
+    report.push(`${name} hub width ${await width()}, new ${await page.textContent("#k-new")}, ${await page.textContent("#k-sum")}, nav ${JSON.stringify(await page.locator("nav a:visible").allTextContents())}`);
+    await page.screenshot({ path: path.join(out, `${name}-hub.png`) });
+    await page.click("[data-mode='draw']");
+    await page.click("#go");
+    await page.locator(".kpad svg").waitFor();
+    const r = await page.locator(".kpad svg").boundingBox();
+    await page.mouse.move(r.x + r.width * 0.2, r.y + r.height * 0.3);
+    await page.mouse.down();
+    await page.mouse.move(r.x + r.width * 0.8, r.y + r.height * 0.3, { steps: 8 });
+    await page.mouse.up();
+    report.push(`${name} draw card width ${await width()}, pad ${Math.round(r.width)} px, strokes drawn ${await page.locator(".kpad svg path").count()}, back hidden ${!(await page.locator(".face.back").isVisible())}`);
+    await page.screenshot({ path: path.join(out, `${name}-draw-front.png`) });
+    await page.keyboard.press(" ");
+    await page.locator(".face.back .strokes path").first().waitFor();
+    await page.waitForTimeout(800);
+    report.push(`${name} draw back width ${await width()}, KanjiVG strokes ${await page.locator(".face.back .strokes path").count()}`);
+    await page.screenshot({ path: path.join(out, `${name}-draw-back.png`) });
+    await page.goto(base + "#kanji/学");
+    await page.locator(".kanji-comps").waitFor();
+    await page.waitForTimeout(500);
+    report.push(`${name} page width ${await width()}, comps ${JSON.stringify(await page.textContent(".kanji-comps"))}, stories ${await page.locator(".story").count()}`);
+    await page.screenshot({ path: path.join(out, `${name}-page.png`), fullPage: true });
     report.push(`${name} errors ${errors.length ? errors.join(" | ") : "none"}`);
     await ctx.close();
   }

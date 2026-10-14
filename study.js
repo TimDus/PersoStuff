@@ -2,14 +2,14 @@
 (function () {
   const { dayOf, grade, preview, queue, mergeStudy, DRILLS } = window.HiraSRS;
   const { same, bump, wordClip } = window.HiraSync;
-  const { note } = window.HiraKanji;
+  const { note, learned } = window.HiraKanji;
   let shell = null;
   let words = null;
   let kanjiInfo = null;
   let koohii = {};
   let loading = null;
   const json = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
-  // Fetched on the first visit and kept, the kanji meanings optional [data/vocab.json, 1,384 words, 381 KB; data/kanji.json, 34 KB, failing = note lines without meanings].
+  // Fetched on the first visit and kept, the kanji meanings optional [data/vocab.json, 1,384 words, 381 KB; data/kanji.json, 48 KB, failing = note lines without meanings].
   const loadWords = () => (loading ||= Promise.all([json("data/vocab.json"), json("data/kanji.json").catch(() => ({}))])
     .then(([list, info]) => { kanjiInfo = info; return (words = list); })
     .catch((e) => { loading = null; throw e; }));
@@ -80,6 +80,13 @@
       also.length ? ` · also in ${also.map((x) => `<span class="jp">${esc(x.w)}</span>`).join(", ")}` : ""}</div>`).join("")}</div>` : "";
   };
   const days = (n) => (n === 0 ? "now" : n < 30 ? `${n}d` : n < 365 ? `${Math.round(n / 30)}mo` : `${Math.round(n / 365)}y`);
+  // The four grades with when each brings the card back [a fresh card: Again now, Hard now, Good 1d, Easy 4d].
+  const gradeButtons = (card) => {
+    const [a, h, g, e] = preview(card, today()).map(days);
+    return [["Again", 1, 1, a], ["Hard", 2, 2, h], ["Good", 3, 3, g], ["Easy", 4, 4, e]];
+  };
+  // The Kanji tab's deck in `study.kanji`, cards keyed by the kanji [学 = { st: "review", ivl: 4, … }].
+  const kanjiBlank = () => ({ cards: {}, settings: { newPerDay: 10, at: 0 } });
 
   function needWords(retry) {
     shell.app.innerHTML = `
@@ -170,12 +177,14 @@
     const word = `<div class="word jp">${ruby(w)}</div>`;
     const meaning = `<div class="meaning">${esc(w.m)}</div><div class="muted small">${esc(w.t || "word")} · N${w.lv}</div>`;
     const kana = w.uk ? `<div class="muted small">Usually written in kana: <span class="jp">${esc(w.r)}</span></div>` : "";
-    const back = `${speak(w.r, w)} ${it.dir === "r" ? meaning : word}${kana}${kanjiNote(w)}${examples(w)}`;
+    const smart = learned(w, deck.kanji?.cards || {}) ? `<div class="smart small">★ Every kanji in it learned</div>` : "";
+    const back = `${speak(w.r, w)} ${it.dir === "r" ? meaning : word}${kana}${smart}${kanjiNote(w)}${examples(w)}`;
     return { front: it.dir === "r" ? word : meaning, back: it.dir === "r" ? back : `${back}<div class="muted small">${esc(w.m)}</div>` };
   }
 
-  // A run of cards: flip, then answer; `buttons` are [label, key, value] and `answer` says whether the card comes back this run.
-  function runCards({ items, title, buttons, answer, done, intro = () => false }) {
+  // A run of cards: flip, then answer; `buttons` are [label, key, value] and `answer` says whether the card comes back this run [the Kanji tab passes its own faces and back link].
+  function runCards({ items, title, buttons, answer, done, intro = () => false, faces: show = faces, back: link = { href: "#words", label: "← Words" },
+    introHint = "New word: read it through, it's asked in a moment" }) {
     shell.cleanup();
     const run = [...items];
     // Words shown once this run [Got it on 秋 = 秋 asked for real 3 cards on].
@@ -186,20 +195,21 @@
       const it = run[0];
       flipped = false;
       showing = intro(it) && !met.has(it.key);
-      const { front, back } = faces(it);
+      const { front, back } = show(it);
       shell.app.innerHTML = `
-        <div class="row"><a href="#words">← Words</a><span class="spacer"></span>
+        <div class="row"><a href="${link.href}">${esc(link.label)}</a><span class="spacer"></span>
           <span class="muted small">${esc(title)}</span>
           <span class="progress-line" id="left">${run.length} left</span></div>
         <div class="stage vocab ${it.dir === "p" ? "produce" : ""}">
           <div class="vcard ${showing ? "flipped" : ""}" id="card"><div class="face front">${front}
-            <div class="hint">${showing ? "New word: read it through, it's asked in a moment"
+            <div class="hint">${showing ? esc(introHint)
               : `<span class="key-only">click or <span class="kbd">space</span></span><span class="touch-only">tap</span> to show the answer`}</div></div>
             <div class="face back" ${showing ? "" : "hidden"}>${back}</div></div>
           <div class="row grades">${showing ? `<button class="good" id="got">Got it <span class="kbd">space</span></button>` : buttons(it).map(([label, key, value, sub]) => `
             <button class="${value === 1 ? "bad" : value >= 3 ? "good" : "ghost"}" data-g="${value}" disabled>${label}${sub ? ` <small>${sub}</small>` : ""} <span class="kbd">${key}</span></button>`).join("")}</div>
         </div>`;
-      shell.app.querySelector("#card").addEventListener("click", (e) => { if (!e.target.closest("[data-say]")) flip(); });
+      // A speaker or a drawing pad on the card takes its own clicks [a stroke drawn in Draw mode doesn't show the answer].
+      shell.app.querySelector("#card").addEventListener("click", (e) => { if (!e.target.closest("[data-say], [data-noflip]")) flip(); });
       shell.app.querySelectorAll("[data-g]").forEach((b) => b.addEventListener("click", () => pick(+b.dataset.g)));
       shell.app.querySelector("#got")?.addEventListener("click", gotIt);
     }
@@ -240,16 +250,17 @@
 
   function runReview() {
     const items = queue({ words, cards: deck.cards, today: today(), newPerDay: deck.settings.newPerDay });
-    if (!items.length) return hub();
+    // The hub drawn at #words, as at #words/review its Study button would link to the page it's on [reload the Done page, raise new words a day].
+    if (!items.length) {
+      history.replaceState(null, "", "#words");
+      return hub();
+    }
     const again = new Set();
     runCards({
       items, title: "Review",
       // A word's first sight shows its answer; the English side comes a day after it was met [秋#r new = shown, 秋#p never].
       intro: (it) => it.dir === "r" && !deck.cards[it.key],
-      buttons: (it) => {
-        const [a, h, g, e] = preview(deck.cards[it.key], today()).map(days);
-        return [["Again", 1, 1, a], ["Hard", 2, 2, h], ["Good", 3, 3, g], ["Easy", 4, 4, e]];
-      },
+      buttons: (it) => gradeButtons(deck.cards[it.key]),
       answer(it, g) {
         // The day of the answer, not of the session [started 03:58, answered 04:03 = the new day].
         const day = today();
@@ -363,6 +374,27 @@
     koohii: (c) => koohii[c],
     loadKoohii: () => loadKoohii(),
     keyword,
+    // What the Kanji tab needs to run its deck on the Words machinery [gradeKanji("学", 3) on a new kanji = due tomorrow].
+    runCards: (opts) => runCards(opts),
+    gradeButtons,
+    today,
+    pending: () => !!timer,
+    kanjiDeck: () => ({ ...kanjiBlank(), ...local().kanji }),
+    gradeKanji(c, g) {
+      const day = today();
+      deck = local();
+      const k = (deck.kanji = { ...kanjiBlank(), ...deck.kanji });
+      const r = grade(k.cards[c], g, day);
+      k.cards = { ...k.cards, [c]: r.card };
+      save();
+      return r;
+    },
+    setKanjiSettings(newPerDay) {
+      deck = local();
+      const k = (deck.kanji = { ...kanjiBlank(), ...deck.kanji });
+      k.settings = { newPerDay, at: Math.max(Date.now(), (k.settings.at || 0) + 1) };
+      save();
+    },
     ...Object.fromEntries(DRILLS.filter((name) => name !== "write").map((name) => [name, drill(name)])),
     unsynced: () => local().savedAt > pushedAt(),
   };

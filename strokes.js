@@ -1,4 +1,4 @@
-// Stroke order from KanjiVG, fetched the first time a button is pressed [data/strokes.json is 51 KB for 154 kana, kanji-strokes.json 631 KB for 778 kanji].
+// Stroke order from KanjiVG, fetched the first time it's needed [data/strokes.json is 51 KB for 154 kana, kanji-strokes.json 618 KB for 778 kanji].
 (function () {
   const files = {};
   // A failed fetch is forgotten so the next press tries again [offline on the train, then back online].
@@ -44,5 +44,14 @@
     b.textContent = "Hide stroke order";
   });
 
-  window.HiraStrokes = { button, load };
+  // Strokes drawn unasked once the file is in, or the button to try again if it fails [a Draw-mode kanji card's back, hidden until the card turns].
+  const shown = (text) => {
+    const fill = (html) => document.querySelectorAll(".stroke-slot[data-shown]").forEach((slot) => {
+      if (slot.dataset.strokes === text && !slot.children.length) slot.innerHTML = html;
+    });
+    loadFor(text).then((all) => fill(draw(text, all)), () => fill(`<button class="ghost stroke-toggle" type="button">Stroke order</button>`));
+    return `<div class="stroke-slot" data-strokes="${esc(text)}" data-shown></div>`;
+  };
+
+  window.HiraStrokes = { button, shown, load };
 })();
