@@ -1,10 +1,13 @@
-// Stroke order from KanjiVG, fetched the first time a button is pressed [data/strokes.json is 51 KB for 154 characters].
+// Stroke order from KanjiVG, fetched the first time a button is pressed [data/strokes.json is 51 KB for 154 kana, kanji-strokes.json 631 KB for 778 kanji].
 (function () {
-  let data = null;
+  const files = {};
   // A failed fetch is forgotten so the next press tries again [offline on the train, then back online].
-  const load = () => (data ||= fetch("data/strokes.json")
+  const fetchOnce = (name) => (files[name] ||= fetch(`data/${name}`)
     .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-    .catch((e) => { data = null; throw e; }));
+    .catch((e) => { delete files[name]; throw e; }));
+  const load = () => fetchOnce("strokes.json");
+  // A button shows one kanji or kana only, so one file serves it [学 = kanji-strokes.json, きゃ = strokes.json].
+  const loadFor = (text) => (/[一-鿿]/.test(text) ? fetchOnce("kanji-strokes.json") : load());
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
   // One character in KanjiVG's 109-unit box, each stroke drawn after the last [キャ: ャ's first stroke is the 4th to draw].
@@ -34,7 +37,7 @@
     if (open || slot.dataset.loading) { open?.remove(); delete slot.dataset.loading; b.textContent = "Stroke order"; return; }
     slot.dataset.loading = "1";
     let all;
-    try { all = await load(); } catch { if (slot.dataset.loading) b.textContent = "Can't load stroke order, try again"; delete slot.dataset.loading; return; }
+    try { all = await loadFor(slot.dataset.strokes); } catch { if (slot.dataset.loading) b.textContent = "Can't load stroke order, try again"; delete slot.dataset.loading; return; }
     if (!slot.dataset.loading) return;
     delete slot.dataset.loading;
     slot.insertAdjacentHTML("beforeend", draw(slot.dataset.strokes, all));

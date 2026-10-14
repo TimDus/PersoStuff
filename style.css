@@ -225,7 +225,7 @@ button.bad { background: var(--bad); border-color: var(--bad); }
   .chart td .kana { font-size: 1.4rem; }
 }
 .speak { display: none; }
-body.has-voice .speak, body.has-media .speak.clip { display: inline-block; }
+body.has-voice .speak, body.has-media .speak.clip, .speak.rec { display: inline-block; }
 nav .short, .touch-only { display: none; }
 button, .btn, .chip, .flash, .tok, .cell, .dot, td[data-kana] { touch-action: manipulation; }
 select { font: inherit; padding: .3rem; border-radius: 8px; }
@@ -321,6 +321,15 @@ body[data-section="japanese"] footer .credits-ja { display: block; }
 .vcard .meaning { font-size: 1.4rem; font-weight: 600; }
 .examples { margin-top: .8rem; border-top: 1px solid var(--line); padding-top: .6rem; display: grid; gap: .5rem; text-align: left; width: 100%; }
 .ex .jp { font-size: 1.1rem; }
+/* A word's kanji under its answer, each kanji a button to its popup [学 study, learning · also in 大学, 学校]. */
+.kanji-note { margin-top: .8rem; border-top: 1px solid var(--line); padding-top: .6rem; display: grid; gap: .3rem; text-align: left; width: 100%; }
+.kn-k { font-family: var(--jp); font-size: 1.3rem; padding: .1rem .45rem; min-width: 2.4rem; background: transparent; color: var(--accent); border: 1px solid var(--line); border-radius: 8px; }
+.kanji-big { font-family: var(--jp); font-size: 5rem; line-height: 1.1; }
+.kanji-kw { font-size: 1.3rem; font-weight: 600; }
+.kanji-words { margin-top: .8rem; display: grid; gap: .35rem; text-align: left; }
+.kw-row .jp { font-size: 1.15rem; }
+.kw-row.unmet { color: var(--muted); }
+.kw-row rt { font-size: .5em; color: var(--muted); }
 .grades { justify-content: center; }
 .grades button { min-width: 5rem; }
 .grades small { opacity: .8; font-size: .75rem; }

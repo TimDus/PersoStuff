@@ -74,3 +74,14 @@ test("a kana word ranks by how common its sound is [はい, よく, どう, そ�
   const at = (k) => vocab.findIndex((w) => w.k === k);
   assert.deepEqual(["はい|はい", "よく|よく", "どう|どう", "その|その"].filter((k) => at(k) >= 359), []);
 });
+
+// A word's 🔊 plays data/words/<key>.mp3 when `au` says so, so a flag without its file is a silent button [929 words have one].
+test("every word marked with a recording has its file, and every file belongs to a marked word", () => {
+  const fs = require("fs"), path = require("path");
+  const { wordClip } = require("../sync.js");
+  const marked = vocab.filter((w) => w.au).map((w) => wordClip(w.k)).sort();
+  const files = fs.readdirSync(path.join(__dirname, "../data/words")).map((f) => `data/words/${f}`).sort();
+  assert.deepEqual(marked, files);
+  assert.equal(marked.length, 929);
+  assert.equal(by("後|あと").au, undefined);
+});

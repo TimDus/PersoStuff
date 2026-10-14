@@ -2000,3 +2000,134 @@ test("Enter on a link while a miss shows follows the link instead of moving on",
   await page.locator("#go").waitFor();
   await page.close();
 });
+
+// ---------- Kanji ----------
+// A word card's 🔊 spoke the kana through the browser's voice, which most phones lack; the word's WaniKani recording plays instead.
+test("a word with a recording plays it, and its button shows without a Japanese voice", async () => {
+  const page = await open(listed, "#words/review");
+  await page.locator("#got").waitFor();
+  assert.equal(await page.locator(".face.back > .speak.rec").count(), 1);
+  await page.click(".face.back > .speak");
+  assert.match((await page.evaluate(() => window.__played)).at(-1), /\/data\/words\/79cb-7c-3042-304d\.mp3$/);
+  await page.close();
+});
+
+test("a word without a recording keeps the browser's speech and plays no clip [後 read あと has none]", async () => {
+  const page = await open(listed, "#words/review");
+  await page.locator("#got").waitFor();
+  while (!/後/.test(await page.textContent(".face.front"))) await page.click("#got");
+  assert.equal(await page.locator(".face.back > .speak").count(), 1);
+  assert.equal(await page.locator(".face.back > .speak.rec").count(), 0);
+  await page.$eval(".face.back > .speak", (b) => b.click());
+  assert.deepEqual(await page.evaluate(() => window.__played), []);
+  await page.close();
+});
+
+// The note under a word's answer: one line per kanji with its meaning and the met words that share it, on the back only.
+const kanjiDeck = () => deckWith({
+  "学校|がっこう#r": reviewed({ first: day - 2, last: day - 2, due: day + 9 }), "大学|だいがく#r": reviewed({ first: day - 1, last: day - 1, due: day + 9 }),
+  "学生|がくせい#r": reviewed({ first: day - 3, last: day - 3, due: day }), "学生|がくせい#p": reviewed({ first: day - 2, last: day - 2, due: day }),
+});
+test("a word's kanji note shows on the back of both sides and never on the front", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#words/review");
+  await page.locator(".face.front").waitFor();
+  for (const front of [/学生/, /student/]) {
+    assert.match(await page.textContent(".face.front"), front);
+    assert.equal(await page.locator(".face.front .kanji-note").count(), 0);
+    assert.equal(await page.locator(".kanji-note").isVisible(), false);
+    await page.click("#card");
+    assert.deepEqual(await page.locator(".kanji-note .kn").allTextContents(), ["学 study, learning · also in 大学, 学校", "生 life, genuine"]);
+    await page.click("[data-g='3']");
+  }
+  await page.close();
+});
+
+// A tap on a note's kanji must not leave the review, since a route change ends the session.
+test("a note's kanji opens a popup over the card, keys don't grade under it, and closing it keeps the session", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#words/review");
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  const left = await page.textContent("#left");
+  // Until the next frame focus would stay on the button that opened it, and a quick space would open a second 学 popup.
+  assert.equal(await page.evaluate(() => { const b = document.querySelector(".kn-k[data-kanji='学']"); b.focus(); b.click(); return document.activeElement === b; }), false);
+  await page.keyboard.press("3");
+  await page.keyboard.press(" ");
+  assert.equal(await page.locator(".modal").count(), 1);
+  assert.match(await page.textContent(".modal"), /学[\s\S]*study, learning/);
+  // Tab stays out of the page behind the popup [two Tabs reached Again, and Space graded it].
+  for (let i = 0; i < 4; i++) await page.keyboard.press("Tab");
+  assert.equal(await page.evaluate(() => !document.activeElement.closest("#app")), true);
+  await page.keyboard.press(" ");
+  assert.equal(await page.textContent("#left"), left);
+  assert.equal((await deckOf(page)).cards["学生|がくせい#r"].n, 1);
+  await page.click(".modal .stroke-toggle");
+  await page.locator(".modal .strokes path").nth(7).waitFor();
+  assert.equal(await page.locator(".modal .strokes path").count(), 8);
+  await page.keyboard.press("Escape");
+  assert.equal(await page.locator(".modal").count(), 0);
+  assert.match(page.url(), /#words\/review$/);
+  await page.click("[data-g='3']");
+  assert.equal((await deckOf(page)).cards["学生|がくせい#r"].n, 2);
+  await page.close();
+});
+
+// Words, Verbs and the rest share the words load, so the kanji meanings it fetches alongside must not be able to sink it.
+test("without data/kanji.json the cards still run, their note lines just lack the meaning", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } });
+  await page.route("**/data/kanji.json", (r) => r.fulfill({ status: 404 }));
+  await page.goto(base + "#words/review");
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  assert.deepEqual(await page.locator(".kanji-note .kn").allTextContents(), ["学 · also in 大学, 学校", "生"]);
+  await page.goto(base + "#verbs");
+  await page.locator("#go").waitFor();
+  await page.close();
+});
+
+test("a recording that won't load falls back to the browser's speech [offline, never played before]", async (t) => {
+  const page = await open(listed, "#words/review");
+  await page.locator("#got").waitFor();
+  if (!(await page.evaluate(() => document.body.classList.contains("has-voice")))) { await page.close(); return t.skip("no Japanese voice on this machine"); }
+  await page.route("**/data/words/**", (r) => r.abort());
+  await page.evaluate(() => { window.__spoke = []; speechSynthesis.speak = (u) => window.__spoke.push(u.text); });
+  await page.click(".face.back > .speak");
+  await page.waitForFunction(() => window.__spoke.length, null, { timeout: 3000 });
+  assert.deepEqual(await page.evaluate(() => window.__spoke), ["あき"]);
+  await page.close();
+});
+
+test("leaving the page with a popup open leaves the next page usable", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#words/review");
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  await page.click(".kn-k[data-kanji='学']");
+  await page.evaluate(() => { location.hash = "#words"; });
+  await page.locator("#go").waitFor();
+  assert.equal(await page.locator(".modal").count(), 0);
+  await page.click("#go", { timeout: 3000 });
+  await page.locator(".face.front").waitFor();
+  await page.close();
+});
+
+// A second tap aborts the first play, which isn't a failed load [two quick taps on 秋 played the clip and spoke あき over it].
+test("a second tap before the recording starts plays it once and speaks nothing", async (t) => {
+  const page = await open(listed, "#words/review");
+  await page.locator("#got").waitFor();
+  if (!(await page.evaluate(() => document.body.classList.contains("has-voice")))) { await page.close(); return t.skip("no Japanese voice on this machine"); }
+  const held = [];
+  await page.route("**/data/words/**", (r) => held.push(r));
+  await page.evaluate(() => {
+    window.__spoke = []; speechSynthesis.speak = (u) => window.__spoke.push(u.text);
+    window.__ends = []; const play = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () { const p = play.call(this); p.then(() => window.__ends.push("ok"), (e) => window.__ends.push(e.name)); return p; };
+  });
+  await page.click(".face.back > .speak");
+  await page.click(".face.back > .speak");
+  await page.waitForFunction(() => window.__played.length === 2);
+  await new Promise((r) => setTimeout(r, 300));
+  held.forEach((r) => r.continue().catch(() => {}));
+  await new Promise((r) => setTimeout(r, 1000));
+  assert.deepEqual(await page.evaluate(() => window.__spoke), []);
+  assert.deepEqual(await page.evaluate(() => window.__ends), ["AbortError", "ok"]);
+  await page.close();
+});

@@ -1,14 +1,16 @@
 // The Japanese section: JLPT vocabulary on Anki-style reviews, both directions, synced to its own column [progress.study, beside the kana in progress.data].
 (function () {
   const { dayOf, grade, preview, queue, mergeStudy, DRILLS } = window.HiraSRS;
-  const { same, bump } = window.HiraSync;
+  const { same, bump, wordClip } = window.HiraSync;
+  const { note } = window.HiraKanji;
   let shell = null;
   let words = null;
+  let kanjiInfo = null;
   let loading = null;
-  // Fetched on the first visit and kept [data/vocab.json, 1,384 words, 374 KB].
-  const loadWords = () => (loading ||= fetch("data/vocab.json")
-    .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-    .then((list) => (words = list))
+  const json = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+  // Fetched on the first visit and kept, the kanji meanings optional [data/vocab.json, 1,384 words, 381 KB; data/kanji.json, 34 KB, failing = note lines without meanings].
+  const loadWords = () => (loading ||= Promise.all([json("data/vocab.json"), json("data/kanji.json").catch(() => ({}))])
+    .then(([list, info]) => { kanjiInfo = info; return (words = list); })
     .catch((e) => { loading = null; throw e; }));
 
   // The deck on this device [cards keyed "会う|あう#r" for Japanese → English, "#p" the other way].
@@ -60,9 +62,17 @@
   const esc = (s) => shell.esc(s);
   // Furigana, the ones over kanji at the word's level marked to be recalled [学生 at N5: asked; 写真's kanji are N4: given].
   const ruby = (w) => w.fu.map(([text, rt, lv]) => (rt ? `<ruby>${esc(text)}<rt${lv >= w.lv ? ' class="ask"' : ""}>${esc(rt)}</rt></ruby>` : esc(text))).join("");
-  const speak = (text) => `<button class="speak" data-say="${esc(text)}" title="Listen">🔊</button>`;
+  // A word with a WaniKani recording plays it, shown even without a Japanese voice.
+  const speak = (text, w) => `<button class="speak${w?.au ? " rec" : ""}" data-say="${esc(text)}"${w?.au ? ` data-rec="${wordClip(w.k)}"` : ""} title="Listen">🔊</button>`;
   const examples = (w) => (w.ex.length ? `<div class="examples">${w.ex.map(([jp, en]) => `
     <div class="ex"><span class="jp">${esc(jp)}</span> ${speak(jp)}<div class="muted small">${esc(en)}</div></div>`).join("")}</div>` : "");
+  const keyword = (c) => kanjiInfo?.[c]?.m || "";
+  // Under the answer, a line per kanji with the met words that share it [学 study, learning · also in 大学, 学校].
+  const kanjiNote = (w) => {
+    const lines = note(w, words, deck.cards);
+    return lines.length ? `<div class="kanji-note">${lines.map(({ c, also }) => `<div class="kn"><button class="kn-k jp" type="button" data-kanji="${esc(c)}" title="About ${esc(c)}">${esc(c)}</button>${keyword(c) ? ` ${esc(keyword(c))}` : ""}${
+      also.length ? ` · also in ${also.map((x) => `<span class="jp">${esc(x.w)}</span>`).join(", ")}` : ""}</div>`).join("")}</div>` : "";
+  };
   const days = (n) => (n === 0 ? "now" : n < 30 ? `${n}d` : n < 365 ? `${Math.round(n / 30)}mo` : `${Math.round(n / 365)}y`);
 
   function needWords(retry) {
@@ -153,7 +163,7 @@
     const word = `<div class="word jp">${ruby(w)}</div>`;
     const meaning = `<div class="meaning">${esc(w.m)}</div><div class="muted small">${esc(w.t || "word")} · N${w.lv}</div>`;
     const kana = w.uk ? `<div class="muted small">Usually written in kana: <span class="jp">${esc(w.r)}</span></div>` : "";
-    const back = `${speak(w.r)} ${it.dir === "r" ? meaning : word}${kana}${examples(w)}`;
+    const back = `${speak(w.r, w)} ${it.dir === "r" ? meaning : word}${kana}${kanjiNote(w)}${examples(w)}`;
     return { front: it.dir === "r" ? word : meaning, back: it.dir === "r" ? back : `${back}<div class="muted small">${esc(w.m)}</div>` };
   }
 
@@ -341,6 +351,9 @@
     needWords,
     words: () => (words ? Promise.resolve(words) : loadWords()),
     met: (k) => !!deck.cards[k + "#r"],
+    cards: () => deck.cards,
+    kanjiInfo: () => kanjiInfo,
+    keyword,
     ...Object.fromEntries(DRILLS.filter((name) => name !== "write").map((name) => [name, drill(name)])),
     unsynced: () => local().savedAt > pushedAt(),
   };

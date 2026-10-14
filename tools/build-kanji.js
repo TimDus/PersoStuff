@@ -1,0 +1,57 @@
+// Builds data/kanji.json (KANJIDIC2's meanings, stroke count and level) and data/kanji-strokes.json (KanjiVG's strokes and components) for every kanji in the word list [大 = "large, big", 3 strokes, N5].
+// Usage: node tools/build-kanji.js _data data/vocab.json data
+const fs = require("fs");
+const path = require("path");
+
+const [dataDir, vocabFile, outDir] = process.argv.slice(2);
+if (!outDir) {
+  console.error("usage: node tools/build-kanji.js <download dir> <vocab json> <out dir>");
+  process.exit(1);
+}
+const words = JSON.parse(fs.readFileSync(vocabFile, "utf8"));
+const listed = [...new Set(words.flatMap((w) => [...w.w].filter((c) => /[一-鿿]/.test(c))))];
+const want = new Set(listed);
+
+// Today's N level from KANJIDIC2's pre-2010 JLPT level, 0 for none, as build-vocab.js reads it [old 4 = N5].
+const OLD_TO_N = { 4: 5, 3: 4, 2: 2, 1: 1 };
+const kanji = {};
+for (const m of fs.readFileSync(path.join(dataDir, "kanjidic", "kanjidic2.xml"), "utf8").matchAll(/<literal>([^<]+)<\/literal>[\s\S]*?<\/character>/g)) {
+  if (!want.has(m[1])) continue;
+  const old = m[0].match(/<jlpt>(\d)<\/jlpt>/);
+  // English meanings only, the first two [大: large, big; French and Spanish carry m_lang].
+  const meanings = [...m[0].matchAll(/<meaning>([^<]+)<\/meaning>/g)].map((x) => x[1]).slice(0, 2);
+  kanji[m[1]] = { m: meanings.join(", "), sc: +m[0].match(/<stroke_count>(\d+)<\/stroke_count>/)[1], lv: old ? OLD_TO_N[old[1]] : 0 };
+}
+
+// A tenth of a unit in the 109-unit box is below a pixel at any size the site draws [740 KB unrounded].
+const round = (d) => d.replace(/-?\d*\.\d+/g, (n) => String(Math.round(+n * 10) / 10));
+const strokes = {};
+for (const c of listed) {
+  const file = path.join(dataDir, "kanjivg", "main", "kanji", `${c.codePointAt(0).toString(16).padStart(5, "0")}.svg`);
+  if (!fs.existsSync(file)) throw new Error(`KanjiVG has no ${c} (${file})`);
+  const svg = fs.readFileSync(file, "utf8");
+  const d = [...svg.matchAll(/<path id="kvg:[0-9a-f]+-s\d+"[^>]*\sd="([^"]+)"/g)].map((m) => round(m[1]));
+  const n = [...svg.matchAll(/<text transform="matrix\(1 0 0 1 ([\d.]+) ([\d.]+)\)">\d+<\/text>/g)].map((m) => [+m[1], +m[2]]);
+  if (!d.length || d.length !== n.length) throw new Error(`${c}: ${d.length} strokes, ${n.length} numbers`);
+  // The outermost named groups under the kanji's own, through unnamed ones [学: ⺍ and 冖 inside an unnamed top, then 子].
+  const c_ = [];
+  const open = [];
+  for (const g of svg.matchAll(/<g\b([^>]*)>|<\/g>/g)) {
+    if (g[0] === "</g>") { open.pop(); continue; }
+    const el = g[1].match(/kvg:element="([^"]+)"/)?.[1];
+    const inside = open.length >= 2 && !open.slice(2).some(Boolean);
+    if (el && inside && !c_.includes(el)) c_.push(el);
+    open.push(el || null);
+  }
+  strokes[c] = { d, n, c: c_ };
+}
+const missing = listed.filter((c) => !kanji[c]);
+if (missing.length) throw new Error(`KANJIDIC2 has no ${missing.join("")}`);
+const off = listed.filter((c) => strokes[c].d.length !== kanji[c].sc);
+
+fs.mkdirSync(outDir, { recursive: true });
+for (const [name, data] of [["kanji.json", kanji], ["kanji-strokes.json", strokes]]) {
+  fs.writeFileSync(path.join(outDir, name), JSON.stringify(data));
+  console.log(`${Object.keys(data).length} kanji -> ${path.join(outDir, name)} (${fs.statSync(path.join(outDir, name)).size} bytes)`);
+}
+if (off.length) console.log(`stroke count differs from KANJIDIC2: ${off.map((c) => `${c} ${strokes[c].d.length}/${kanji[c].sc}`).join(", ")}`);

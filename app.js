@@ -119,9 +119,11 @@
 
   // Timers, key handlers and leave hooks last until the next route change [a break countdown stops, a half-done review uploads].
   let teardown = [];
+  // A popup takes the keys from the page under it [3 with a kanji's popup open graded the card behind].
   const onKey = (fn) => {
-    document.addEventListener("keydown", fn);
-    teardown.push(() => document.removeEventListener("keydown", fn));
+    const h = (e) => { if (!document.querySelector(".modal-back")) fn(e); };
+    document.addEventListener("keydown", h);
+    teardown.push(() => document.removeEventListener("keydown", h));
   };
   const every = (ms, fn) => {
     const t = setInterval(fn, ms);
@@ -165,15 +167,20 @@
     if (Date.now() - mediaUrlsAt > 11 * 3600e3) await loadMediaUrls().catch(() => {});
     return mediaUrls.get(key);
   }
-  async function say(text) {
+  // A word's own recording needs no signed link, and speech stands in when it won't load, not when a newer tap cut it off [offline = NotSupportedError, a second tap = AbortError].
+  async function say(text, rec) {
     window.speechSynthesis?.cancel();
     player.pause();
+    if (rec) { player.src = rec; player.play().catch((e) => { if (e.name !== "AbortError") speak(text); }); return; }
     const clip = clipFor(text);
     if (clip) {
       const url = await mediaUrl(clipPath(clip));
       if (url) { player.src = url; player.play().catch(() => {}); }
       return;
     }
+    speak(text);
+  }
+  function speak(text) {
     if (!jaVoice) return;
     const u = new SpeechSynthesisUtterance(text);
     u.voice = jaVoice; u.lang = "ja-JP"; u.rate = 0.8;
@@ -199,7 +206,7 @@
   });
   document.addEventListener("click", (e) => {
     const b = e.target.closest("[data-say]");
-    if (b) say(b.dataset.say);
+    if (b) say(b.dataset.say, b.dataset.rec);
   });
 
   // Letter-by-letter romaji for hiragana or katakana [いっしょ = issho, まっちゃ = matcha, ベーコン = beekon].
@@ -246,11 +253,13 @@
     const back = document.createElement("div");
     back.className = "modal-back";
     back.innerHTML = `<div class="modal panel">${html}<div class="row" style="justify-content:center;margin-top:1rem"><button class="ghost" data-close>Close</button></div></div>`;
-    const close = () => { back.remove(); document.removeEventListener("keydown", esc_); };
+    // The page under a popup is out of reach of Tab and clicks until it closes [two Tabs reached Again behind a kanji's popup].
+    const close = () => { back.remove(); app.inert = false; document.removeEventListener("keydown", esc_); };
     const esc_ = (e) => { if (e.key === "Escape") close(); };
     back.addEventListener("click", (e) => { if (e.target === back || e.target.closest("[data-close]")) close(); });
     document.addEventListener("keydown", esc_);
     document.body.appendChild(back);
+    app.inert = true;
   }
   function kanaModal(k) {
     const p = progress[k.kana], w = study.write.of(k.kana);
@@ -1260,6 +1269,7 @@
   // Runs the teardown of whatever was on screen [a finished quiz's clock stops, a left review uploads].
   function cleanup() {
     document.querySelectorAll(".modal-back").forEach((m) => m.remove());
+    app.inert = false;
     teardown.forEach((fn) => fn());
     teardown = [];
   }
@@ -1345,7 +1355,7 @@
     // This device's copy belongs to the account that made it [A's session expires, B signs in = A's answers stay out of B's row].
     if (store.get("sync.user", user.id) !== user.id) applySnapshot(blank());
     store.set("sync.user", user.id);
-    await Promise.all([sync(pulled), study.start({ app, esc, fmtTime, onKey, onLeave: (fn) => teardown.push(fn), cleanup, backend, user, syncState }, pulledStudy)]);
+    await Promise.all([sync(pulled), study.start({ app, esc, fmtTime, onKey, onLeave: (fn) => teardown.push(fn), cleanup, backend, user, syncState, openModal }, pulledStudy)]);
     route();
   }
   boot();
