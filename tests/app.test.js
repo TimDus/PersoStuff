@@ -2410,3 +2410,14 @@ test("Draw mode's answer offers the Stroke order button when the strokes fail to
   assert.equal(await page.locator(".face.back .strokes").count(), 0);
   await page.close();
 });
+
+// A link with a broken escape threw URIError in route(), so the old page stayed up and the new one never drew [#kanji/%E5 left the chart on screen].
+test("a link with a broken escape still routes, to its tab's own page", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#chart");
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.evaluate(() => { location.hash = "#kanji/%E5"; });
+  await page.locator("#k-new").waitFor({ timeout: 3000 });
+  assert.deepEqual(errors, []);
+  await page.close();
+});

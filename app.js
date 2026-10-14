@@ -1277,7 +1277,8 @@
   let lastPage = "", readingFrom = "";
   function route() {
     cleanup();
-    const [tab, ...rest] = decodeURIComponent(location.hash.slice(1)).split("/");
+    // Each part decoded on its own, a broken escape kept as typed [#kanji/%E5 = the Kanji tab with "%E5", not a URIError].
+    const [tab, ...rest] = location.hash.slice(1).split("/").map((p) => { try { return decodeURIComponent(p); } catch { return p; } });
     const view = routes[tab] ? tab : "learn";
     if (view === "reading" && !lastPage.startsWith("#reading")) readingFrom = lastPage.startsWith("#learn") ? lastPage : "";
     lastPage = view === "learn" ? location.hash || "#learn" : location.hash;
