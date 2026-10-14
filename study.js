@@ -6,12 +6,18 @@
   let shell = null;
   let words = null;
   let kanjiInfo = null;
+  let koohii = {};
   let loading = null;
   const json = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
   // Fetched on the first visit and kept, the kanji meanings optional [data/vocab.json, 1,384 words, 381 KB; data/kanji.json, 34 KB, failing = note lines without meanings].
   const loadWords = () => (loading ||= Promise.all([json("data/vocab.json"), json("data/kanji.json").catch(() => ({}))])
     .then(([list, info]) => { kanjiInfo = info; return (words = list); })
     .catch((e) => { loading = null; throw e; }));
+  // Heisig's keywords and Koohii's stories from the private bucket [never awaited by the words; a failure is asked again by the next Words visit or popup, a sign that never answers leaves them out until a reload].
+  let koohiiLoading = null;
+  const loadKoohii = () => (koohiiLoading ||= shell.backend.signedUrls(["koohii.json"])
+    .then((m) => (m.get("koohii.json") ? json(m.get("koohii.json")) : {}))
+    .then((k) => { koohii = k; }, () => { koohiiLoading = null; }));
 
   // The deck on this device [cards keyed "会う|あう#r" for Japanese → English, "#p" the other way].
   const KEY = "hira.study";
@@ -66,7 +72,7 @@
   const speak = (text, w) => `<button class="speak${w?.au ? " rec" : ""}" data-say="${esc(text)}"${w?.au ? ` data-rec="${wordClip(w.k)}"` : ""} title="Listen">🔊</button>`;
   const examples = (w) => (w.ex.length ? `<div class="examples">${w.ex.map(([jp, en]) => `
     <div class="ex"><span class="jp">${esc(jp)}</span> ${speak(jp)}<div class="muted small">${esc(en)}</div></div>`).join("")}</div>` : "");
-  const keyword = (c) => kanjiInfo?.[c]?.m || "";
+  const keyword = (c) => koohii[c]?.kw || kanjiInfo?.[c]?.m || "";
   // Under the answer, a line per kanji with the met words that share it [学 study, learning · also in 大学, 学校].
   const kanjiNote = (w) => {
     const lines = note(w, words, deck.cards);
@@ -97,6 +103,7 @@
       if (failed) return needWords(() => viewWords([mode, set]));
     }
     deck = local();
+    loadKoohii();
     if (mode === "review") return runReview();
     if (mode === "practice") return runPractice(set);
     hub();
@@ -353,6 +360,8 @@
     met: (k) => !!deck.cards[k + "#r"],
     cards: () => deck.cards,
     kanjiInfo: () => kanjiInfo,
+    koohii: (c) => koohii[c],
+    loadKoohii: () => loadKoohii(),
     keyword,
     ...Object.fromEntries(DRILLS.filter((name) => name !== "write").map((name) => [name, drill(name)])),
     unsynced: () => local().savedAt > pushedAt(),

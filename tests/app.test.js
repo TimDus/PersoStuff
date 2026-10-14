@@ -58,7 +58,14 @@ async function open(cfg, hash = "") {
       signOut: async () => { log.push("signOut"); localStorage.setItem("__out", "1"); },
       isAllowed: async () => { down(); return cfg.allowed; },
       content: async () => { listed(); log.push("content"); return (await fetch("content/worksheets.json")).json(); },
-      signedUrls: async (paths) => { listed(); return new Map(paths.map((p) => [p, "content/" + p])); },
+      // Koohii's file only when a case brings one, so the real content/koohii.json never decides a case [cfg.koohii; koohiiHang never answers, koohiiHold keeps the first ask until __releaseKoohii, koohiiFailOnce drops the first ask].
+      signedUrls: async (paths) => {
+        listed();
+        if (paths.includes("koohii.json") && cfg.koohiiHang) return new Promise(() => {});
+        if (paths.includes("koohii.json") && cfg.koohiiHold && !window.__koohiiHeld) { window.__koohiiHeld = 1; await new Promise((r) => (window.__releaseKoohii = r)); }
+        if (paths.includes("koohii.json") && cfg.koohiiFailOnce && !window.__koohiiFailed) { window.__koohiiFailed = 1; throw new TypeError("Failed to fetch"); }
+        return new Map(paths.filter((p) => p !== "koohii.json" || cfg.koohii)
+          .map((p) => [p, p === "koohii.json" ? `data:application/json,${encodeURIComponent(JSON.stringify(cfg.koohii))}` : "content/" + p])); },
       loadProgress: async () => { down(); return JSON.parse(localStorage.getItem("__remote")) ?? cfg.remote ?? null; },
       saveProgress: async (id, data) => { down(); log.push({ save: structuredClone(data) }); localStorage.setItem("__remote", JSON.stringify(data)); },
       loadStudy: async () => { down(); if (cfg.studyDown) throw new TypeError("Failed to fetch"); return JSON.parse(localStorage.getItem("__remoteStudy")) ?? cfg.remoteStudy ?? null; },
@@ -2129,5 +2136,115 @@ test("a second tap before the recording starts plays it once and speaks nothing"
   await new Promise((r) => setTimeout(r, 1000));
   assert.deepEqual(await page.evaluate(() => window.__spoke), []);
   assert.deepEqual(await page.evaluate(() => window.__ends), ["AbortError", "ok"]);
+  await page.close();
+});
+
+// Koohii's keywords and stories come from the private bucket through one signed link; other members wrote the stories.
+const koohii = { 学: { kw: "study", frame: 346, mine: "My <em>roof</em> &amp; <strong>study</strong>.", stories: [
+  { by: "first", text: "Under a <em>crown</em> of <em>sparks</em>, a <em>child</em> sits down to <strong>study</strong>.", stars: 300 },
+  { by: "second", text: "Bad <img src=x onerror=window.__x=1> and &lt;script&gt; text", stars: 120 },
+  { by: "third", text: "Ends in a broken <img src=x onerror=window.__x=1", stars: 40 }] } };
+test("with Koohii loaded a note line shows Heisig's keyword, and the popup its frame, the account's story, then the top stories by author", async () => {
+  // A card is drawn with the keyword known when it's drawn, so the review starts once Koohii's file is in.
+  const page = await open({ ...listed, koohii, local: { "study.user": "u1", study: kanjiDeck() } }, "#words");
+  await page.waitForFunction(() => HiraStudy.keyword("学") === "study");
+  await page.click("#go");
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  assert.deepEqual(await page.locator(".kanji-note .kn").allTextContents(), ["学 study · also in 大学, 学校", "生 life, genuine"]);
+  await page.click(".kn-k[data-kanji='学']");
+  assert.match(await page.textContent(".modal .kanji-meta"), /RTK 346/);
+  assert.deepEqual(await page.locator(".modal .story-by").allTextContents(), ["From the site's Koohii account", "first", "second", "third"]);
+  assert.equal(await page.locator(".modal .story em").count(), 4);
+  assert.match(await page.textContent(".modal"), /Remembering the Kanji © James W\. Heisig/);
+  await page.close();
+});
+
+test("a story's markup keeps em and strong only, a broken tag included", async () => {
+  const page = await open({ ...listed, koohii, local: { "study.user": "u1", study: kanjiDeck() } }, "#words/review");
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  await page.click(".kn-k[data-kanji='学']");
+  await page.locator(".modal .story").nth(3).waitFor();
+  assert.equal(await page.locator(".modal img, .modal script").count(), 0);
+  assert.equal(await page.evaluate(() => window.__x), undefined);
+  assert.match(await page.locator(".modal .story").nth(2).textContent(), /and <script> text/);
+  await page.close();
+});
+
+// Koohii's file loads beside the words, never in front of them [a sign request that hung kept Words on "Loading words…"].
+test("a Koohii link that never answers doesn't hold up the words", async () => {
+  const page = await open({ ...listed, koohii, koohiiHang: true, local: { "study.user": "u1", study: kanjiDeck() } }, "#words/review");
+  await page.locator(".face.front").waitFor({ timeout: 5000 });
+  await page.click("#card");
+  assert.equal(await page.locator(".kanji-note .kn").first().textContent(), "学 study, learning · also in 大学, 学校");
+  await page.close();
+});
+
+test("a Koohii load that failed is tried again on the next visit to the words", async () => {
+  const page = await open({ ...listed, koohii, koohiiFailOnce: true, local: { "study.user": "u1", study: kanjiDeck() } }, "#words/review");
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  assert.match(await page.locator(".kanji-note .kn").first().textContent(), /^学 study, learning/);
+  await page.click("a[href='#words']");
+  await page.locator("#go").waitFor();
+  await page.waitForFunction(() => HiraStudy.keyword("学") === "study", null, { timeout: 5000 });
+  await page.click("#go");
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  assert.match(await page.locator(".kanji-note .kn").first().textContent(), /^学 study ·/);
+  await page.close();
+});
+
+// A popup drawn before Koohii's file landed kept KANJIDIC's meaning and no stories until it was closed and opened again.
+test("a popup opened while Koohii loads fills in when it lands", async () => {
+  const page = await open({ ...listed, koohii, koohiiHold: true, local: { "study.user": "u1", study: kanjiDeck() } }, "#words/review");
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  await page.click(".kn-k[data-kanji='学']");
+  assert.equal(await page.textContent(".modal .kanji-kw"), "study, learning");
+  // A stroke order opened meanwhile stays open [the first redraw rebuilt the whole popup and wiped it].
+  await page.click(".modal .stroke-toggle");
+  await page.locator(".modal .strokes").waitFor();
+  await page.evaluate(() => window.__releaseKoohii());
+  await page.locator(".modal .story").first().waitFor({ timeout: 3000 });
+  assert.equal(await page.textContent(".modal .kanji-kw"), "study");
+  assert.match(await page.textContent(".modal .kanji-meta"), /RTK 346/);
+  assert.equal(await page.locator(".modal .strokes").count(), 1);
+  assert.equal(await page.textContent(".modal .stroke-toggle"), "Hide stroke order");
+  await page.close();
+});
+
+test("a popup asks for Koohii again after a failed load", async () => {
+  const page = await open({ ...listed, koohii, koohiiFailOnce: true, local: { "study.user": "u1", study: kanjiDeck() } }, "#words/review");
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  await page.click(".kn-k[data-kanji='学']");
+  await page.locator(".modal .story").first().waitFor({ timeout: 3000 });
+  assert.equal(await page.textContent(".modal .kanji-kw"), "study");
+  await page.close();
+});
+
+test("a popup waiting on a Koohii load that fails asks once more", async () => {
+  const page = await open({ ...listed, koohii, koohiiHold: true, koohiiFailOnce: true, local: { "study.user": "u1", study: kanjiDeck() } }, "#words/review");
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  await page.click(".kn-k[data-kanji='学']");
+  await page.evaluate(() => window.__releaseKoohii());
+  await page.locator(".modal .story").first().waitFor({ timeout: 3000 });
+  assert.equal(await page.textContent(".modal .kanji-kw"), "study");
+  await page.close();
+});
+
+test("a kanji Koohii's file lacks keeps KANJIDIC's meaning, with no Heisig line and no stories", async () => {
+  const page = await open({ ...listed, koohii, local: { "study.user": "u1", study: kanjiDeck() } }, "#words");
+  await page.waitForFunction(() => HiraStudy.keyword("学") === "study");
+  await page.click("#go");
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  await page.click(".kn-k[data-kanji='生']");
+  assert.equal(await page.textContent(".modal .kanji-kw"), "life, genuine");
+  assert.doesNotMatch(await page.textContent(".modal"), /Heisig/);
+  assert.equal(await page.locator(".modal .stories").isVisible(), false);
   await page.close();
 });

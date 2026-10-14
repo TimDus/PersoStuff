@@ -9,7 +9,7 @@ if (!outDir) {
   process.exit(1);
 }
 const words = JSON.parse(fs.readFileSync(vocabFile, "utf8"));
-const listed = [...new Set(words.flatMap((w) => [...w.w].filter((c) => /[一-鿿]/.test(c))))];
+const listed = [...new Set(words.flatMap(require("../kanji.js").kanjiOf))];
 const want = new Set(listed);
 
 // Today's N level from KANJIDIC2's pre-2010 JLPT level, 0 for none, as build-vocab.js reads it [old 4 = N5].

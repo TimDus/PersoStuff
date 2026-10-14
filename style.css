@@ -330,6 +330,11 @@ body[data-section="japanese"] footer .credits-ja { display: block; }
 .kw-row .jp { font-size: 1.15rem; }
 .kw-row.unmet { color: var(--muted); }
 .kw-row rt { font-size: .5em; color: var(--muted); }
+/* Koohii stories under the stroke order, each author above its text [the Koohii account's story, then three by stars]. */
+.stories { margin-top: .8rem; display: grid; gap: .6rem; text-align: left; }
+.stories:empty { display: none; }
+.story { border-left: 3px solid var(--accent-soft); padding-left: .6rem; }
+.story-text strong { color: var(--accent); }
 .grades { justify-content: center; }
 .grades button { min-width: 5rem; }
 .grades small { opacity: .8; font-size: .75rem; }
