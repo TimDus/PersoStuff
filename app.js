@@ -352,7 +352,7 @@
     app.innerHTML = `
       <h1>Learn hiragana in ${LESSONS.length} steps</h1>
       <p class="lead">Follow Tofugu's order: learn a column with its mnemonics, quiz everything so far, then do the worksheet.
-        Don't practise writing yet — reading comes first.</p>
+        Reading comes first; writing practice is there when you want it.</p>
       <div class="grid">
         ${cards(TRACKS.hiragana)}
         <a class="panel lesson-card" href="#reading">
@@ -420,6 +420,7 @@
       l.groups.length ? { text: `Flip through these ${kanaOf(l.groups).length} cards until they feel familiar.`, href: `#cards/${l.groups.join(",")}`, label: "Flashcards" } : null,
       ...l.tasks.map((t) => ({ text: t.text, href: `#quiz/${t.quiz.join(",")}/${t.rounds}`, label: "Start quiz" })),
       l.sheet ? { text: `Worksheet${SHEETS.find((s) => s.id === l.sheet) ? `: ${SHEETS.find((s) => s.id === l.sheet).title}` : ""}. Take the breaks between rounds — recalling after a pause is the point.`, href: `#sheets/${l.sheet}`, label: "Worksheet" } : null,
+      l.groups.length ? { text: "Learn to write them: each stroke is shown for you to trace, then you write the kana from memory.", href: `#write/${l.groups.join(",")}/1/learn`, label: "Practice writing" } : null,
       l.smallTsu || l.longVowel ? { text: "No exercise for this one. Move on to reading real sentences.", href: reading, label: "Reading practice" } : null,
     ].filter(Boolean);
     const name = script === "katakana" ? "Katakana step" : "Step";
@@ -551,8 +552,8 @@
     const LEAD = {
       read: `Type the romaji for each kana. Right answers move on by themselves; press <span class="kbd">Enter</span> to give up on one.
         Misses come back later in the round. Go for speed once you're accurate.`,
-      write: `Write each kana from its romaji, with a finger or the mouse, in stroke order. Get a stroke wrong three times and it shows
-        faintly to trace, and the kana comes back later in the round.`,
+      write: `Write each kana from its romaji in stroke order, with a finger or the mouse. Learn shows each stroke to trace, then asks
+        the kana from memory. Self shows the answer over your drawing and you say whether you had it. Per stroke and Whole kana check it for you.`,
     };
     app.innerHTML = `
       <h1>Quiz</h1>
@@ -721,29 +722,35 @@
   }
 
   // ---------- Writing ----------
-  function viewWrite([sel, rounds]) {
+  function viewWrite([sel, rounds, mode]) {
     if (!sel || !kanaOf(sel.split(",")).length) return location.replace("#quiz");
     const key = `${sel}/${+rounds || 1}`;
-    runWrite(kanaOf(sel.split(",")), Math.max(1, +rounds || 1), keepBest(key) ? key : null);
+    runWrite(kanaOf(sel.split(",")), Math.max(1, +rounds || 1), keepBest(key) ? key : null, mode === "learn" ? "learn" : null);
   }
 
-  // A run of kana written from their romaji, judged against KanjiVG [あ: Per stroke judges each of 3 as it lands, Whole kana all 3 on Check].
-  function runWrite(list, rounds, bestKey) {
+  // A run of kana written from their romaji [あ: Learn traces its 3 strokes first, Self shows it over your drawing, Per stroke and Whole kana judge it against KanjiVG].
+  function runWrite(list, rounds, bestKey, forced) {
     cleanup();
     const { pathPoints, strokeMatches, grade, written } = window.HiraWrite;
-    const queue = spaced(list, rounds, Math.random, shareKana);
+    // A stored mode this code doesn't know opens in Self [a value from a later version, or "zz"].
+    let check = forced || store.get("write.check", "self");
+    if (!["learn", "self", "stroke", "whole"].includes(check)) check = "self";
+    const learn = check === "learn";
+    // Learn meets the kana in chart order every round [あ column, 2 rounds = あいうえおあいうえお, where Self shuffles].
+    const queue = learn ? Array.from({ length: rounds }, () => list).flat() : spaced(list, rounds, Math.random, shareKana);
     const total = queue.length, gap = gapFor(list.length);
     const misses = new Map(), took = new Map();
     let idx = 0, right = 0, wrong = 0, shownAt = 0, all = null, gone = false;
-    let check = store.get("write.check", "stroke");
     // The kana on the pad and how far along it is [next 2, tries 1 = two strokes down, one miss on the third].
     let k = null, targets = [], n = 1, drawn = [], next = 0, tries = 0, hinted = false, waiting = false, pts = null;
+    // Self after Show, Learn's two passes, and the pause before the next kana [pass "memory", helped = a demo was needed from memory].
+    let shown = false, shownFor = 0, pass = "trace", helped = false, pause = false, traced = false;
     const start = Date.now();
     teardown.push(() => { gone = true; });
 
     app.innerHTML = `
       <div class="row"><a href="#quiz">← Choose kana</a><span class="spacer"></span>
-        <span class="seg" id="checkmode"><button data-check="stroke">Per stroke</button><button data-check="whole">Whole kana</button></span>
+        <span class="seg" id="checkmode"><button data-check="learn">Learn</button><button data-check="self">Self</button><button data-check="stroke">Per stroke</button><button data-check="whole">Whole kana</button></span>
         <span class="progress-line" id="prog"></span></div>
       <div class="stage">
         <div class="write-prompt"><b id="romaji">…</b> <span id="say"></span><div class="muted small" id="script"></div></div>
@@ -756,32 +763,46 @@
     every(500, () => { const t = app.querySelector("#time"); if (t) t.textContent = fmtTime(Date.now() - start); });
     const points = (p) => p.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
     const line = (p, cls) => `<polyline class="${cls}" points="${points(p)}"/>`;
-    const path = (t, cls) => `<path class="${cls}" d="${t.d}" transform="translate(${109 * t.j} 0)"/>`;
+    // A KanjiVG stroke in its cell, made one path long for the draw-in animation when i is given [pathLength="1" and --i:2].
+    const path = (t, cls, i) => `<path class="${cls}" d="${t.d}" transform="translate(${109 * t.j} 0)"${i === undefined ? "" : ` pathLength="1" style="--i:${i}"`}/>`;
+    const num = (x, y, i) => `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" style="--i:${i}">${i + 1}</text>`;
     const layer = (name) => pad.querySelector(`.${name}`);
+    // No kana takes input yet or any more [before strokes.json arrives, behind a miss's Continue, in the 400 ms after a right kana or any Learn kana].
+    const busy = () => !k || waiting || pause;
 
+    const ACTS = {
+      learn: `<button class="ghost" id="hint">Show again</button>`,
+      self: `<button class="ghost" id="undo">Undo</button><button class="ghost" id="clear">Clear</button><button id="show">Show <span class="kbd">Space</span></button>`,
+      shown: `<button class="bad" id="again">Again <span class="kbd">1</span></button><button class="good" id="got">Got it <span class="kbd">2</span></button>`,
+      stroke: `<button class="ghost" id="hint">Hint</button>`,
+      whole: `<button class="ghost" id="undo">Undo</button><button class="ghost" id="clear">Clear</button><button id="done">Check <span class="kbd">Enter</span></button>`,
+    };
     function drawChecks() {
       app.querySelectorAll("#checkmode button").forEach((b) => b.classList.toggle("on", b.dataset.check === check));
-      acts.innerHTML = check === "stroke"
-        ? `<button class="ghost" id="hint">Hint</button>`
-        : `<button class="ghost" id="undo">Undo</button><button class="ghost" id="clear">Clear</button><button id="done">Check <span class="kbd">Enter</span></button>`;
+      acts.innerHTML = ACTS[shown ? "shown" : check];
       acts.querySelector("#hint")?.addEventListener("click", hint);
       acts.querySelector("#undo")?.addEventListener("click", () => { drawn.pop(); inkDrawn(); });
       acts.querySelector("#clear")?.addEventListener("click", () => { drawn = []; inkDrawn(); });
       acts.querySelector("#done")?.addEventListener("click", checkWhole);
+      acts.querySelector("#show")?.addEventListener("click", reveal);
+      acts.querySelector("#again")?.addEventListener("click", () => kanaDone(false));
+      acts.querySelector("#got")?.addEventListener("click", () => kanaDone(true));
     }
     // A new pad for the kana, or the same kana afresh after the check mode changed [きゃ = two 109-unit cells side by side].
     function reset() {
       const chars = [...k.kana];
       n = chars.length;
-      targets = chars.flatMap((c, j) => all[c].d.map((d) => ({ d, j, pts: pathPoints(d).map(([x, y]) => [x + 109 * j, y]) })));
+      targets = chars.flatMap((c, j) => all[c].d.map((d, i) => ({ d, j, label: all[c].n[i], pts: pathPoints(d).map(([x, y]) => [x + 109 * j, y]) })));
       drawn = []; next = 0; tries = 0; hinted = false; waiting = false; pts = null;
+      shown = false; shownFor = 0; pass = "trace"; helped = false; traced = false;
       pad.setAttribute("viewBox", `0 0 ${109 * n} 109`);
       pad.setAttribute("class", `pad${n > 1 ? " wide" : ""}`);
       pad.innerHTML = `<g class="guide">${chars.map((_, j) => `<rect x="${109 * j + 1}" y="1" width="107" height="107" rx="6"/>
         <path d="M${109 * j + 54.5} 5V104M${109 * j + 5} 54.5H${109 * j + 104}"/>`).join("")}</g>
         <g class="hint"></g><g class="ink"></g><polyline class="live" points=""/>`;
-      fb.innerHTML = "";
+      fb.innerHTML = learn ? `<p class="muted">Trace each stroke as it's shown.</p>` : "";
       drawChecks();
+      if (learn) demo(0);
     }
     function show() {
       // Cleared before Done, as in the reading quiz [a later Enter redrew it].
@@ -796,50 +817,78 @@
       shownAt = Date.now();
     }
     const inkDrawn = () => { layer("ink").innerHTML = drawn.map((p) => line(p, "mine")).join(""); };
-    // The next stroke faintly, to trace, and the kana then counts as a miss [3 misses on one stroke show it too].
+    // One stroke drawn in for you and left as a faint trail to trace [a miss on it plays it again].
+    const demo = (i) => { layer("hint").innerHTML = path(targets[i], "demo", 0); };
+    // The next stroke to trace, and the kana then counts as a miss [Per stroke: 3 misses on one stroke show it too; Learn: only from memory].
     function hint() {
-      if (waiting || check !== "stroke") return;
+      if (busy()) return;
+      if (learn) { helped ||= pass === "memory"; return demo(next); }
+      if (check !== "stroke") return;
       hinted = true;
       layer("hint").innerHTML = path(targets[next], "");
     }
     function strokeDone(p) {
-      if (check === "whole") { drawn.push(p); return inkDrawn(); }
+      if (check === "whole" || check === "self") { drawn.push(p); return inkDrawn(); }
       const t = targets[next];
       if (strokeMatches(p, t.pts)) {
         layer("ink").insertAdjacentHTML("beforeend", path(t, "mine"));
         layer("hint").innerHTML = "";
         next++; tries = 0;
-        if (next === targets.length) kanaDone(!hinted);
-        return;
+        if (next < targets.length) { if (pass === "trace" && learn) demo(next); return; }
+        if (!learn) return kanaDone(!hinted);
+        return pass === "trace" ? fromMemory() : kanaDone(!helped);
       }
       layer("ink").insertAdjacentHTML("beforeend", line(p, "bad"));
       const el = layer("ink").lastElementChild;
       after(350, () => el.remove());
+      if (learn) return hint();
       if (++tries >= 3) hint();
     }
+    // The traced kana wiped after a moment, or at once when the next stroke starts sooner [a quick hand's first stroke still counts].
+    function fromMemory() {
+      pass = "memory"; next = 0; traced = true;
+      fb.innerHTML = `<p class="muted">Now from memory.</p>`;
+      after(400, wipe);
+    }
+    const wipe = () => { if (traced) layer("ink").innerHTML = ""; traced = false; };
+    // The answer drawn in over your drawing, and your strokes numbered in your order [え with its bottom stroke first: your 1 sits on its 2].
+    function reveal() {
+      if (shown || busy() || check !== "self") return;
+      shown = true;
+      shownFor = Date.now() - shownAt;
+      layer("ink").insertAdjacentHTML("beforeend", drawn.map((p, i) => num(p[0][0], p[0][1] - 2, i)).join(""));
+      layer("hint").innerHTML = targets.map((t, i) => path(t, "answer", i) + num(t.label[0] + 109 * t.j, t.label[1], i)).join("");
+      drawChecks();
+    }
     function checkWhole() {
-      if (waiting || !drawn.length) return;
+      if (busy() || !drawn.length) return;
       if (written(drawn, targets.map((t) => t.pts))) return kanaDone(true);
       const marks = grade(drawn, targets.map((t) => t.pts));
       layer("ink").innerHTML = drawn.map((p, i) => line(p, marks[i] ? "mine" : "bad")).join("");
       layer("hint").innerHTML = targets.map((t) => path(t, "")).join("");
       kanaDone(false);
     }
+    // One kana finished, and only a checker's miss waits for Continue [Learn records and puts back nothing, Self has its answer on screen already].
     function kanaDone(ok) {
-      waiting = true;
-      study.write.record(k.kana, ok);
       idx++;
+      if (!learn) study.write.record(k.kana, ok);
       if (ok) {
         right++;
-        took.set(k, [...(took.get(k) || []), Date.now() - shownAt]);
+        if (!learn) took.set(k, [...(took.get(k) || []), shownFor || Date.now() - shownAt]);
         app.querySelector("#ok").textContent = right;
-        pad.classList.add("right");
-        return after(400, show);
+      } else {
+        wrong++;
+        misses.set(k, (misses.get(k) || 0) + 1);
+        app.querySelector("#bad").textContent = wrong;
+        if (!learn) requeue(queue, idx - 1, gap, Math.random, shareKana);
       }
-      wrong++;
-      misses.set(k, (misses.get(k) || 0) + 1);
-      app.querySelector("#bad").textContent = wrong;
-      requeue(queue, idx - 1, gap, Math.random, shareKana);
+      if (check === "self") return show();
+      if (ok || learn) {
+        if (ok) pad.classList.add("right");
+        pause = true;
+        return after(400, () => { pause = false; show(); });
+      }
+      waiting = true;
       fb.innerHTML = `<div class="ans">${esc(k.kana)} ${speakBtn(k.kana)}</div>${strokeBtn(k.kana)}
         <button class="ghost" id="next" style="margin-top:.5rem">Continue <span class="kbd">Enter</span></button>`;
       fb.querySelector("#next").addEventListener("click", show);
@@ -852,8 +901,9 @@
     };
     const live = () => pad.querySelector(".live");
     pad.addEventListener("pointerdown", (e) => {
-      if (waiting || !k) return;
+      if (busy() || shown) return;
       e.preventDefault();
+      wipe();
       pad.setPointerCapture(e.pointerId);
       pts = [at(e)];
     });
@@ -871,29 +921,43 @@
     };
     pad.addEventListener("pointerup", () => lift(true));
     pad.addEventListener("pointercancel", () => lift(false));
+    // A clicked button keeps no focus, so Space and Enter stay the run's [Space after Undo pressed Undo again, after the speaker played it again].
+    [acts, fb, app.querySelector("#checkmode"), app.querySelector(".write-prompt")].forEach((el) => el.addEventListener("mousedown", (e) => { if (e.target.closest("button")) e.preventDefault(); }));
     app.querySelector("#checkmode").addEventListener("click", (e) => {
       const b = e.target.closest("[data-check]");
       if (!b || b.dataset.check === check) return;
+      store.set("write.check", b.dataset.check);
+      // Learn has its own order and keeps nothing, so a switch into or out of it starts the run over [#write/a/1/learn becomes #write/a/1].
+      if (learn || b.dataset.check === "learn") {
+        history.replaceState(null, "", location.hash.replace(/\/learn$/, ""));
+        return runWrite(list, rounds, bestKey);
+      }
       check = b.dataset.check;
-      store.set("write.check", check);
-      if (waiting || !k) drawChecks(); else reset();
+      if (busy()) drawChecks(); else reset();
     });
     onKey((e) => {
-      if (e.target.closest("button, a") && e.key === "Enter") return;
-      if (e.key === "Enter") { e.preventDefault(); if (waiting) show(); else if (check === "whole") checkWhole(); }
-      else if (e.key === "Backspace" && check === "whole" && !waiting) { e.preventDefault(); drawn.pop(); inkDrawn(); }
+      if ((e.key === "Enter" || e.key === " ") && e.target.closest("button, a")) return;
+      if (typing(e)) return;
+      if (waiting) { if (e.key === "Enter") { e.preventDefault(); show(); } return; }
+      if (busy()) return;
+      const keep = check === "whole" || (check === "self" && !shown);
+      if (check === "self" && !shown && (e.key === " " || e.key === "Enter")) { e.preventDefault(); reveal(); }
+      else if (shown && (e.key === "1" || e.key === "ArrowLeft")) kanaDone(false);
+      else if (shown && (e.key === "2" || e.key === "ArrowRight")) kanaDone(true);
+      else if (e.key === "Enter" && check === "whole") { e.preventDefault(); checkWhole(); }
+      else if (e.key === "Backspace" && keep) { e.preventDefault(); drawn.pop(); inkDrawn(); }
     });
     function finish() {
       study.flush();
       doneScreen({
-        start, right, wrong, total, list, misses, took, again: () => runWrite(list, rounds, bestKey), drill: (items) => runWrite(items, 3, null),
-        best: bestKey && { get: () => study.write.best(bestKey), set: (b) => study.write.setBest(bestKey, b) },
+        start, right, wrong, total, list, misses, took, again: () => runWrite(list, rounds, bestKey, forced), drill: (items) => runWrite(items, 3, null, forced),
+        best: bestKey && !learn && { get: () => study.write.best(bestKey), set: (b) => study.write.setBest(bestKey, b) },
       });
     }
     window.HiraStrokes.load().then((data) => { all = data; if (!gone) show(); }, () => {
       if (gone) return;
       fb.innerHTML = `<p class="muted">Can't load the stroke data.</p><button class="ghost" id="retry">Try again</button>`;
-      fb.querySelector("#retry").addEventListener("click", () => runWrite(list, rounds, bestKey));
+      fb.querySelector("#retry").addEventListener("click", () => runWrite(list, rounds, bestKey, forced));
     });
   }
 
