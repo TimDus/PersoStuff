@@ -2255,6 +2255,12 @@ test("a word without a recording keeps the browser's speech and plays no clip [�
   await page.close();
 });
 
+// The readings block as [reading, its words] rows and the muted rest [学: [["ガク", "大学 · 学校 · 学生"]], "まな.ぶ"].
+const readings = (page, scope) => page.evaluate((s) => [
+  [...document.querySelectorAll(`${s} .kr-row`)].map((r) => [r.querySelector(".kr").textContent, r.querySelector(".kr-words").textContent]),
+  document.querySelector(`${s} .kr-rest`)?.textContent ?? null,
+], scope);
+
 // The note under a word's answer: one line per kanji with its meaning and the met words that share it, on the back only.
 const kanjiDeck = () => deckWith({
   "学校|がっこう#r": reviewed({ first: day - 2, last: day - 2, due: day + 9 }), "大学|だいがく#r": reviewed({ first: day - 1, last: day - 1, due: day + 9 }),
@@ -2428,7 +2434,7 @@ test("a popup opened while Koohii loads fills in when it lands", async () => {
   await page.click("#card");
   await page.click(".kn-k[data-kanji='学']");
   assert.equal(await page.textContent(".modal .kanji-kw"), "study, learning");
-  assert.equal(await page.textContent(".modal .kanji-reading"), "ガク · まな.ぶ");
+  assert.deepEqual(await readings(page, ".modal"), [[["ガク", "大学 · 学校 · 学生"]], "まな.ぶ"]);
   // A stroke order opened meanwhile stays open [the first redraw rebuilt the whole popup and wiped it].
   await page.click(".modal .stroke-toggle");
   await page.locator(".modal .strokes").waitFor();
@@ -2505,7 +2511,7 @@ test("the Kanji hub counts the kanji met words unlocked, and a review introduces
   assert.equal(await page.textContent(".face.front .kanji-prompt"), "study");
   assert.equal(await page.locator(".face.back").isVisible(), true);
   assert.equal(await page.textContent(".face.back .kanji-big"), "学");
-  assert.equal(await page.textContent(".face.back .kanji-reading"), "ガク · まな.ぶ");
+  assert.deepEqual(await readings(page, ".face.back"), [[["ガク", "大学 · 学校 · 学生"]], "まな.ぶ"]);
   assert.equal(await page.locator(".face.back .stroke-toggle").count(), 1, "Paper mode keeps the Stroke order button");
   assert.equal(await page.locator(".face.back .story").count(), 4);
   assert.match(await page.textContent(".hint"), /New kanji/);
@@ -2598,16 +2604,37 @@ test("a kanji's page opens for any kanji in the word list, with or without kanji
   await page.close();
 });
 
+// KanjiVG's sound parts were never shown, so 晴's page didn't say that 青 and 静 read セイ like it.
+test("a kanji's page lists the list's kanji sharing its sound and reading as links, and its popup lists them plain", async () => {
+  const deck = deckWith({ "晴れる|はれる#r": reviewed({ first: day - 1, last: day - 1, due: day }) });
+  const page = await open({ ...listed, local: { "study.user": "u1", study: deck } }, "#kanji/晴");
+  await page.locator(".kanji-family").waitFor({ timeout: 3000 });
+  assert.equal(await page.textContent(".kanji-family"), "Same sound セイ: 青 静");
+  assert.deepEqual(await page.locator(".kanji-family a").evaluateAll((as) => as.map((a) => a.getAttribute("href"))), ["#kanji/青", "#kanji/静"]);
+  assert.deepEqual(await readings(page, ".kanji-page"), [[["は.れる", "晴れる"]], "セイ"]);
+  await page.goto(base + "#words/review");
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  await page.click(".kn-k[data-kanji='晴']");
+  await page.locator(".modal .kanji-family").waitFor({ timeout: 3000 });
+  assert.equal(await page.textContent(".modal .kanji-family"), "Same sound セイ: 青 静");
+  assert.equal(await page.locator(".modal .kanji-family a").count(), 0, "a link would leave the review");
+  await page.close();
+});
+
 // A kanji.json cached from before the readings threw on `on` and left the Kanji page blank [no error on screen, just nothing].
-test("a kanji's page and review still open on a cached kanji.json without readings", async () => {
+test("a kanji's page and review still open on a cached kanji.json without readings or sound parts", async () => {
   const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  const old = Object.fromEntries(Object.entries(require("../data/kanji.json")).map(([c, { on, kun, ...rest }]) => [c, rest]));
+  const old = Object.fromEntries(Object.entries(require("../data/kanji.json")).map(([c, { on, kun, p, ...rest }]) => [c, rest]));
   await page.route("**/data/kanji.json", (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify(old) }));
   await page.goto(base + "#kanji/学");
   await page.locator(".kanji-page").waitFor({ timeout: 3000 });
   assert.equal(await page.locator(".kanji-page .kanji-reading").count(), 0);
+  await page.goto(base + "#kanji/晴");
+  await page.locator(".kanji-page[data-c='晴']").waitFor({ timeout: 3000 });
+  assert.equal(await page.locator(".kanji-page .kanji-family").count(), 0);
   await page.goto(base + "#kanji/review");
   await page.locator(".face.back .kanji-big").waitFor({ state: "attached", timeout: 3000 });
   assert.deepEqual(errors, []);
@@ -2626,7 +2653,7 @@ test("a reload asks the server for the data files again, and uses the kept copy 
   try {
     await page.reload();
     await page.locator(".kanji-page").waitFor({ timeout: 3000 });
-    assert.equal(await page.textContent(".kanji-page .kanji-reading"), "ガク · まな.ぶ");
+    assert.deepEqual(await readings(page, ".kanji-page"), [[["ガク", "大学 · 学校 · 学生"]], "まな.ぶ"]);
   } finally {
     dropData = false;
   }

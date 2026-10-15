@@ -123,3 +123,68 @@ test("a word counts as learned once every kanji in it has a card at 21 days or m
   assert.equal(learned(word("学生|がくせい"), { 学: at(21) }), false);
   assert.equal(learned(vocab.find((w) => !/[一-鿿]/.test(w.w)), {}), false);
 });
+
+// A kanji's page listed every reading KANJIDIC2 gives with nothing to say which one the words already met use [学: ガク and まな.ぶ alike].
+const { readingIn, byReading, family } = require("../kanji.js");
+
+test("a kanji's reading in a word is found through rendaku, a small っ and a kun's stem", () => {
+  assert.equal(readingIn("学", word("学生|がくせい"), kanji), "ガク");
+  assert.equal(readingIn("学", word("学校|がっこう"), kanji), "ガク");
+  assert.equal(readingIn("紙", word("手紙|てがみ"), kanji), "かみ");
+  assert.equal(readingIn("晴", word("素晴らしい|すばらしい"), kanji), "は.れる");
+  assert.equal(readingIn("生", word("生きる|いきる"), kanji), "い.きる");
+  assert.equal(readingIn("生", word("先生|せんせい"), kanji), "セイ");
+  // A reading spelled as written beats a voiced one, else 神社 じんじゃ reads シン voiced.
+  assert.equal(readingIn("神", word("神社|じんじゃ"), kanji), "ジン");
+  // A lone kanji with kana after it takes a kun first, else 死ぬ and 差し上げる read the on'yomi シ and サ.
+  assert.deepEqual([readingIn("死", word("死ぬ|しぬ"), kanji), readingIn("差", word("差し上げる|さしあげる"), kanji)], ["し.ぬ", "さ.す"]);
+  // A reading has to use up the furigana, else 話 read はなし would count as はな.す.
+  assert.equal(readingIn("話", word("話|はなし"), kanji), "はなし");
+  // 々 repeats the kanji before it, voiced or not [時々 = とき + どき].
+  assert.deepEqual(["時々|ときどき", "段々|だんだん", "色々|いろいろ"].map((k) => readingIn(k[0], word(k), kanji)), ["とき", "ダン", "いろ"]);
+});
+
+test("a whole-word reading, or a kanji.json without readings, gives a kanji no reading [今日 = きょう]", () => {
+  assert.equal(readingIn("今", word("今日|きょう"), kanji), null);
+  const old = Object.fromEntries(Object.entries(kanji).map(([c, { on, kun, ...rest }]) => [c, rest]));
+  assert.equal(readingIn("学", word("学生|がくせい"), old), null);
+  assert.deepEqual(byReading("学", vocab, { "学生|がくせい#r": met(10) }, old), { used: [], rest: [] });
+});
+
+test("a reading lists up to 3 met words that use it, newest first, and the readings no met word uses come after", () => {
+  const cards = {
+    "学生|がくせい#r": met(10), "学校|がっこう#r": met(11), "大学|だいがく#r": met(14), "医学|いがく#r": met(12), "科学|かがく#r": met(13),
+  };
+  const rows = (c, cs) => { const b = byReading(c, vocab, cs, kanji); return [b.used.map((u) => [u.r, u.words.map((w) => w.w)]), b.rest]; };
+  assert.deepEqual(rows("学", cards), [[["ガク", ["大学", "科学", "医学"]]], ["まな.ぶ"]]);
+  // An unmet word or one met only English side first counts for nothing.
+  assert.deepEqual(rows("学", { "学生|がくせい#p": met(10) }), [[], ["ガク", "まな.ぶ"]]);
+  // 今日 is read whole, so only 今晩 places a reading.
+  assert.deepEqual(rows("今", { "今日|きょう#r": met(10), "今晩|こんばん#r": met(11) }), [[["コン", ["今晩"]]], ["キン", "いま"]]);
+  // Readings keep kanji.json's order whichever was met first.
+  assert.deepEqual(rows("生", { "生きる|いきる#r": met(12), "先生|せんせい#r": met(10) }), [[["セイ", ["先生"]], ["い.きる", ["生きる"]]], ["ショウ", "う.まれる", "お.う"]]);
+});
+
+// KanjiVG marks the part that gives a kanji its sound [晴 and 静 take theirs from 青, all read セイ].
+test("kanji.json keeps KanjiVG's sound parts, only where a kanji has one", () => {
+  assert.deepEqual(kanji["晴"].p, ["青"]);
+  assert.equal("p" in kanji["大"], false);
+  // KanjiVG's own marks come off [金: 今1 and 今2 = 今; 売: 買V = 買], and a kanji marked as its own sound has none [陰: 陰right].
+  assert.deepEqual([kanji["金"].p, kanji["売"].p], [["今"], ["買"]]);
+  assert.equal("p" in kanji["陰"], false);
+  // A slash gives alternatives, each a part of its own [仮: 叚V/反 = 叚 and 反, so 仮 meets 暇].
+  assert.deepEqual(kanji["仮"].p, ["叚", "反"]);
+});
+
+test("a sound family is the list's kanji sharing a sound part and an on'yomi, never one whose reading moved on", () => {
+  assert.deepEqual(family("晴", kanji), [{ r: ["セイ"], cs: ["青", "静"] }]);
+  assert.deepEqual(family("青", kanji), [{ r: ["セイ"], cs: ["晴", "静"] }]);
+  // 活 and 話 both take 舌, but read カツ and ワ.
+  assert.deepEqual([family("活", kanji), family("話", kanji)], [[], []]);
+  assert.deepEqual(family("会", kanji), [{ r: ["カイ", "エ"], cs: ["絵"] }]);
+  assert.deepEqual([family("金", kanji), family("売", kanji)], [[{ r: ["キン", "コン"], cs: ["今"] }], [{ r: ["バイ"], cs: ["買"] }]]);
+  // A part KanjiVG spells as a sum still joins the kanji that share it [新 and 親: 辛+木, シン].
+  assert.deepEqual([family("新", kanji), family("無", kanji)], [[{ r: ["シン"], cs: ["親"] }], [{ r: ["ブ"], cs: ["舞"] }]]);
+  const old = Object.fromEntries(Object.entries(kanji).map(([c, { p, ...rest }]) => [c, rest]));
+  assert.deepEqual(family("晴", old), []);
+});

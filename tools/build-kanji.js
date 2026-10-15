@@ -1,4 +1,4 @@
-// Builds data/kanji.json (KANJIDIC2's meanings, stroke count, level and readings, KanjiVG's components) and data/kanji-strokes.json (KanjiVG's strokes) for every kanji in the word list [大 = "large, big", 3 strokes, N5].
+// Builds data/kanji.json (KANJIDIC2's meanings, stroke count, level and readings, KanjiVG's components and sound parts) and data/kanji-strokes.json (KanjiVG's strokes) for every kanji in the word list [大 = "large, big", 3 strokes, N5].
 // Usage: node tools/build-kanji.js _data data/vocab.json data
 const fs = require("fs");
 const path = require("path");
@@ -68,6 +68,10 @@ for (const c of listed) {
   }
   strokes[c] = { d, n };
   kanji[c].c = c_;
+  // The parts KanjiVG marks as giving the sound, its own marks off and never the kanji itself, left out when none [金's 今1 and 今2 = 今; 新 and 親 share 辛+木; 大 has no p].
+  const p = [...new Set([...svg.matchAll(/kvg:phon="([^"]+)"/g)].flatMap((m) => m[1].split("/")).map((x) => x.replace(/(?:right|[0-9VT])+$/, "")))]
+    .filter((x) => x !== c);
+  if (p.length) kanji[c].p = p;
 }
 const off = listed.filter((c) => strokes[c].d.length !== kanji[c].sc);
 

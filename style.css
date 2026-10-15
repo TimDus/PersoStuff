@@ -327,6 +327,12 @@ body[data-section="japanese"] footer .credits-ja { display: block; }
 .kn-k { font-family: var(--jp); font-size: 1.3rem; padding: .1rem .45rem; min-width: 2.4rem; background: transparent; color: var(--accent); border: 1px solid var(--line); border-radius: 8px; }
 .kanji-reading { font-size: 1.5rem; }
 .kanji-reading span { white-space: nowrap; }
+/* A reading a met word uses with those words beside it, the unused ones muted under it [ガク 大学 · 学校, then まな.ぶ grey]. */
+.kr-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; column-gap: .7rem; }
+.kr-words { font-size: 1.15rem; }
+.kr-row ~ .kr-rest { color: var(--muted); font-size: 1.15rem; }
+.kanji-family { margin-top: .3rem; }
+.kanji-family a { margin-right: .25rem; }
 .kanji-big { font-family: var(--jp); font-size: 5rem; line-height: 1.1; }
 .kanji-kw { font-size: 1.3rem; font-weight: 600; }
 .kanji-words { margin-top: .8rem; display: grid; gap: .35rem; text-align: left; }

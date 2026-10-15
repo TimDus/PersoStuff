@@ -11,7 +11,7 @@
   // Asked fresh each visit, the kept copy only when the server can't be reached [a kanji.json from before its readings stayed for days].
   const json = (url) => fetch(url, { cache: "no-cache" }).catch(() => fetch(url, { cache: "force-cache" }))
     .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
-  // Fetched on the first visit and kept, the kanji meanings optional [data/vocab.json, 1,384 words, 381 KB; data/kanji.json, 82 KB, failing = note lines without meanings].
+  // Fetched on the first visit and kept, the kanji meanings optional [data/vocab.json, 1,384 words, 381 KB; data/kanji.json, 87 KB, failing = note lines without meanings].
   const loadWords = () => (loading ||= Promise.all([json("data/vocab.json"), json("data/kanji.json").catch(() => ({}))])
     .then(([list, info]) => { kanjiInfo = info; return (words = list); })
     .catch((e) => { loading = null; throw e; }));

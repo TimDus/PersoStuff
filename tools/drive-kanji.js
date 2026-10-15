@@ -3,6 +3,7 @@
 // and a popup over a review is where a stacked second popup and keys grading the card underneath both turned up.
 // Read the screenshots; report.txt has page width against viewport (equal = nothing overflows), the note lines,
 // the stroke count drawn in the popup and the recording's HTTP status and duration; the hub's 778-kanji grid and the drawing pad are the parts a phone squeezes.
+// A reading row with three met words is the widest line on a phone's card back, and 晴's sound family is the line under its components [大学生 puts セイ beside 先生].
 // Usage: node tools/drive-kanji.js . <out dir>
 const http = require("http"), fs = require("fs"), path = require("path");
 const [root, out] = process.argv.slice(2).map((p) => path.resolve(p));
@@ -50,6 +51,7 @@ const deck = { cards: { "大学生|だいがくせい#r": card(day - 5, day), "�
       };
     }, deck);
     const width = () => page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
+    const readings = (s) => page.evaluate((s) => [...document.querySelectorAll(`${s} .kanji-reading > div`)].map((d) => d.textContent).join(" | "), s);
     await page.goto(base + "#words/review");
     await page.locator(".face.front").waitFor();
     await page.click("#card");
@@ -62,7 +64,7 @@ const deck = { cards: { "大学生|だいがくせい#r": card(day - 5, day), "�
     await page.click(".kn-k[data-kanji='学']");
     await page.click(".modal .stroke-toggle");
     await page.locator(".modal .strokes path").nth(7).waitFor();
-    report.push(`${name} popup width ${await width()}, strokes ${await page.locator(".modal .strokes path").count()}, words ${await page.locator(".modal .kw-row").count()} (${await page.locator(".modal .kw-row:not(.unmet)").count()} met)`);
+    report.push(`${name} popup width ${await width()}, strokes ${await page.locator(".modal .strokes path").count()}, words ${await page.locator(".modal .kw-row").count()} (${await page.locator(".modal .kw-row:not(.unmet)").count()} met), readings ${await readings(".modal")}`);
     await page.screenshot({ path: path.join(out, `${name}-popup.png`) });
     await page.keyboard.press("Escape");
     await page.goto(base + "#kanji");
@@ -82,13 +84,17 @@ const deck = { cards: { "大学生|だいがくせい#r": card(day - 5, day), "�
     await page.keyboard.press(" ");
     await page.locator(".face.back .strokes path").first().waitFor();
     await page.waitForTimeout(800);
-    report.push(`${name} draw back width ${await width()}, KanjiVG strokes ${await page.locator(".face.back .strokes path").count()}`);
+    report.push(`${name} draw back width ${await width()}, KanjiVG strokes ${await page.locator(".face.back .strokes path").count()}, readings ${await readings(".face.back")}`);
     await page.screenshot({ path: path.join(out, `${name}-draw-back.png`) });
     await page.goto(base + "#kanji/学");
     await page.locator(".kanji-comps").waitFor();
     await page.waitForTimeout(500);
-    report.push(`${name} page width ${await width()}, comps ${JSON.stringify(await page.textContent(".kanji-comps"))}, stories ${await page.locator(".story").count()}`);
+    report.push(`${name} page width ${await width()}, comps ${JSON.stringify(await page.textContent(".kanji-comps"))}, stories ${await page.locator(".story").count()}, readings ${await readings(".kanji-page")}`);
     await page.screenshot({ path: path.join(out, `${name}-page.png`), fullPage: true });
+    await page.goto(base + "#kanji/晴");
+    await page.locator(".kanji-family").waitFor();
+    report.push(`${name} 晴 page width ${await width()}, family ${JSON.stringify(await page.textContent(".kanji-family"))}, links ${JSON.stringify(await page.locator(".kanji-family a").evaluateAll((as) => as.map((a) => a.getAttribute("href"))))}, readings ${await readings(".kanji-page")}`);
+    await page.screenshot({ path: path.join(out, `${name}-family.png`) });
     report.push(`${name} errors ${errors.length ? errors.join(" | ") : "none"}`);
     await ctx.close();
   }

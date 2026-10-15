@@ -1,7 +1,7 @@
 // The Kanji tab, its deck and a kanji's page, which a word card's note opens as a popup so the review underneath goes on [学 = study, its strokes and the 13 words with it].
 (function () {
   const study = window.HiraStudy;
-  const { wordsWith, kanjiOf, unlocks, kanjiQueue, mature } = window.HiraKanji;
+  const { wordsWith, kanjiOf, unlocks, kanjiQueue, mature, byReading, family } = window.HiraKanji;
   const esc = (s) => study.shell().esc(s);
   // Stories are other members' HTML, so every < that doesn't open an em or strong is shown as text [a broken <img onerror= stays text].
   const safe = (html) => html.replace(/<(?!\/?(?:em|strong)>)/g, "&lt;");
@@ -14,6 +14,9 @@
       return page && info[p] ? `<a href="#kanji/${esc(p)}">${label}</a>` : `<span>${label}</span>`;
     }).join("")}</div>` : "";
   }
+  // The list's kanji sharing its sound part and an on'yomi, each a link on its page and plain in a popup [晴: Same sound セイ: 青 静].
+  const fam = (c, page) => family(c, study.kanjiInfo() || {}).map(({ r, cs }) => `<div class="kanji-family small">Same sound <span class="jp">${r.map(esc).join(" · ")}</span>: ${
+    cs.map((d) => (page ? `<a class="jp" href="#kanji/${esc(d)}">${esc(d)}</a>` : `<span class="jp">${esc(d)}</span>`)).join(" ")}</div>`).join("");
   // The parts Koohii's data decides, drawn from whatever has arrived [before it lands: KANJIDIC's meaning, no frame, no stories].
   function head(c, page) {
     const info = study.kanjiInfo()?.[c] || {}, k = study.koohii(c);
@@ -29,16 +32,19 @@
     return list.map((s) => `
       <div class="story"><div class="story-by muted small">${esc(s.by)}</div><div class="story-text">${safe(s.text)}</div></div>`).join("");
   }
-  const big = (c) => {
-    // Readings missing from a kanji.json cached before they were added [GitHub Pages keeps it 10 minutes after a push].
-    const info = study.kanjiInfo()?.[c], all = [...(info?.on || []), ...(info?.kun || [])];
-    return `${all.length ? `<div class="kanji-reading jp">${all.map((r) => `<span>${esc(r)}</span>`).join(" · ")}</div>` : ""}<div class="kanji-big jp">${esc(c)}</div>`;
+  // A row per reading a met word uses with those words, the rest on one line, none from a kanji.json cached before readings [学: ガク 大学 · 学校, then まな.ぶ].
+  const big = (c, words) => {
+    const { used, rest } = byReading(c, words, study.cards(), study.kanjiInfo() || {});
+    const rows = used.map(({ r, words: ws }) => `<div class="kr-row"><span class="kr">${esc(r)}</span><span class="kr-words">${ws.map((w) => esc(w.w)).join(" · ")}</span></div>`).join("");
+    const line = rest.length ? `<div class="kr-rest">${rest.map((r) => `<span>${esc(r)}</span>`).join(" · ")}</div>` : "";
+    return `${rows || line ? `<div class="kanji-reading jp">${rows}${line}</div>` : ""}<div class="kanji-big jp">${esc(c)}</div>`;
   };
   const rows = (c, words, n = Infinity) => wordsWith(c, words, study.cards()).slice(0, n).map((w) => `
     <div class="kw-row${study.met(w.k) ? "" : " unmet"}"><span class="jp">${study.ruby(w)}</span> <span class="small">${esc(w.m)}</span></div>`).join("");
   const body = (c, words, page) => `
-    ${big(c)}
+    ${big(c, words)}
     <div class="kanji-head">${head(c, page)}</div>
+    ${fam(c, page)}
     ${window.HiraStrokes.button(c)}
     <div class="stories">${stories(c)}</div>
     <div class="kanji-words">${rows(c, words)}</div>`;
@@ -142,7 +148,7 @@
     const front = `<div class="kanji-prompt">${esc(prompt(c, words))}</div>${draw
       ? `<div class="kpad" data-noflip><svg viewBox="0 0 109 109" aria-label="Drawing pad"></svg><button class="ghost small" type="button" data-clear>Clear</button></div>`
       : `<div class="muted small">Write it on paper, then turn the card</div>`}`;
-    const back = `${big(c)}${draw ? window.HiraStrokes.shown(c) : window.HiraStrokes.button(c)}
+    const back = `${big(c, words)}${draw ? window.HiraStrokes.shown(c) : window.HiraStrokes.button(c)}
       <div class="stories">${stories(c)}</div><div class="kanji-words">${rows(c, words, 5)}</div>`;
     return { front, back };
   }
