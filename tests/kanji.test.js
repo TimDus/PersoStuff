@@ -116,6 +116,14 @@ test("today's kanji: due reviews most overdue first, then learning, then new up 
   assert.deepEqual(kanjiQueue({ unlocked, cards: {}, today: 10, newPerDay: 2 }), ["一", "二"]);
 });
 
+test("kanji due the same day come in a fresh order each session, overdue ones still first", () => {
+  const seeded = (seed) => () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+  const kc = Object.fromEntries(["一", "二", "三", "四", "五", "六", "七", "八"].map((c, i) => [c, { ...met(1), due: i < 2 ? 8 : 10 }]));
+  const run = (seed) => kanjiQueue({ unlocked: [], cards: kc, today: 10, newPerDay: 0, rand: seeded(seed) }).join("");
+  assert.ok(new Set([1, 2, 3, 4, 5].map(run)).size > 1, "five sessions gave one order");
+  for (const s of [1, 2, 3, 4, 5]) assert.deepEqual([...run(s).slice(0, 2)].sort(), ["一", "二"]);
+});
+
 test("a word counts as learned once every kanji in it has a card at 21 days or more, never a kana word", () => {
   const at = (ivl) => ({ ...met(1), ivl });
   assert.equal(learned(word("学生|がくせい"), { 学: at(21), 生: at(30) }), true);

@@ -35,10 +35,10 @@
     return r.again ? 0 : r.card.ivl;
   });
 
-  // Today's cards: due reviews most overdue first, learning cards a closed tab left behind, then new ones.
+  // Today's cards: due reviews most overdue first and shuffled within a day, learning cards a closed tab left behind, then new ones.
   // New: the English side of words whose Japanese side was first seen before today, and the next words in deck order,
   // each kind up to newPerDay less what today already introduced [15 met this morning = 5 more tonight].
-  function queue({ words, cards, today, newPerDay }) {
+  function queue({ words, cards, today, newPerDay, rand = Math.random }) {
     const out = [];
     const item = (word, dir) => ({ key: `${word.k}#${dir}`, word, dir });
     const due = [], learning = [], prod = [], rec = [];
@@ -54,7 +54,7 @@
       if (!r) rec.push(item(word, "r"));
       else if (!p && r.first < today) prod.push(item(word, "p"));
     }
-    out.push(...due.sort((a, b) => a[0] - b[0]).map(([, it]) => it), ...learning);
+    out.push(...due.map(([d, it]) => [d, rand(), it]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(([, , it]) => it), ...learning);
     // A word's two sides on the same day are its new English card and its Japanese review [w0 Monday: r, Tuesday: r then p].
     out.push(...prod.slice(0, Math.max(0, newPerDay - prodToday)), ...rec.slice(0, Math.max(0, newPerDay - recToday)));
     return out;

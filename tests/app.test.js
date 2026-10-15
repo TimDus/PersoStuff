@@ -2264,7 +2264,8 @@ const readings = (page, scope) => page.evaluate((s) => [
 // The note under a word's answer: one line per kanji with its meaning and the met words that share it, on the back only.
 const kanjiDeck = () => deckWith({
   "学校|がっこう#r": reviewed({ first: day - 2, last: day - 2, due: day + 9 }), "大学|だいがく#r": reviewed({ first: day - 1, last: day - 1, due: day + 9 }),
-  "学生|がくせい#r": reviewed({ first: day - 3, last: day - 3, due: day }), "学生|がくせい#p": reviewed({ first: day - 2, last: day - 2, due: day }),
+  // 学生's Japanese side a day overdue, so it comes first however a day's reviews are shuffled [both due today: either side first].
+  "学生|がくせい#r": reviewed({ first: day - 3, last: day - 3, due: day - 1 }), "学生|がくせい#p": reviewed({ first: day - 2, last: day - 2, due: day }),
 });
 test("a word's kanji note shows on the back of both sides and never on the front", async () => {
   const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#words/review");

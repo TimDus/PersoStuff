@@ -96,6 +96,25 @@ test("due reviews come before new words, most overdue first", () => {
   assert.ok(!q.some((c) => c.key === "w7|r7#r"));
 });
 
+// Reviews due the same day came in the word list's order every time, so a batch met together could be answered by position [the one after 学校].
+const seeded = (seed) => () => {
+  seed = (seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+test("reviews due the same day come in a fresh order each session, overdue ones still first", () => {
+  const cards = {};
+  for (let i = 0; i < 10; i++) cards[`w${i}|r${i}#r`] = { st: "review", ivl: 3, ease: 2.5, due: i < 3 ? 98 : 100, n: 2, lapses: 0, first: 90, last: 97 };
+  const run = (seed) => queue({ words: deck, cards, today: 100, newPerDay: 0, rand: seeded(seed) }).map((c) => c.word.k);
+  const orders = new Set([1, 2, 3, 4, 5].map((s) => run(s).join()));
+  assert.ok(orders.size > 1, "five sessions gave one order");
+  for (const s of [1, 2, 3, 4, 5]) {
+    assert.deepEqual(run(s).slice(0, 3).sort(), ["w0|r0", "w1|r1", "w2|r2"]);
+    assert.equal(run(s).length, 10);
+  }
+});
+
 test("a card left in learning by a closed tab is offered again", () => {
   const cards = { "w0|r0#r": { st: "learn", ivl: 0, ease: 2.5, due: 100, n: 1, lapses: 0, first: 100, last: 100 } };
   assert.ok(queue({ words: deck, cards, today: 100, newPerDay: 20 }).some((c) => c.key === "w0|r0#r"));
