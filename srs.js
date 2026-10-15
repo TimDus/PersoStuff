@@ -37,8 +37,8 @@
 
   // Today's cards: due reviews most overdue first and shuffled within a day, learning cards a closed tab left behind, then new ones.
   // New: the English side of words whose Japanese side was first seen before today, and the next words in deck order,
-  // each kind up to newPerDay less what today already introduced [15 met this morning = 5 more tonight].
-  function queue({ words, cards, today, newPerDay, rand = Math.random }) {
+  // each kind up to newPerDay less what today already introduced [15 met this morning = 5 more tonight]; a word meets `ready` to be new [学生 once 学 and 生 have kanji cards].
+  function queue({ words, cards, today, newPerDay, rand = Math.random, ready = () => true }) {
     const out = [];
     const item = (word, dir) => ({ key: `${word.k}#${dir}`, word, dir });
     const due = [], learning = [], prod = [], rec = [];
@@ -51,7 +51,7 @@
         if (c.st === "review" && c.due <= today) due.push([c.due, item(word, dir)]);
         else if (c.st !== "review" && c.due <= today) learning.push(item(word, dir));
       }
-      if (!r) rec.push(item(word, "r"));
+      if (!r) { if (ready(word)) rec.push(item(word, "r")); }
       else if (!p && r.first < today) prod.push(item(word, "p"));
     }
     out.push(...due.map(([d, it]) => [d, rand(), it]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(([, , it]) => it), ...learning);

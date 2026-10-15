@@ -2,8 +2,9 @@
 // It exists because the tests drive one note line at a time, while the phone shows three for 大学生 beside the examples,
 // and a popup over a review is where a stacked second popup and keys grading the card underneath both turned up.
 // Read the screenshots; report.txt has page width against viewport (equal = nothing overflows), the note lines,
-// the stroke count drawn in the popup and the recording's HTTP status and duration; the hub's 778-kanji grid and the drawing pad are the parts a phone squeezes.
+// the stroke count drawn in the popup and the recording's HTTP status and duration; the hub's 902-kanji grid and the drawing pad are the parts a phone squeezes.
 // A reading row with three met words is the widest line on a phone's card back, and 晴's sound family is the line under its components [大学生 puts セイ beside 先生].
+// 海's parts once read a bare 氵, so the parts lines of 海, 水, 漢 and 近 and the hub's next kanji in Heisig's order are reported too.
 // Usage: node tools/drive-kanji.js . <out dir>
 const http = require("http"), fs = require("fs"), path = require("path");
 const [root, out] = process.argv.slice(2).map((p) => path.resolve(p));
@@ -95,6 +96,22 @@ const deck = { cards: { "大学生|だいがくせい#r": card(day - 5, day), "�
     await page.locator(".kanji-family").waitFor();
     report.push(`${name} 晴 page width ${await width()}, family ${JSON.stringify(await page.textContent(".kanji-family"))}, links ${JSON.stringify(await page.locator(".kanji-family a").evaluateAll((as) => as.map((a) => a.getAttribute("href"))))}, readings ${await readings(".kanji-page")}`);
     await page.screenshot({ path: path.join(out, `${name}-family.png`) });
+    // Parts first: a radical form's full kanji, the full kanji's forms, a drift note, and the order the hub offers.
+    for (const c of ["海", "水", "漢", "近"]) {
+      await page.goto(base + `#kanji/${c}`);
+      await page.locator(`.kanji-page[data-c='${c}'] .kanji-kw`).waitFor();
+      await page.waitForTimeout(300);
+      const text = (s) => page.evaluate((s) => [...document.querySelectorAll(s)].map((d) => d.textContent).join(" | "), s);
+      report.push(`${name} ${c} page width ${await width()}, parts ${JSON.stringify(await text(".kanji-comps"))}, why ${JSON.stringify(await text(".kanji-why"))}, forms ${JSON.stringify(await text(".kanji-forms"))}`);
+      await page.screenshot({ path: path.join(out, `${name}-parts-${c.codePointAt(0).toString(16)}.png`) });
+    }
+    await page.goto(base + "#kanji");
+    await page.locator("#k-new").waitFor();
+    report.push(`${name} next kanji ${(await page.locator(".kgrid a.next").allTextContents()).join("")}, headings ${JSON.stringify(await page.locator("#app h2").allTextContents())}`);
+    await page.goto(base + "#words");
+    await page.locator("#new").waitFor();
+    report.push(`${name} words hub new ${await page.textContent("#new")}, ${JSON.stringify(await page.textContent("#waiting"))}`);
+    await page.screenshot({ path: path.join(out, `${name}-words-hub.png`) });
     report.push(`${name} errors ${errors.length ? errors.join(" | ") : "none"}`);
     await ctx.close();
   }

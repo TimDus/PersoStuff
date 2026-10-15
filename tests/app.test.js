@@ -765,6 +765,10 @@ const deckOf = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("hi
 const studySaves = (page) => page.evaluate(() => window.__log.filter((l) => l.study).map((l) => l.study));
 const reviewed = (over) => ({ st: "review", ivl: 1, ease: 2.5, due: day + 1, n: 1, lapses: 0, first: day, last: day, ...over });
 const deckWith = (cards) => ({ cards, settings: { newPerDay: 20, at: 0 }, savedAt: 1 });
+// Every kanji started, so new words come in list order [秋 first] rather than only the kana words a fresh account gets.
+const KANJI = Object.keys(require("../data/kanji.json"));
+const started = (cfg = {}) => ({ ...listed, ...cfg, local: { "study.user": "u1", study: { ...deckWith({}),
+  kanji: { cards: Object.fromEntries(KANJI.map((c) => [c, reviewed({ first: day - 1, last: day - 1, due: day + 30 })])), settings: { newPerDay: 10, at: 0 } } } } });
 // New words open as an introduction with a single Got it, and are asked a few cards later [a fresh deck: 4 introductions, then 秋 asked].
 const pastIntros = async (page) => { while (await page.locator("#got").count()) await page.click("#got"); };
 const answer = async (page, g) => { await pastIntros(page); await page.click("#card"); await page.click(`[data-g='${g}']`); };
@@ -778,19 +782,24 @@ test("the Japanese section has its own tabs, and the kana tabs stay as they were
   await page.close();
 });
 
-test("a fresh account is offered 20 new words, Japanese side first, with the kanji's reading ready to show", async () => {
+// Words follow the kanji: a word with kanji opens once each of its kanji has a card, so a fresh account starts on kana words.
+test("a fresh account is offered 20 new kana words, and a word with kanji once its kanji have cards", async () => {
   const page = await open(listed, "#words");
   await page.locator("#new").waitFor();
   assert.deepEqual([await page.textContent("#new"), await page.textContent("#due")], ["20", "0"]);
   await page.click("#go");
   assert.equal(await page.textContent("#left"), "20 left");
-  assert.equal(await page.locator(".face.front ruby rt").first().textContent(), "あき");
+  assert.doesNotMatch(await page.textContent(".face.front .word"), /[一-鿿]/);
   await page.close();
+  const ready = await open({ ...listed, local: { "study.user": "u1", study: { ...deckWith({}), kanji: { cards: { 秋: reviewed() }, settings: { newPerDay: 10, at: 0 } } } } }, "#words/review");
+  await ready.locator(".face.front").waitFor();
+  assert.equal(await ready.locator(".face.front ruby rt").first().textContent(), "あき");
+  await ready.close();
 });
 
 // A new word was asked cold, before the learner had ever seen it; KanjiMemorize shows it first, and so does this now.
 test("a new word opens with its answer and Got it and is asked for real a few cards on; its English side never opens that way", async () => {
-  const page = await open(listed, "#words/review");
+  const page = await open(started(), "#words/review");
   await page.locator("#got").waitFor();
   assert.match(await page.textContent(".face.front"), /秋/);
   assert.equal(await page.locator(".face.back").isVisible(), true);
@@ -811,7 +820,7 @@ test("a new word opens with its answer and Got it and is asked for real a few ca
 });
 
 test("Good on a new word brings it back tomorrow and syncs the deck apart from the kana", async () => {
-  const page = await open(listed, "#words/review");
+  const page = await open(started(), "#words/review");
   await page.locator(".face.front").waitFor();
   await answer(page, 3);
   const card = (await deckOf(page)).cards["秋|あき#r"];
@@ -968,7 +977,7 @@ test("leaving the Words page while the list loads stays on the page you went to"
 
 // Another device's clock ahead left later answers here looking already sent [its push stamped 13:00, this answer 12:10].
 test("an answer made after syncing with a fast-clock device still asks before Sign out drops it", async () => {
-  const page = await open({ ...listed, remoteStudy: { ...deckWith({}), savedAt: Date.now() + 3600e3 } }, "#words/review");
+  const page = await open(started({ remoteStudy: { ...deckWith({}), savedAt: Date.now() + 3600e3 } }), "#words/review");
   await page.locator(".face.front").waitFor();
   await page.evaluate(() => localStorage.setItem("__offline", "1"));
   await answer(page, 3);
@@ -1000,7 +1009,7 @@ test("answers upload together rather than one by one, and a finished session upl
 test("a session that runs past 4 am files its answers under the new day", async () => {
   const start = new Date();
   start.setHours(3, 58, 0, 0);
-  const page = await open({ ...listed, clock: start.getTime() }, "#words/review");
+  const page = await open(started({ clock: start.getTime() }), "#words/review");
   await page.locator(".face.front").waitFor();
   await page.clock.setSystemTime(start.getTime() + 5 * 60e3);
   await answer(page, 3);
@@ -1034,7 +1043,7 @@ test("practice buttons count the cards a round will show, both sides of a word",
 });
 
 test("Enter on a focused grade button presses that button", async () => {
-  const page = await open(listed, "#words/review");
+  const page = await open(started(), "#words/review");
   await page.locator(".face.front").waitFor();
   await pastIntros(page);
   await page.click("#card");
@@ -2236,7 +2245,7 @@ test("Enter on a link while a miss shows follows the link instead of moving on",
 // ---------- Kanji ----------
 // A word card's 🔊 spoke the kana through the browser's voice, which most phones lack; the word's WaniKani recording plays instead.
 test("a word with a recording plays it, and its button shows without a Japanese voice", async () => {
-  const page = await open(listed, "#words/review");
+  const page = await open(started(), "#words/review");
   await page.locator("#got").waitFor();
   assert.equal(await page.locator(".face.back > .speak.rec").count(), 1);
   await page.click(".face.back > .speak");
@@ -2245,7 +2254,7 @@ test("a word with a recording plays it, and its button shows without a Japanese 
 });
 
 test("a word without a recording keeps the browser's speech and plays no clip [後 read あと has none]", async () => {
-  const page = await open(listed, "#words/review");
+  const page = await open(started(), "#words/review");
   await page.locator("#got").waitFor();
   while (!/後/.test(await page.textContent(".face.front"))) await page.click("#got");
   assert.equal(await page.locator(".face.back > .speak").count(), 1);
@@ -2324,7 +2333,7 @@ test("without data/kanji.json the cards still run, their note lines just lack th
 });
 
 test("a recording that won't load falls back to the browser's speech [offline, never played before]", async (t) => {
-  const page = await open(listed, "#words/review");
+  const page = await open(started(), "#words/review");
   await page.locator("#got").waitFor();
   if (!(await page.evaluate(() => document.body.classList.contains("has-voice")))) { await page.close(); return t.skip("no Japanese voice on this machine"); }
   await page.route("**/data/words/**", (r) => r.abort());
@@ -2350,7 +2359,7 @@ test("leaving the page with a popup open leaves the next page usable", async () 
 
 // A second tap aborts the first play, which isn't a failed load [two quick taps on 秋 played the clip and spoke あき over it].
 test("a second tap before the recording starts plays it once and speaks nothing", async (t) => {
-  const page = await open(listed, "#words/review");
+  const page = await open(started(), "#words/review");
   await page.locator("#got").waitFor();
   if (!(await page.evaluate(() => document.body.classList.contains("has-voice")))) { await page.close(); return t.skip("no Japanese voice on this machine"); }
   const held = [];
@@ -2483,7 +2492,7 @@ test("a kanji Koohii's file lacks keeps KANJIDIC's meaning, with no Heisig line 
 });
 
 // ---------- Kanji tab ----------
-// A kanji unlocks when a met word uses it, a new one opens with its answer, and a grade lands in study.kanji, which
+// A new kanji opens with its answer, and a grade lands in study.kanji, which
 // mergeStudy merges card by card: taken whole from the newer side, one device's kanji reviews would wipe the other's.
 const VOCAB = require("../data/vocab.json");
 const withKanji = (cards, settings = { newPerDay: 10, at: 0 }) => ({ ...kanjiDeck(), kanji: { cards, settings } });
@@ -2497,43 +2506,49 @@ async function drag(page, sel, pts) {
   await page.mouse.up();
 }
 
-test("the Kanji hub counts the kanji met words unlocked, and a review introduces, grades and syncs them", async () => {
-  const page = await open({ ...listed, koohii, local: { "study.user": "u1", study: kanjiDeck() } }, "#kanji");
+// Heisig's first frames, so the hub's order is his and not the stroke-count stand-in [一 1, 二 2, 三 3, 口 11, 日 12].
+const frames = Object.fromEntries([["一", "one", 1], ["二", "two", 2], ["三", "three", 3], ["口", "mouth", 11], ["日", "day", 12]]
+  .map(([c, kw, frame]) => [c, { kw, frame, mine: null, stories: [] }]));
+// Kanji came from met words, so a fresh account had none and 意 could come before 音 and 心; now they go in Heisig's order, parts first.
+test("the Kanji hub offers the next kanji in Heisig's order, and a review introduces, grades and syncs them", async () => {
+  const page = await open({ ...listed, koohii: { ...koohii, ...frames }, local: { "study.user": "u1", study: withKanji({}, { newPerDay: 5, at: 0 }) } }, "#kanji");
   await page.locator("#k-new").waitFor();
-  // 学生 met first unlocks 学 and 生, then 学校 adds 校 and 大学 adds 大.
-  assert.deepEqual([await page.textContent("#k-new"), await page.textContent("#k-due")], ["4", "0"]);
-  assert.match(await page.textContent("#k-sum"), /4 of 778 unlocked · 0 learned/);
-  assert.equal(await page.locator(".kgrid a").count(), 778);
-  // The grid goes by level, then by first place in the list [all four N5: 学 20th, 生 21st, 校 24th, 大 62nd].
-  assert.deepEqual(await page.locator(".kgrid a:not(.locked)").allTextContents(), ["学", "生", "校", "大"]);
-  await page.waitForFunction(() => HiraStudy.keyword("学") === "study");
+  assert.deepEqual([await page.textContent("#k-new"), await page.textContent("#k-due")], ["5", "0"]);
+  assert.match(await page.textContent("#k-sum"), /0 of 902 started · 0 learned/);
+  assert.equal(await page.locator(".kgrid a").count(), 902);
+  assert.deepEqual((await page.locator(".kgrid a.next").allTextContents()).sort(), [..."一二三口日"].sort());
   await page.click("#go");
   await page.locator("#got").waitFor();
-  assert.equal(await page.textContent(".face.front .kanji-prompt"), "study");
-  assert.equal(await page.locator(".face.back").isVisible(), true);
-  assert.equal(await page.textContent(".face.back .kanji-big"), "学");
-  assert.deepEqual(await readings(page, ".face.back"), [[["ガク", "大学 · 学校 · 学生"]], "まな.ぶ"]);
-  assert.equal(await page.locator(".face.back .stroke-toggle").count(), 1, "Paper mode keeps the Stroke order button");
-  assert.equal(await page.locator(".face.back .story").count(), 4);
+  assert.equal(await page.textContent(".face.front .kanji-prompt"), "one");
+  assert.equal(await page.textContent(".face.back .kanji-big"), "一");
   assert.match(await page.textContent(".hint"), /New kanji/);
-  assert.equal(await page.textContent("#app a[href='#kanji']"), "← Kanji");
   await pastIntros(page);
-  assert.equal(await page.textContent(".face.front .kanji-prompt"), "study");
-  assert.equal(await page.locator(".face.back").isVisible(), false);
-  assert.equal((await deckOf(page)).kanji, undefined, "an introduction stores nothing");
+  assert.equal((await deckOf(page)).kanji.cards["一"], undefined, "an introduction stores nothing");
   await page.click("#card");
   await page.click("[data-g='3']");
-  assert.deepEqual((await deckOf(page)).kanji.cards["学"], { st: "review", ivl: 1, ease: 2.5, due: day + 1, n: 1, lapses: 0, first: day, last: day });
-  for (let i = 0; i < 3; i++) await answer(page, 3);
+  assert.deepEqual((await deckOf(page)).kanji.cards["一"], { st: "review", ivl: 1, ease: 2.5, due: day + 1, n: 1, lapses: 0, first: day, last: day });
+  for (let i = 0; i < 4; i++) await answer(page, 3);
   await page.locator("h1", { hasText: "Done" }).waitFor();
-  assert.deepEqual(Object.keys((await studySaves(page)).at(-1).kanji.cards).sort(), ["大", "学", "校", "生"].sort());
-  assert.match(page.url(), /#kanji\/review$/);
+  assert.deepEqual(Object.keys((await studySaves(page)).at(-1).kanji.cards).sort(), [..."一二三口日"].sort());
+  await page.close();
+});
+
+// 学 due as a review, so its back is the one asked for whatever the order of new kanji.
+test("a kanji card's back shows its readings, its parts, the stroke order and the stories", async () => {
+  const page = await open({ ...listed, koohii, local: { "study.user": "u1", study: withKanji({ 学: reviewed({ first: day - 5, last: day - 1, due: day }) }, { newPerDay: 5, at: 0 }) } }, "#kanji");
+  await page.locator("#k-due").waitFor();
+  await page.click("#go");
+  await page.locator(".face.front .kanji-prompt", { hasText: "study" }).waitFor();
+  await page.click("#card");
+  assert.deepEqual(await readings(page, ".face.back"), [[["ガク", "大学 · 学校 · 学生"]], "まな.ぶ"]);
+  assert.match(await page.textContent(".face.back .kanji-comps"), /子 child/);
+  assert.equal(await page.locator(".face.back .stroke-toggle").count(), 1, "Paper mode keeps the Stroke order button");
+  assert.equal(await page.locator(".face.back .story").count(), 4);
   await page.close();
 });
 
 test("the new-a-day choice caps the day's new kanji and is kept in the deck", async () => {
-  const cards = Object.fromEntries(VOCAB.slice(0, 12).map((w) => [`${w.k}#r`, reviewed({ first: day - 1, last: day - 1, due: day + 5 })]));
-  const page = await open({ ...listed, local: { "study.user": "u1", study: deckWith(cards) } }, "#kanji");
+  const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#kanji");
   await page.locator("#k-new").waitFor();
   assert.equal(await page.textContent("#k-new"), "10");
   await page.selectOption("#kper", "5");
@@ -2577,6 +2592,40 @@ test("a kanji's page has its components, stories and words, and the popup shows 
   await page.click(".kn-k[data-kanji='学']");
   assert.match(await page.textContent(".modal .kanji-comps"), /子 child/);
   assert.equal(await page.locator(".modal .kanji-comps a").count(), 0, "a link would leave the review");
+  await page.close();
+});
+
+// 海's parts read "氵" and nothing else, so nothing said the left side meant water, and 水's page never said it turns into 氵.
+test("a radical form names its full kanji, the full kanji names its forms, and a shape gets a name", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#kanji/海");
+  await page.locator(".kanji-comps").waitFor({ timeout: 3000 });
+  assert.match(await page.textContent(".kanji-comps"), /氵 the 水 radical, water/);
+  assert.equal(await page.locator(".kanji-comps a[href='#kanji/水']").count(), 1);
+  await page.goto(base + "#kanji/水");
+  // 水 is 氵 on the left and 氺 at the bottom [海; 様].
+  await page.locator(".kanji-page[data-c='水'] .kanji-forms").first().waitFor({ timeout: 3000 });
+  const forms = await page.locator(".kanji-forms").allTextContents();
+  // The first 8 of 37 in study order, here the stroke-count stand-in as no Koohii file is served [6 to 8 strokes, then code point], not kanji.json's 泳 汚 温 海.
+  assert.equal(forms[0], "As a radical it's written 氵: 汚 池 決 汽 沢 沸 油 治 …");
+  assert.deepEqual(forms.slice(1), ["As a radical it's written 氺: 様"]);
+  await page.goto(base + "#kanji/近");
+  await page.locator(".kanji-page[data-c='近'] .kanji-comps").waitFor({ timeout: 3000 });
+  assert.match(await page.textContent(".kanji-comps"), /⻌ \w/);
+  // 漢 has its 氵 from the Han river, which nothing in "China" suggests.
+  await page.goto(base + "#kanji/漢");
+  await page.locator(".kanji-page[data-c='漢'] .kanji-why").waitFor({ timeout: 3000 });
+  assert.match(await page.textContent(".kanji-why"), /Han/);
+  await page.close();
+});
+
+// The parts no word uses are deck kanji too, so their grid links and pages must open [未, only in 味 and 妹].
+test("a kanji that is only a part has a page, and the hub lists it under its own heading", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#kanji");
+  await page.locator(".kgrid").first().waitFor();
+  assert.ok((await page.locator("h2").allTextContents()).includes("Only as parts"));
+  await page.click(".kgrid a:text('未')");
+  await page.locator(".kanji-page[data-c='未']").waitFor({ timeout: 3000 });
+  assert.equal(await page.locator(".kanji-page .kanji-words .kw-row").count(), 0);
   await page.close();
 });
 
@@ -2624,12 +2673,20 @@ test("a kanji's page lists the list's kanji sharing its sound and reading as lin
 });
 
 // A kanji.json cached from before the readings threw on `on` and left the Kanji page blank [no error on screen, just nothing].
-test("a kanji's page and review still open on a cached kanji.json without readings or sound parts", async () => {
+// The parts-first kanji.json added 124 kanji and `v`, so a copy from before has neither [778 entries, 海 without 氵 = 水].
+test("a kanji's page, the hub and the review still open on a cached kanji.json without readings, sound parts or parts first", async () => {
   const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  const old = Object.fromEntries(Object.entries(require("../data/kanji.json")).map(([c, { on, kun, p, ...rest }]) => [c, rest]));
+  const words = new Set(VOCAB.flatMap((w) => [...w.w]));
+  const old = Object.fromEntries(Object.entries(require("../data/kanji.json")).filter(([c]) => words.has(c)).map(([c, { on, kun, p, v, ...rest }]) => [c, rest]));
+  assert.equal(Object.keys(old).length, 778);
   await page.route("**/data/kanji.json", (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify(old) }));
+  await page.goto(base + "#kanji");
+  await page.locator("#k-sum").waitFor({ timeout: 5000 });
+  assert.match(await page.textContent("#k-sum"), /^0 of 778 started/);
+  await page.goto(base + "#kanji/海");
+  await page.locator(".kanji-page[data-c='海'] .kanji-comps").waitFor({ timeout: 3000 });
   await page.goto(base + "#kanji/学");
   await page.locator(".kanji-page").waitFor({ timeout: 3000 });
   assert.equal(await page.locator(".kanji-page .kanji-reading").count(), 0);
@@ -2639,6 +2696,16 @@ test("a kanji's page and review still open on a cached kanji.json without readin
   await page.goto(base + "#kanji/review");
   await page.locator(".face.back .kanji-big").waitFor({ state: "attached", timeout: 3000 });
   assert.deepEqual(errors, []);
+  await page.close();
+});
+
+// The hub waits for Koohii's file, which holds Heisig's order; a sign that never answers must not leave it on "Loading kanji…".
+test("with Koohii's sign hanging the hub still opens after its wait, in stroke-count order", async () => {
+  const page = await open({ ...listed, koohii, koohiiHang: true, local: { "study.user": "u1", study: kanjiDeck() } }, "#kanji");
+  await page.locator("#k-new").waitFor({ timeout: 6000 });
+  // The grid goes by level, so 乙, a part no word uses, sits under Only as parts.
+  const next = await page.locator(".kgrid a.next").allTextContents();
+  assert.deepEqual([next.length, next.includes("一"), next.includes("乙")], [10, true, true]);
   await page.close();
 });
 
@@ -2664,7 +2731,7 @@ test("a reload asks the server for the data files again, and uses the kept copy 
 // A review with nothing left drew the hub under #kanji/review, so the hub's Study button linked to the page it was on and did nothing.
 test("a review with nothing left shows the hub at #kanji, and Words at #words, so their Study buttons work", async () => {
   const later = (n) => reviewed({ first: day - 3, last: day - 1, due: day + n });
-  const kanji = await open({ ...listed, local: { "study.user": "u1", study: withKanji({ 学: later(5), 生: later(5), 校: later(5), 大: later(5) }) } }, "#kanji/review");
+  const kanji = await open({ ...listed, local: { "study.user": "u1", study: withKanji(Object.fromEntries(KANJI.map((c) => [c, later(5)]))) } }, "#kanji/review");
   await kanji.locator("#k-new").waitFor();
   assert.match(kanji.url(), /#kanji$/);
   await kanji.close();

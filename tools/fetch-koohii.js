@@ -1,12 +1,12 @@
-// Saves Kanji Koohii's study page of every kanji in the word list to _data/koohii/<hex>.html, signed in with the login in .env, never printed [学 = 5b66.html].
-// One request every 3 s, pages already saved are skipped, so a stopped run resumes [778 pages, about 40 minutes].
-// Usage: node tools/fetch-koohii.js data/vocab.json _data/koohii [one kanji to fetch only that page]
+// Saves Kanji Koohii's study page of every deck kanji in data/kanji.json to _data/koohii/<hex>.html, signed in with the login in .env, never printed [学 = 5b66.html].
+// One request every 3 s, pages already saved are skipped, so a stopped run resumes [902 pages, about 45 minutes from empty].
+// Usage: node tools/fetch-koohii.js data/kanji.json _data/koohii [one kanji to fetch only that page]
 const fs = require("fs");
 const path = require("path");
 
-const [vocabFile, outDir, only] = process.argv.slice(2);
+const [kanjiFile, outDir, only] = process.argv.slice(2);
 if (!outDir) {
-  console.error("usage: node tools/fetch-koohii.js <vocab json> <out dir> [kanji]");
+  console.error("usage: node tools/fetch-koohii.js <kanji json> <out dir> [kanji]");
   process.exit(1);
 }
 const env = fs.readFileSync(path.join(__dirname, "..", ".env"), "utf8");
@@ -18,8 +18,7 @@ if (!user || !pass) {
   process.exit(1);
 }
 const SITE = "https://kanji.koohii.com";
-const words = JSON.parse(fs.readFileSync(vocabFile, "utf8"));
-const listed = only ? [only] : [...new Set(words.flatMap(require("../kanji.js").kanjiOf))];
+const listed = only ? [only] : Object.keys(JSON.parse(fs.readFileSync(kanjiFile, "utf8")));
 const hex = (c) => c.codePointAt(0).toString(16);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 

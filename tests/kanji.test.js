@@ -12,8 +12,40 @@ const listed = [...new Set(vocab.flatMap((w) => [...w.w].filter((c) => /[一-鿿
 test("every kanji in the word list has a meaning, a stroke count and a level", () => {
   assert.equal(listed.length, 778);
   assert.deepEqual(listed.filter((c) => !kanji[c]?.m || !(kanji[c].sc > 0) || !(kanji[c].lv >= 0)), []);
-  assert.deepEqual(Object.keys(kanji).filter((c) => !listed.includes(c)), []);
   assert.deepEqual(kanji["大"], { m: "large, big", sc: 3, lv: 5, on: ["ダイ", "タイ"], kun: ["おお.きい"], c: [] });
+});
+
+// The deck learns a kanji's parts before the kanji, so a jōyō part no N5 or N4 word uses needs its own entry [味 is 口 and 未].
+test("kanji.json adds the jōyō kanji the word list's kanji are built from, and only those", () => {
+  const added = Object.keys(kanji).filter((c) => !listed.includes(c));
+  assert.equal(added.length, 124);
+  assert.deepEqual([..."未竹貝寸羊衣阜"].filter((c) => !added.includes(c)), []);
+  const partOf = (p) => Object.values(kanji).some((k) => k.c.includes(p) || Object.values(k.v || {}).includes(p));
+  assert.deepEqual(added.filter((c) => !partOf(c)), []);
+  assert.deepEqual(added.filter((c) => !kanji[c].m || !(kanji[c].sc > 0) || !strokes[c]?.d.length), []);
+});
+
+// A radical form brings its full kanji as a part, KanjiVG's partial ones too [海's 氵 = 水; 飯's 飠 = 食, marked partial].
+test("a radical form names its full kanji, partial or not, and never the kanji it's in", () => {
+  assert.deepEqual(kanji["海"].v, { 氵: "水" });
+  assert.deepEqual([kanji["休"].v, kanji["近"].v], [{ 亻: "人" }, undefined]);
+  assert.deepEqual([kanji["飯"].v, kanji["様"].v, kanji["考"].v], [{ 飠: "食" }, { 氺: "水" }, { 耂: "老" }]);
+  assert.deepEqual(Object.entries(kanji).filter(([c, k]) => Object.values(k.v || {}).includes(c)).map(([c]) => c), []);
+});
+
+// Only a radical-form pair keeps KanjiVG's original [兄's 儿 = 八 is a shape match, 魚's 灬 = 火 is the fire radical].
+test("a part names its full kanji only where it is that kanji's radical form, whatever it means in the kanji", () => {
+  assert.deepEqual(["兄", "冬", "次", "貫"].map((c) => kanji[c].v), Array(4).fill(undefined));
+  assert.deepEqual(require("../kanji.js").forms("八", kanji), []);
+  assert.deepEqual(["魚", "才", "帰", "光", "興", "者"].map((c) => kanji[c].v), [{ 灬: "火" }, { 扌: "手" }, { 刂: "刀" }, { "⺌": "小" }, { "𦥑": "臼" }, { 耂: "老" }]);
+});
+
+// KanjiVG names a few parts by a private code that would show as text, and the parts inside one still count [原: 厂, then 白 and 小 inside CDP-8BC4].
+test("every part is a single character, never the kanji itself", () => {
+  assert.deepEqual(Object.entries(kanji).filter(([, k]) => k.c.some((p) => [...p].length !== 1)).map(([c]) => c), []);
+  assert.deepEqual(kanji["原"].c, ["厂", "白", "小"]);
+  // KanjiVG names 王's own strokes 王, so its page linked to itself as a part.
+  assert.deepEqual(Object.entries(kanji).filter(([c, k]) => k.c.includes(c)).map(([c]) => c), []);
 });
 
 test("every kanji has up to 3 on and 3 kun readings, without KANJIDIC's prefix and suffix forms", () => {
@@ -92,36 +124,70 @@ test("a kanji's word list puts met words first, newest first, then the rest in l
   assert.equal(wordsWith("学", vocab, cards).length, 13);
 });
 
-// The Kanji tab's deck: a kanji unlocks when a met word uses it, and the day's new kanji are the oldest unlocked ones.
-const { unlocks, kanjiQueue, learned } = require("../kanji.js");
+// The Kanji tab's deck: every kanji in Heisig's order with its parts in front, and the day's new kanji the next ones in it.
+const { order, partsOf, forms, kanjiQueue, ready, learned } = require("../kanji.js");
+// RTK frames as Koohii gives them, kept here as Koohii's file is private [人 1023 comes after 会 814, which holds it].
+const FRAMES = { 一: 1, 二: 2, 口: 11, 日: 12, 水: 137, 味: 233, 立: 462, 海: 500, 音: 518, 心: 639, 意: 654, 会: 814, 人: 1023 };
+const before = (list, c) => partsOf(c, kanji).filter((p) => list.indexOf(p) > list.indexOf(c));
 
-test("a kanji unlocks on the first day a word with it was met, oldest first, list order breaking a tie", () => {
-  const cards = { "学校|がっこう#r": met(14), "大学|だいがく#r": met(10), "学生|がくせい#r": met(12), "先生|せんせい#p": met(5) };
-  // 大学 reads 大 first, but 学 comes first in the list (20th to 大's 62nd); 学生 unlocks only 生, as 学 is already open.
-  assert.deepEqual(unlocks(vocab, cards), [{ c: "学", day: 10 }, { c: "大", day: 10 }, { c: "生", day: 12 }, { c: "校", day: 14 }]);
-  assert.deepEqual(unlocks(vocab, { "大学|だいがく#r": met(10) }).map((u) => u.c), ["学", "大"]);
-  assert.deepEqual(unlocks(vocab, { "先生|せんせい#p": met(5) }), []);
+test("a kanji's parts are the deck's kanji in it, a radical form as its full kanji, never itself", () => {
+  assert.deepEqual(partsOf("意", kanji), ["音", "心"]);
+  assert.deepEqual(partsOf("海", kanji), ["水", "毎"]);
+  assert.deepEqual([partsOf("学", kanji), partsOf("一", kanji)], [["子"], []]);
+});
+
+test("kanji come in Heisig's frame order, each one's parts pulled in front of it, all the way down", () => {
+  const list = order(kanji, FRAMES);
+  assert.deepEqual(list.slice(0, 4), ["一", "二", "口", "日"]);
+  assert.equal(new Set(list).size, Object.keys(kanji).length);
+  assert.equal(list.length, Object.keys(kanji).length);
+  // 意 is 音 and 心, and 音 is 立 and 日; 会 holds 人 though Heisig numbers 人 later; 海's 氵 is 水; 味's 未 has no frame here.
+  for (const [a, b] of [["立", "音"], ["音", "意"], ["心", "意"], ["人", "会"], ["水", "海"], ["未", "味"]]) assert.ok(list.indexOf(a) < list.indexOf(b), `${a} before ${b}`);
+  assert.deepEqual(Object.keys(kanji).filter((c) => before(list, c).length), []);
+});
+
+// Koohii's file is private and can fail to load; the deck still needs an order then.
+test("without frames kanji go by stroke count, parts still first", () => {
+  const list = order(kanji, {});
+  assert.deepEqual(list.slice(0, 2), ["一", "乙"]);
+  assert.ok(list.indexOf("十") < list.indexOf("千"));
+  assert.deepEqual(Object.keys(kanji).filter((c) => before(list, c).length), []);
+  assert.deepEqual(order(kanji, FRAMES).slice(0, 4), order(kanji, { ...FRAMES, 學: 5 }).slice(0, 4), "a frame for a kanji outside the deck changes nothing");
+});
+
+test("a full kanji lists its radical forms, with the kanji using them", () => {
+  const water = forms("水", kanji);
+  assert.deepEqual(water.map((f) => f.f), ["氵", "氺"]);
+  assert.deepEqual([..."海池泳"].filter((c) => !water[0].cs.includes(c)), []);
+  assert.deepEqual(forms("人", kanji).map((f) => f.f), ["亻"]);
+  assert.deepEqual(forms("大", kanji), []);
 });
 
 test("today's kanji: due reviews most overdue first, then learning, then new up to the day's limit less today's intros", () => {
-  const unlocked = ["一", "二", "三", "四", "五", "六"].map((c, i) => ({ c, day: i }));
+  const unlocked = ["一", "二", "三", "四", "五", "六"];
   const kc = {
     二: { ...met(1), due: 9 }, 四: { ...met(1), due: 7 }, 五: { ...met(1), due: 11 },
     三: { st: "learn", ivl: 0, ease: 2.5, due: 10, n: 1, lapses: 0, first: 10, last: 10 },
     // A card whose word was since lost still comes up [七 from a reset word deck].
     七: { ...met(1), due: 8 },
   };
-  assert.deepEqual(kanjiQueue({ unlocked, cards: kc, today: 10, newPerDay: 3 }), ["四", "七", "二", "三", "一", "六"]);
-  assert.deepEqual(kanjiQueue({ unlocked, cards: kc, today: 10, newPerDay: 1 }), ["四", "七", "二", "三"]);
-  assert.deepEqual(kanjiQueue({ unlocked, cards: {}, today: 10, newPerDay: 2 }), ["一", "二"]);
+  assert.deepEqual(kanjiQueue({ order: unlocked, cards: kc, today: 10, newPerDay: 3 }), ["四", "七", "二", "三", "一", "六"]);
+  assert.deepEqual(kanjiQueue({ order: unlocked, cards: kc, today: 10, newPerDay: 1 }), ["四", "七", "二", "三"]);
+  assert.deepEqual(kanjiQueue({ order: unlocked, cards: {}, today: 10, newPerDay: 2 }), ["一", "二"]);
 });
 
 test("kanji due the same day come in a fresh order each session, overdue ones still first", () => {
   const seeded = (seed) => () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
   const kc = Object.fromEntries(["一", "二", "三", "四", "五", "六", "七", "八"].map((c, i) => [c, { ...met(1), due: i < 2 ? 8 : 10 }]));
-  const run = (seed) => kanjiQueue({ unlocked: [], cards: kc, today: 10, newPerDay: 0, rand: seeded(seed) }).join("");
+  const run = (seed) => kanjiQueue({ order: [], cards: kc, today: 10, newPerDay: 0, rand: seeded(seed) }).join("");
   assert.ok(new Set([1, 2, 3, 4, 5].map(run)).size > 1, "five sessions gave one order");
   for (const s of [1, 2, 3, 4, 5]) assert.deepEqual([...run(s).slice(0, 2)].sort(), ["一", "二"]);
+});
+
+test("a word can be new once each of its kanji has a card, a kana word at once", () => {
+  assert.equal(ready(word("学生|がくせい"), { 学: met(1), 生: met(2) }), true);
+  assert.equal(ready(word("学生|がくせい"), { 学: met(1) }), false);
+  assert.equal(ready(vocab.find((w) => !/[一-鿿]/.test(w.w)), {}), true);
 });
 
 test("a word counts as learned once every kanji in it has a card at 21 days or more, never a kana word", () => {

@@ -1,6 +1,6 @@
 // Builds content/koohii.json from the pages tools/fetch-koohii.js saved: Heisig's keyword, the frame, your own story and the top 3 shared stories by stars [学 = study, frame 346].
 // Stories stay HTML with only <em> and <strong>, the rest of their text as written [Third &lt;script&gt; story.].
-// Usage: node tools/build-koohii.js data/vocab.json _data/koohii content/koohii.json
+// Usage: node tools/build-koohii.js data/kanji.json _data/koohii content/koohii.json
 const fs = require("fs");
 const path = require("path");
 
@@ -25,13 +25,12 @@ function parse(html) {
 }
 
 if (require.main === module) {
-  const [vocabFile, pageDir, outFile] = process.argv.slice(2);
+  const [kanjiFile, pageDir, outFile] = process.argv.slice(2);
   if (!outFile) {
-    console.error("usage: node tools/build-koohii.js <vocab json> <page dir> <out json>");
+    console.error("usage: node tools/build-koohii.js <kanji json> <page dir> <out json>");
     process.exit(1);
   }
-  const words = JSON.parse(fs.readFileSync(vocabFile, "utf8"));
-  const listed = [...new Set(words.flatMap(require("../kanji.js").kanjiOf))];
+  const listed = Object.keys(JSON.parse(fs.readFileSync(kanjiFile, "utf8")));
   const out = {}, missing = [];
   for (const c of listed) {
     const file = path.join(pageDir, `${c.codePointAt(0).toString(16)}.html`);

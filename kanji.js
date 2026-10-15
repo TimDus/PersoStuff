@@ -15,29 +15,42 @@
     c, also: wordsWith(c, words, cards).filter((w) => w.w !== word.w && cards[`${w.k}#r`]).slice(0, 3),
   }));
 
-  // Each kanji of the met words with the day its first word was met, oldest first, then by first place in the list [大学 met day 10 = 学, 大].
-  function unlocks(words, cards) {
-    const day = new Map(), place = new Map();
-    for (const w of words) {
-      const first = cards[`${w.k}#r`]?.first;
-      for (const c of kanjiOf(w)) {
-        if (!place.has(c)) place.set(c, place.size);
-        if (first !== undefined && !(day.get(c) <= first)) day.set(c, first);
-      }
-    }
-    return [...day].map(([c, d]) => ({ c, day: d })).sort((a, b) => a.day - b.day || place.get(a.c) - place.get(b.c));
+  // A kanji's parts that are deck kanji, a radical form as its full kanji [海 = 水 毎; 学's ⺍ and 冖 aren't kanji, so 子].
+  const partsOf = (c, info) => [...new Set((info[c]?.c || []).map((p) => info[c].v?.[p] || p))].filter((p) => p !== c && info[p]);
+  // The deck in study order: Heisig's frames, stroke count where a kanji has none, each kanji's parts pulled in front of it
+  // [会 814 holds 人 1023, so 人 goes first; without Koohii's file 一 and 乙 lead on 1 stroke].
+  function order(info, frames) {
+    const rank = (c) => [frames[c] ?? Infinity, info[c].sc || 99, c.codePointAt(0)];
+    const by = (a, b) => { const [x, y] = [rank(a), rank(b)]; return x[0] - y[0] || x[1] - y[1] || x[2] - y[2]; };
+    const out = [], placed = new Set();
+    const place = (c) => {
+      if (placed.has(c)) return;
+      placed.add(c);
+      partsOf(c, info).sort(by).forEach(place);
+      out.push(c);
+    };
+    Object.keys(info).sort(by).forEach(place);
+    return out;
   }
-  // Today's kanji: due reviews most overdue first and shuffled within a day, learning ones, then unlocked ones without a card up to newPerDay less today's [3 met this morning of 10 = 7 more].
-  function kanjiQueue({ unlocked, cards, today, newPerDay, rand = Math.random }) {
+  // The radical forms of a kanji, with the kanji using each [水: 氵 in 海 池 泳…; 大 has none].
+  function forms(c, info) {
+    const by = new Map();
+    for (const [d, x] of Object.entries(info)) for (const [f, full] of Object.entries(x.v || {})) if (full === c) by.set(f, [...(by.get(f) || []), d]);
+    return [...by].map(([f, cs]) => ({ f, cs }));
+  }
+  // Today's kanji: due reviews most overdue first and shuffled within a day, learning ones, then the next in order without a card up to newPerDay less today's [3 started this morning of 10 = 7 more].
+  function kanjiQueue({ order: seq, cards, today, newPerDay, rand = Math.random }) {
     const all = Object.entries(cards);
     const due = all.filter(([, k]) => k.st === "review" && k.due <= today).map((e) => [...e, rand()]).sort((a, b) => a[1].due - b[1].due || a[2] - b[2]);
     const learning = all.filter(([, k]) => k.st !== "review" && k.due <= today);
     const intros = all.filter(([, k]) => k.first === today).length;
-    const fresh = unlocked.filter(({ c }) => !cards[c]).slice(0, Math.max(0, newPerDay - intros));
-    return [...due, ...learning].map(([c]) => c).concat(fresh.map(({ c }) => c));
+    const fresh = seq.filter((c) => !cards[c]).slice(0, Math.max(0, newPerDay - intros));
+    return [...due, ...learning].map(([c]) => c).concat(fresh);
   }
   // A kanji card on a three-week interval, Anki's mature [ivl 21 yes, 20 not yet].
   const mature = (card) => card?.ivl >= 21;
+  // A word can be new once each of its kanji has a card [学生 with only 学 started waits; これ never does].
+  const ready = (word, kcards) => kanjiOf(word).every((c) => kcards[c]);
   // A word reads as known once every kanji in it is mature [学生 with 学 at 21 days and 生 at 20: not yet].
   const learned = (word, kcards) => kanjiOf(word).length > 0 && kanjiOf(word).every((c) => mature(kcards[c]));
 
@@ -90,7 +103,7 @@
     return [...groups.values()];
   }
 
-  const api = { kanjiOf, wordsWith, note, unlocks, kanjiQueue, mature, learned, readingIn, byReading, family };
+  const api = { kanjiOf, wordsWith, note, partsOf, order, forms, kanjiQueue, mature, ready, learned, readingIn, byReading, family };
   if (typeof module !== "undefined") module.exports = api;
   else root.HiraKanji = api;
 })(this);

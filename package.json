@@ -8,7 +8,7 @@
     "build-strokes": "node tools/build-strokes.js _data/kanjivg/main/kanji data/strokes.json",
     "build-vocab": "node tools/build-vocab.js _data data/vocab.json",
     "build-kanji": "node tools/build-kanji.js _data data/vocab.json data",
-    "build-koohii": "node tools/build-koohii.js data/vocab.json _data/koohii content/koohii.json",
+    "build-koohii": "node tools/build-koohii.js data/kanji.json _data/koohii content/koohii.json",
     "build-grammar": "node tools/build-grammar.js _data data/vocab.json data/grammar.json",
     "verify-db": "bash tools/psql.sh -q -f supabase/verify.sql"
   },

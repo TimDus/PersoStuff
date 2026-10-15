@@ -2,7 +2,7 @@
 (function () {
   const { dayOf, grade, preview, queue, mergeStudy, DRILLS } = window.HiraSRS;
   const { same, bump, wordClip } = window.HiraSync;
-  const { note, learned } = window.HiraKanji;
+  const { note, learned, ready: hasKanji } = window.HiraKanji;
   let shell = null;
   let words = null;
   let kanjiInfo = null;
@@ -89,6 +89,7 @@
   };
   // The Kanji tab's deck in `study.kanji`, cards keyed by the kanji [学 = { st: "review", ivl: 4, … }].
   const kanjiBlank = () => ({ cards: {}, settings: { newPerDay: 10, at: 0 } });
+  const ready = (w) => hasKanji(w, deck.kanji?.cards || {});
 
   function needWords(retry) {
     shell.app.innerHTML = `
@@ -126,7 +127,8 @@
   const byKey = () => new Map(words.flatMap((w) => [[`${w.k}#r`, { key: `${w.k}#r`, word: w, dir: "r" }], [`${w.k}#p`, { key: `${w.k}#p`, word: w, dir: "p" }]]));
 
   function hub() {
-    const q = queue({ words, cards: deck.cards, today: today(), newPerDay: deck.settings.newPerDay });
+    const q = queue({ words, cards: deck.cards, today: today(), newPerDay: deck.settings.newPerDay, ready });
+    const waiting = words.filter((w) => !deck.cards[`${w.k}#r`] && !ready(w)).length;
     const isNew = (it) => !deck.cards[it.key];
     const fresh = q.filter(isNew).length;
     const seen = (lv) => words.filter((w) => w.lv === lv && deck.cards[`${w.k}#r`]).length;
@@ -137,8 +139,9 @@
     const today_ = answeredToday(false).length, missed = answeredToday(true).length;
     shell.app.innerHTML = `
       <h1>Words</h1>
-      <p class="lead">The JLPT N5 words, then N4, most common first. Each word is a card both ways: read the Japanese, then
-        recall it from English the next day. Answer honestly; the buttons set when it comes back.</p>
+      <p class="lead">The JLPT N5 words, then N4, most common first, a word with kanji once you've started its kanji. Each word
+        is a card both ways: read the Japanese, then recall it from English the next day. Answer honestly; the buttons set
+        when it comes back.</p>
       <div class="panel">
         <div class="stats" style="margin-bottom:1rem">
           <div><div class="big-number" id="due">${q.length - fresh}</div>to review</div>
@@ -150,6 +153,7 @@
           <span class="spacer"></span>
           <label>New words a day <select id="per">${[5, 10, 20, 30].map((n) => `<option ${n === deck.settings.newPerDay ? "selected" : ""}>${n}</option>`).join("")}</select></label>
         </div>
+        ${waiting ? `<p class="muted small" id="waiting">${waiting > 1 ? `${waiting} words wait for their kanji` : "1 word waits for its kanji"}; each opens once you've started them in <a href="#kanji">Kanji</a>.</p>` : ""}
       </div>
       <h2>Practice</h2>
       <p class="muted small">Plain flashcards that don't change when anything is due, so go again as often as you like.</p>
@@ -251,7 +255,7 @@
   }
 
   function runReview() {
-    const items = queue({ words, cards: deck.cards, today: today(), newPerDay: deck.settings.newPerDay });
+    const items = queue({ words, cards: deck.cards, today: today(), newPerDay: deck.settings.newPerDay, ready });
     // The hub drawn at #words, as at #words/review its Study button would link to the page it's on [reload the Done page, raise new words a day].
     if (!items.length) {
       history.replaceState(null, "", "#words");
@@ -374,6 +378,8 @@
     cards: () => deck.cards,
     kanjiInfo: () => kanjiInfo,
     koohii: (c) => koohii[c],
+    // Heisig's frame per kanji, empty until Koohii's file is in [学 = 346].
+    frames: () => Object.fromEntries(Object.entries(koohii).filter(([, k]) => k.frame).map(([c, k]) => [c, k.frame])),
     loadKoohii: () => loadKoohii(),
     keyword,
     // What the Kanji tab needs to run its deck on the Words machinery [gradeKanji("学", 3) on a new kanji = due tomorrow].

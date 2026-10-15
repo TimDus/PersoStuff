@@ -115,6 +115,16 @@ test("reviews due the same day come in a fresh order each session, overdue ones 
   }
 });
 
+// Words follow the kanji: one with kanji waits until each has a card, while a word already met keeps going [学生 opens once 学 and 生 have one].
+test("only words the ready rule passes are offered new, while a met word keeps its reviews and gets its English side", () => {
+  const ready = (w) => !["w0|r0", "w2|r2"].includes(w.k);
+  assert.deepEqual(queue({ words: deck, cards: {}, today: 100, newPerDay: 3, ready }).map((c) => c.word.k), ["w1|r1", "w3|r3", "w4|r4"]);
+  const cards = { "w0|r0#r": { st: "review", ivl: 1, ease: 2.5, due: 100, n: 1, lapses: 0, first: 99, last: 99 } };
+  const q = queue({ words: deck, cards, today: 100, newPerDay: 3, ready });
+  assert.deepEqual(q.filter((c) => c.word.k === "w0|r0").map((c) => c.dir), ["r", "p"]);
+  assert.equal(q.some((c) => c.word.k === "w2|r2"), false);
+});
+
 test("a card left in learning by a closed tab is offered again", () => {
   const cards = { "w0|r0#r": { st: "learn", ivl: 0, ease: 2.5, due: 100, n: 1, lapses: 0, first: 100, last: 100 } };
   assert.ok(queue({ words: deck, cards, today: 100, newPerDay: 20 }).some((c) => c.key === "w0|r0#r"));

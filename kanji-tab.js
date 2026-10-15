@@ -1,22 +1,37 @@
 // The Kanji tab, its deck and a kanji's page, which a word card's note opens as a popup so the review underneath goes on [学 = study, its strokes and the 13 words with it].
 (function () {
   const study = window.HiraStudy;
-  const { wordsWith, kanjiOf, unlocks, kanjiQueue, mature, byReading, family } = window.HiraKanji;
+  const { wordsWith, kanjiOf, order, forms, kanjiQueue, mature, byReading, family } = window.HiraKanji;
+  const { NAMES, NOTES } = window.HiraRadicals;
   const esc = (s) => study.shell().esc(s);
   // Stories are other members' HTML, so every < that doesn't open an em or strong is shown as text [a broken <img onerror= stays text].
   const safe = (html) => html.replace(/<(?!\/?(?:em|strong)>)/g, "&lt;");
 
-  // A kanji's parts with their keywords, each listed kanji a link on its page and plain in a popup [学: ⺍ 冖 子 child; a link would end the review].
+  // A deck kanji as a link on its page and plain in a popup, where a link would end the review [水 water: a link to #kanji/水, text over a card].
+  const link = (c, page, label) => (page ? `<a href="#kanji/${esc(c)}">${label}</a>` : `<span>${label}</span>`);
+  const listed = (cs, page) => cs.map((d) => link(d, page, `<span class="jp">${esc(d)}</span>`)).join(" ");
+  // A kanji's parts by name: a deck kanji by its keyword, a radical form by its full kanji, a shape by its name [学: ⺍ three strokes, 冖 crown, cover, 子 child; 海: 氵 the 水 radical, water].
   function comps(c, page) {
     const info = study.kanjiInfo() || {}, list = info[c]?.c || [];
     return list.length ? `<div class="kanji-comps small">${list.map((p) => {
-      const label = `<span class="jp">${esc(p)}</span>${study.keyword(p) ? ` ${esc(study.keyword(p))}` : ""}`;
-      return page && info[p] ? `<a href="#kanji/${esc(p)}">${label}</a>` : `<span>${label}</span>`;
+      const full = info[c].v?.[p];
+      if (full && info[full]) return `<span><span class="jp">${esc(p)}</span> the ${link(full, page, `<span class="jp">${esc(full)}</span>`)} radical, ${esc(study.keyword(full))}</span>`;
+      const name = info[p] ? study.keyword(p) : NAMES[p];
+      const label = `<span class="jp">${esc(p)}</span>${name ? ` ${esc(name)}` : ""}`;
+      return info[p] ? link(p, page, label) : `<span>${label}</span>`;
     }).join("")}</div>` : "";
   }
+  // The parts, why a misleading one is there, and the kanji's radical forms with the first 8 kanji using them in study order [水: 氵 in 泳 活 消 泊…, 海 further on].
+  function parts(c, page) {
+    const info = study.kanjiInfo() || {}, fs = forms(c, info);
+    const at = fs.length ? new Map(order(info, study.frames()).map((d, i) => [d, i])) : null;
+    return `${comps(c, page)}${NOTES[c] ? `<div class="kanji-why small">${esc(NOTES[c])}</div>` : ""}${fs.map(({ f, cs }) => {
+      const first = [...cs].sort((a, b) => at.get(a) - at.get(b));
+      return `<div class="kanji-forms small">As a radical it's written <span class="jp">${esc(f)}</span>: ${listed(first.slice(0, 8), page)}${cs.length > 8 ? " …" : ""}</div>`;
+    }).join("")}`;
+  }
   // The list's kanji sharing its sound part and an on'yomi, each a link on its page and plain in a popup [晴: Same sound セイ: 青 静].
-  const fam = (c, page) => family(c, study.kanjiInfo() || {}).map(({ r, cs }) => `<div class="kanji-family small">Same sound <span class="jp">${r.map(esc).join(" · ")}</span>: ${
-    cs.map((d) => (page ? `<a class="jp" href="#kanji/${esc(d)}">${esc(d)}</a>` : `<span class="jp">${esc(d)}</span>`)).join(" ")}</div>`).join("");
+  const fam = (c, page) => family(c, study.kanjiInfo() || {}).map(({ r, cs }) => `<div class="kanji-family small">Same sound <span class="jp">${r.map(esc).join(" · ")}</span>: ${listed(cs, page)}</div>`).join("");
   // The parts Koohii's data decides, drawn from whatever has arrived [before it lands: KANJIDIC's meaning, no frame, no stories].
   function head(c, page) {
     const info = study.kanjiInfo()?.[c] || {}, k = study.koohii(c);
@@ -24,7 +39,7 @@
       <div class="kanji-kw">${esc(study.keyword(c))}</div>
       <div class="muted small kanji-meta">${[info.sc && `${info.sc} strokes`, info.lv >= 4 && `N${info.lv}`, k?.frame && `RTK ${k.frame}`].filter(Boolean).join(" · ")}</div>
       ${k ? `<div class="muted small">Keyword from Remembering the Kanji © James W. Heisig</div>` : ""}
-      ${comps(c, page)}`;
+      ${parts(c, page)}`;
   }
   function stories(c) {
     const k = study.koohii(c);
@@ -87,44 +102,55 @@
     app.innerHTML = `<p class="muted">Loading kanji…</p>`;
     try { words = await study.words(); } catch { if (location.hash === here) study.needWords(() => viewKanji([sub])); return; }
     if (location.hash !== here) return;
-    study.loadKoohii();
-    if (sub === "review") return review(words, here);
-    // Only a kanji of the word list has a page, kanji.json or not [#kanji/constructor is the hub].
-    if (sub && words.some((w) => kanjiOf(w).includes(sub))) return page(sub, words);
+    // Only a deck kanji has a page, kanji.json or not [#kanji/未 opens, #kanji/constructor is the hub].
+    if (sub && sub !== "review" && (Object.hasOwn(study.kanjiInfo() || {}, sub) || words.some((w) => kanjiOf(w).includes(sub)))) {
+      study.loadKoohii();
+      return page(sub, words);
+    }
+    // Heisig's order and his keywords both come in Koohii's file, so it gets a moment to land [a hung sign gives up after 3 s: stroke count and KANJIDIC's meanings].
+    await Promise.race([study.loadKoohii(), new Promise((r) => setTimeout(r, 3000))]);
+    if (location.hash !== here) return;
+    if (sub === "review") return review(words);
     hub(words);
   }
+
+  // Every deck kanji in study order, the word list's alone in list order without kanji.json [秋 足 後 言… when it failed].
+  const sequence = (words) => {
+    const info = study.kanjiInfo() || {};
+    return Object.keys(info).length ? order(info, study.frames()) : [...new Set(words.flatMap(kanjiOf))];
+  };
 
   function hub(words) {
     const { app } = study.shell();
     const k = study.kanjiDeck();
-    const open = unlocks(words, study.cards());
-    const q = kanjiQueue({ unlocked: open, cards: k.cards, today: study.today(), newPerDay: k.settings.newPerDay });
-    const fresh = q.filter((c) => !k.cards[c]).length;
-    const opened = new Set(open.map((o) => o.c));
+    const all = sequence(words);
+    const q = kanjiQueue({ order: all, cards: k.cards, today: study.today(), newPerDay: k.settings.newPerDay });
+    const next = new Set(q.filter((c) => !k.cards[c]));
     const info = study.kanjiInfo() || {};
-    const all = [...new Set(words.flatMap(kanjiOf))];
-    const state = (c) => (mature(k.cards[c]) ? "learned" : k.cards[c] ? "studying" : opened.has(c) ? "unlocked" : "locked");
-    const groups = [["JLPT N5", (lv) => lv === 5], ["JLPT N4", (lv) => lv === 4], ["Beyond N4", (lv) => lv !== 5 && lv !== 4]];
+    const used = new Set(words.flatMap(kanjiOf));
+    const state = (c) => (mature(k.cards[c]) ? "learned" : k.cards[c] ? "studying" : next.has(c) ? "next" : "later");
+    const groups = [["JLPT N5", (c) => used.has(c) && info[c]?.lv === 5], ["JLPT N4", (c) => used.has(c) && info[c]?.lv === 4],
+      ["Beyond N4", (c) => used.has(c) && info[c]?.lv !== 5 && info[c]?.lv !== 4], ["Only as parts", (c) => !used.has(c)]];
     app.innerHTML = `
       <h1>Kanji</h1>
-      <p class="lead">A kanji opens once a word you've met uses it. Its card shows Heisig's keyword: recall the kanji on paper, or draw it
-        here, then turn the card and grade yourself.</p>
+      <p class="lead">Kanji come in Heisig's order, each one's parts before it, and a word opens in Words once you've started
+        all its kanji. A card shows Heisig's keyword: recall the kanji on paper, or draw it here, then turn the card and grade yourself.</p>
       <div class="panel">
         <div class="stats" style="margin-bottom:1rem">
-          <div><div class="big-number" id="k-due">${q.length - fresh}</div>to review</div>
-          <div><div class="big-number" id="k-new">${fresh}</div>new</div>
+          <div><div class="big-number" id="k-due">${q.length - next.size}</div>to review</div>
+          <div><div class="big-number" id="k-new">${next.size}</div>new</div>
         </div>
-        <p class="muted small" id="k-sum">${opened.size} of ${all.length} unlocked · ${all.filter((c) => state(c) === "learned").length} learned</p>
+        <p class="muted small" id="k-sum">${all.filter((c) => k.cards[c]).length} of ${all.length} started · ${all.filter((c) => state(c) === "learned").length} learned</p>
         <div class="row">
           ${q.length ? `<a class="btn" id="go" href="#kanji/review">Study ${q.length} kanji</a>`
-            : `<span class="badge">${opened.size ? "All done for today" : "Meet words in Words to open kanji"}</span>`}
+            : `<span class="badge">All done for today</span>`}
           <span class="spacer"></span>
           <span class="seg">${[["paper", "Paper"], ["draw", "Draw"]].map(([m, label]) => `<button class="${m === mode() ? "on" : ""}" data-mode="${m}" aria-pressed="${m === mode()}">${label}</button>`).join("")}</span>
           <label>New kanji a day <select id="kper">${[5, 10, 20].map((n) => `<option ${n === k.settings.newPerDay ? "selected" : ""}>${n}</option>`).join("")}</select></label>
         </div>
       </div>
       ${(Object.keys(info).length ? groups : [["All kanji", () => true]]).map(([title, ok]) => {
-        const cs = all.filter((c) => ok(info[c]?.lv));
+        const cs = all.filter(ok);
         return cs.length ? `<h2>${title}</h2><div class="kgrid">${cs.map((c) => `<a class="jp ${state(c)}" href="#kanji/${esc(c)}" title="${esc(study.keyword(c))}">${esc(c)}</a>`).join("")}</div>` : "";
       }).join("")}`;
     app.querySelector("#kper").addEventListener("change", (e) => { study.setKanjiSettings(+e.target.value); hub(words); });
@@ -148,17 +174,14 @@
     const front = `<div class="kanji-prompt">${esc(prompt(c, words))}</div>${draw
       ? `<div class="kpad" data-noflip><svg viewBox="0 0 109 109" aria-label="Drawing pad"></svg><button class="ghost small" type="button" data-clear>Clear</button></div>`
       : `<div class="muted small">Write it on paper, then turn the card</div>`}`;
-    const back = `${big(c, words)}${draw ? window.HiraStrokes.shown(c) : window.HiraStrokes.button(c)}
+    const back = `${big(c, words)}${parts(c, false)}${draw ? window.HiraStrokes.shown(c) : window.HiraStrokes.button(c)}
       <div class="stories">${stories(c)}</div><div class="kanji-words">${rows(c, words, 5)}</div>`;
     return { front, back };
   }
 
-  async function review(words, here) {
-    // The keyword is the question, so Koohii's gets a moment to land before the first card [a hung sign gives up after 3 s and asks KANJIDIC's meaning].
-    await Promise.race([study.loadKoohii(), new Promise((r) => setTimeout(r, 3000))]);
-    if (location.hash !== here) return;
+  function review(words) {
     const k = study.kanjiDeck();
-    const items = kanjiQueue({ unlocked: unlocks(words, study.cards()), cards: k.cards, today: study.today(), newPerDay: k.settings.newPerDay }).map((c) => ({ key: c, c }));
+    const items = kanjiQueue({ order: sequence(words), cards: k.cards, today: study.today(), newPerDay: k.settings.newPerDay }).map((c) => ({ key: c, c }));
     if (!items.length) {
       history.replaceState(null, "", "#kanji");
       return hub(words);
@@ -186,7 +209,7 @@
     study.shell().app.innerHTML = `
       <div class="panel" style="text-align:center;max-width:560px;margin:2rem auto">
         <h1>Done for today!</h1>
-        <p class="muted">${n} kanji${again ? ` · ${again} Again` : " · no misses"}. More open as you meet words.</p>
+        <p class="muted">${n} kanji${again ? ` · ${again} Again` : " · no misses"}. Words that use them open in Words.</p>
         <div class="row" style="justify-content:center;margin-top:1.2rem">
           <a class="btn" href="#kanji">Kanji</a>
           <a class="btn ghost" href="#words">Words</a>

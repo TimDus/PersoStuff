@@ -1,4 +1,4 @@
-// Builds data/kanji.json (KANJIDIC2's meanings, stroke count, level and readings, KanjiVG's components and sound parts) and data/kanji-strokes.json (KanjiVG's strokes) for every kanji in the word list [大 = "large, big", 3 strokes, N5].
+// Builds data/kanji.json (KANJIDIC2's meanings, stroke count, level and readings, KanjiVG's components and sound parts) and data/kanji-strokes.json (KanjiVG's strokes) for every kanji in the word list and the jōyō kanji they're built from [大 = "large, big", 3 strokes, N5; 味 brings 未].
 // Usage: node tools/build-kanji.js _data data/vocab.json data
 const fs = require("fs");
 const path = require("path");
@@ -9,8 +9,40 @@ if (!outDir) {
   process.exit(1);
 }
 const words = JSON.parse(fs.readFileSync(vocabFile, "utf8"));
+const xml = fs.readFileSync(path.join(dataDir, "kanjidic", "kanjidic2.xml"), "utf8");
+const svgFile = (c) => path.join(dataDir, "kanjivg", "main", "kanji", `${c.codePointAt(0).toString(16).padStart(5, "0")}.svg`);
+// The radical-form pairs a KanjiVG original is kept for, as a form and not a meaning; any other original is dropped
+// [灬 is the 火 radical in 魚 too, where it draws a tail; 儿 is a radical of its own, so 兄's "儿 = 八" goes].
+const RADICAL_FORMS = new Set(["氵水", "亻人", "扌手", "⻖阜", "灬火", "刂刀", "礻示", "⺤爪", "飠食", "⻞食", "忄心", "⺌小", "耂老", "⺨犬", "衤衣", "𦥑臼", "⺷羊", "氺水"]);
+// The outermost named groups under the kanji's own, through unnamed ones and KanjiVG's private codes, with its full kanji for a
+// radical form, marked partial or not [学: ⺍ and 冖 inside an unnamed top, then 子; 原: 厂, then 白 and 小 inside CDP-8BC4; 飯: 飠 = 食].
+function partsIn(svg, c) {
+  const out = [], open = [];
+  for (const g of svg.matchAll(/<g\b([^>]*)>|<\/g>/g)) {
+    if (g[0] === "</g>") { open.pop(); continue; }
+    const raw = g[1].match(/kvg:element="([^"]+)"/)?.[1];
+    const el = raw && [...raw].length === 1 ? raw : null;
+    const inside = open.length >= 2 && !open.slice(2).some(Boolean);
+    if (el && inside && el !== c && !out.some((p) => p.el === el)) {
+      const full = g[1].match(/kvg:original="([^"]+)"/)?.[1];
+      out.push({ el, full: RADICAL_FORMS.has(el + full) ? full : undefined });
+    }
+    open.push(el);
+  }
+  return out;
+}
+// The word list's kanji, then every jōyō kanji they're built from, as a part or as a radical form's full kanji [味 adds 未; 興's 𦥑 adds 臼; 778 + 124].
+const chars = [...xml.matchAll(/<literal>([^<]+)<\/literal>[\s\S]*?<\/character>/g)];
+const joyo = new Set(chars.filter((m) => /<grade>[1-8]<\/grade>/.test(m[0])).map((m) => m[1]));
 const listed = [...new Set(words.flatMap(require("../kanji.js").kanjiOf))];
 const want = new Set(listed);
+for (const c of want) {
+  if (!fs.existsSync(svgFile(c))) continue;
+  for (const p of partsIn(fs.readFileSync(svgFile(c), "utf8"), c)) {
+    for (const x of [p.el, p.full]) if (x && joyo.has(x) && fs.existsSync(svgFile(x))) want.add(x);
+  }
+}
+const deck = [...want];
 
 // Today's N level from KANJIDIC2's pre-2010 JLPT level, 0 for none, as build-vocab.js reads it [old 4 = N5].
 const OLD_TO_N = { 4: 5, 3: 4, 2: 2, 1: 1 };
@@ -30,7 +62,7 @@ function kunOf(c, all) {
   return out.slice(0, 3);
 }
 const kanji = {};
-for (const m of fs.readFileSync(path.join(dataDir, "kanjidic", "kanjidic2.xml"), "utf8").matchAll(/<literal>([^<]+)<\/literal>[\s\S]*?<\/character>/g)) {
+for (const m of chars) {
   if (!want.has(m[1])) continue;
   const old = m[0].match(/<jlpt>(\d)<\/jlpt>/);
   // English meanings only, the first two [大: large, big; French and Spanish carry m_lang].
@@ -41,7 +73,7 @@ for (const m of fs.readFileSync(path.join(dataDir, "kanjidic", "kanjidic2.xml"),
     on: read("ja_on").slice(0, 3), kun: kunOf(m[1], read("ja_kun")) };
 }
 
-const missing = listed.filter((c) => !kanji[c]);
+const missing = deck.filter((c) => !kanji[c]);
 if (missing.length) throw new Error(`KANJIDIC2 has no ${missing.join("")}`);
 
 // A tenth of a unit in the 109-unit box, rejoined after rounding as a minus that rounds away was the only separator
@@ -49,31 +81,25 @@ if (missing.length) throw new Error(`KANJIDIC2 has no ${missing.join("")}`);
 const round = (d) => d.replace(/([a-zA-Z])([^a-zA-Z]*)/g, (_, cmd, args) => cmd + (args.match(/-?(?:\d+\.?\d*|\.\d+)/g) || [])
   .map((n) => String(Math.round(+n * 10) / 10 || 0)).reduce((s, n, i) => s + (i && n[0] !== "-" ? "," : "") + n, ""));
 const strokes = {};
-for (const c of listed) {
-  const file = path.join(dataDir, "kanjivg", "main", "kanji", `${c.codePointAt(0).toString(16).padStart(5, "0")}.svg`);
+for (const c of deck) {
+  const file = svgFile(c);
   if (!fs.existsSync(file)) throw new Error(`KanjiVG has no ${c} (${file})`);
   const svg = fs.readFileSync(file, "utf8");
   const d = [...svg.matchAll(/<path id="kvg:[0-9a-f]+-s\d+"[^>]*\sd="([^"]+)"/g)].map((m) => round(m[1]));
   const n = [...svg.matchAll(/<text transform="matrix\(1 0 0 1 ([\d.]+) ([\d.]+)\)">\d+<\/text>/g)].map((m) => [+m[1], +m[2]]);
   if (!d.length || d.length !== n.length) throw new Error(`${c}: ${d.length} strokes, ${n.length} numbers`);
-  // The outermost named groups under the kanji's own, through unnamed ones [学: ⺍ and 冖 inside an unnamed top, then 子].
-  const c_ = [];
-  const open = [];
-  for (const g of svg.matchAll(/<g\b([^>]*)>|<\/g>/g)) {
-    if (g[0] === "</g>") { open.pop(); continue; }
-    const el = g[1].match(/kvg:element="([^"]+)"/)?.[1];
-    const inside = open.length >= 2 && !open.slice(2).some(Boolean);
-    if (el && inside && !c_.includes(el)) c_.push(el);
-    open.push(el || null);
-  }
   strokes[c] = { d, n };
-  kanji[c].c = c_;
+  const parts = partsIn(svg, c);
+  kanji[c].c = parts.map((p) => p.el);
+  // A radical form's full kanji, where the deck has it and not the part itself, never the kanji it's in [海: 氵 = 水; 老's 耂 is 老's own top].
+  const v = Object.fromEntries(parts.filter((p) => p.full && p.full !== p.el && p.full !== c && want.has(p.full) && !want.has(p.el)).map((p) => [p.el, p.full]));
+  if (Object.keys(v).length) kanji[c].v = v;
   // The parts KanjiVG marks as giving the sound, its own marks off and never the kanji itself, left out when none [金's 今1 and 今2 = 今; 新 and 親 share 辛+木; 大 has no p].
   const p = [...new Set([...svg.matchAll(/kvg:phon="([^"]+)"/g)].flatMap((m) => m[1].split("/")).map((x) => x.replace(/(?:right|[0-9VT])+$/, "")))]
     .filter((x) => x !== c);
   if (p.length) kanji[c].p = p;
 }
-const off = listed.filter((c) => strokes[c].d.length !== kanji[c].sc);
+const off = deck.filter((c) => strokes[c].d.length !== kanji[c].sc);
 
 fs.mkdirSync(outDir, { recursive: true });
 for (const [name, data] of [["kanji.json", kanji], ["kanji-strokes.json", strokes]]) {
