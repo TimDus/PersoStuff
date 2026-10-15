@@ -86,11 +86,13 @@
     }
     return null;
   }
-  // A kanji's readings with up to 3 met words each, newest first, then the readings no met word uses [学: ガク from 大学, 科学, 医学; まな.ぶ].
+  // A kanji's main reading and the rest, each with up to 3 list words using it, met ones first and newest first [学: ガク 大学 科学 医学, then まな.ぶ with none].
   function byReading(c, words, cards, info) {
-    const met = wordsWith(c, words, cards).filter((w) => cards[`${w.k}#r`]).map((w) => [w, readingIn(c, w, info)]);
-    const rows = [...(info[c]?.on || []), ...(info[c]?.kun || [])].map((r) => ({ r, words: met.filter(([, x]) => x === r).slice(0, 3).map(([w]) => w) }));
-    return { used: rows.filter((x) => x.words.length), rest: rows.filter((x) => !x.words.length).map((x) => x.r) };
+    const all = wordsWith(c, words, cards).map((w) => [w, readingIn(c, w, info)]);
+    const rows = [...(info[c]?.on || []), ...(info[c]?.kun || [])].map((r) => ({
+      r, words: all.filter(([, x]) => x === r).slice(0, 3).map(([w]) => ({ w, met: !!cards[`${w.k}#r`] })),
+    }));
+    return { top: rows.find((x) => x.r === info[c]?.top) || null, rest: rows.filter((x) => x.r !== info[c]?.top) };
   }
   // The list's kanji sharing a sound part with c, being its part or having c as theirs, grouped by the on'yomi they still share [晴: セイ 青 静; 青: セイ 晴 静; 活 and 話 share 舌, not a reading].
   function family(c, info) {

@@ -4,18 +4,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const kanji = require("../data/kanji.json");
-const { NAMES, NOTES } = require("../radicals.js");
+const { NAMES } = require("../radicals.js");
 
 const shapes = [...new Set(Object.values(kanji).flatMap((k) => k.c.filter((p) => !kanji[p] && !(k.v || {})[p])))];
 
 test("every part that isn't a deck kanji or a radical form has a name", () => {
   assert.ok(shapes.length > 150, `${shapes.length} shapes`);
   assert.deepEqual(shapes.filter((p) => !NAMES[p]), []);
-});
-
-test("every drift note is on a deck kanji and names a part that kanji has", () => {
-  assert.ok(Object.keys(NOTES).length >= 10);
-  assert.deepEqual(Object.keys(NOTES).filter((c) => !kanji[c]), []);
-  assert.deepEqual(Object.entries(NOTES).filter(([c, n]) => !kanji[c].c.some((p) => n.includes(p))).map(([c]) => c), []);
-  assert.match(NOTES["漢"], /Han/);
 });

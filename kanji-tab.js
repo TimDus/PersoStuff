@@ -2,7 +2,7 @@
 (function () {
   const study = window.HiraStudy;
   const { wordsWith, kanjiOf, order, forms, kanjiQueue, mature, byReading, family } = window.HiraKanji;
-  const { NAMES, NOTES } = window.HiraRadicals;
+  const { NAMES } = window.HiraRadicals;
   const esc = (s) => study.shell().esc(s);
   // Stories are other members' HTML, so every < that doesn't open an em or strong is shown as text [a broken <img onerror= stays text].
   const safe = (html) => html.replace(/<(?!\/?(?:em|strong)>)/g, "&lt;");
@@ -21,11 +21,11 @@
       return info[p] ? link(p, page, label) : `<span>${label}</span>`;
     }).join("")}</div>` : "";
   }
-  // The parts, why a misleading one is there, and the kanji's radical forms with the first 8 kanji using them in study order [水: 氵 in 泳 活 消 泊…, 海 further on].
+  // The parts, the kanji's history note, and its radical forms with the first 8 kanji using them in study order [水: 氵 in 泳 活 消 泊…, 海 further on].
   function parts(c, page) {
-    const info = study.kanjiInfo() || {}, fs = forms(c, info);
+    const info = study.kanjiInfo() || {}, fs = forms(c, info), why = study.history(c)?.note;
     const at = fs.length ? new Map(order(info, study.frames()).map((d, i) => [d, i])) : null;
-    return `${comps(c, page)}${NOTES[c] ? `<div class="kanji-why small">${esc(NOTES[c])}</div>` : ""}${fs.map(({ f, cs }) => {
+    return `${comps(c, page)}${why ? `<div class="kanji-why small">${esc(why)}</div>` : ""}${fs.map(({ f, cs }) => {
       const first = [...cs].sort((a, b) => at.get(a) - at.get(b));
       return `<div class="kanji-forms small">As a radical it's written <span class="jp">${esc(f)}</span>: ${listed(first.slice(0, 8), page)}${cs.length > 8 ? " …" : ""}</div>`;
     }).join("")}`;
@@ -47,39 +47,54 @@
     return list.map((s) => `
       <div class="story"><div class="story-by muted small">${esc(s.by)}</div><div class="story-text">${safe(s.text)}</div></div>`).join("");
   }
-  // A row per reading a met word uses with those words, the rest on one line, none from a kanji.json cached before readings [学: ガク 大学 · 学校, then まな.ぶ].
+  // The main reading large over the kanji, the others in rows under it, all off on a kanji.json cached without them [四: シ 四 over 四, then よっ.つ, よん, よ].
   const big = (c, words) => {
-    const { used, rest } = byReading(c, words, study.cards(), study.kanjiInfo() || {});
-    const rows = used.map(({ r, words: ws }) => `<div class="kr-row"><span class="kr">${esc(r)}</span><span class="kr-words">${ws.map((w) => esc(w.w)).join(" · ")}</span></div>`).join("");
-    const line = rest.length ? `<div class="kr-rest">${rest.map((r) => `<span>${esc(r)}</span>`).join(" · ")}</div>` : "";
-    return `${rows || line ? `<div class="kanji-reading jp">${rows}${line}</div>` : ""}<div class="kanji-big jp">${esc(c)}</div>`;
+    const { top, rest } = byReading(c, words, study.cards(), study.kanjiInfo() || {});
+    const ws = (x) => `<span class="kr-words">${x.words.map(({ w, met }) => `<span${met ? "" : ` class="unmet"`}>${esc(w.w)}</span>`).join(" · ")}</span>`;
+    const main = top ? `<div class="kanji-top jp"><div class="kr-main">${esc(top.r)}</div>${ws(top)}</div>` : "";
+    const rows = rest.map((x) => `<div class="kr-row"><span class="kr">${esc(x.r)}</span>${ws(x)}</div>`).join("");
+    return `${main}<div class="kanji-big jp">${esc(c)}</div>${rows ? `<div class="kanji-reading jp">${rows}</div>` : ""}`;
   };
   const rows = (c, words, n = Infinity) => wordsWith(c, words, study.cards()).slice(0, n).map((w) => `
     <div class="kw-row${study.met(w.k) ? "" : " unmet"}"><span class="jp">${study.ruby(w)}</span> <span class="small">${esc(w.m)}</span></div>`).join("");
+  // The story behind a shut fold, in a slot fillHistory fills and Koohii's fill-in never redraws [魚 has a note and no story, so no fold].
+  const story = (c) => {
+    const h = study.history(c)?.history;
+    return h ? `<details class="kanji-story small"><summary>History</summary><p>${esc(h)}</p></details>` : "";
+  };
   const body = (c, words, page) => `
     ${big(c, words)}
     <div class="kanji-head">${head(c, page)}</div>
+    <div class="kanji-hist">${story(c)}</div>
     ${fam(c, page)}
     ${window.HiraStrokes.button(c)}
     <div class="stories">${stories(c)}</div>
     <div class="kanji-words">${rows(c, words)}</div>`;
 
+  // Redraws the head of every open page or popup of c and one slot below it, from whatever has landed [an open stroke order or History fold outside the slot stays].
+  const redraw = (c, slot, html) => document.querySelectorAll(".kanji-pop").forEach((el) => {
+    if (el.dataset.c !== c) return;
+    el.querySelector(".kanji-head").innerHTML = head(c, "page" in el.dataset);
+    el.querySelector(slot).innerHTML = html;
+  });
   // Asks for Koohii's file if it hasn't arrived, once more if that load fails, and fills in the Koohii parts of an open page or popup [学 opened mid-load: "study, learning" becomes "study", an open stroke order stays].
   async function fillKoohii(c) {
     if (study.koohii(c)) return;
     await study.loadKoohii();
     if (!study.koohii(c)) await study.loadKoohii();
-    if (!study.koohii(c)) return;
-    document.querySelectorAll(".kanji-pop").forEach((el) => {
-      if (el.dataset.c !== c) return;
-      el.querySelector(".kanji-head").innerHTML = head(c, "page" in el.dataset);
-      el.querySelector(".stories").innerHTML = stories(c);
-    });
+    if (study.koohii(c)) redraw(c, ".stories", stories(c));
+  }
+  // Fills the history note and story into a popup opened before history.json landed, which it never waits for [3 pressed at once graded the card under it].
+  async function fillHistory(c) {
+    if (study.history(c)) return;
+    await study.loadHistory();
+    if (study.history(c)) redraw(c, ".kanji-hist", story(c));
   }
   async function popup(c) {
     const words = await study.words();
     study.shell().openModal(`<div class="kanji-pop" data-c="${esc(c)}">${body(c, words, false)}</div>`);
     fillKoohii(c);
+    fillHistory(c);
   }
 
   document.addEventListener("click", (e) => {
@@ -100,7 +115,7 @@
     const here = location.hash;
     let words;
     app.innerHTML = `<p class="muted">Loading kanji…</p>`;
-    try { words = await study.words(); } catch { if (location.hash === here) study.needWords(() => viewKanji([sub])); return; }
+    try { [words] = await Promise.all([study.words(), study.loadHistory()]); } catch { if (location.hash === here) study.needWords(() => viewKanji([sub])); return; }
     if (location.hash !== here) return;
     // Only a deck kanji has a page, kanji.json or not [#kanji/未 opens, #kanji/constructor is the hub].
     if (sub && sub !== "review" && (Object.hasOwn(study.kanjiInfo() || {}, sub) || words.some((w) => kanjiOf(w).includes(sub)))) {

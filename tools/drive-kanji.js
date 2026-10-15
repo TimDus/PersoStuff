@@ -3,8 +3,9 @@
 // and a popup over a review is where a stacked second popup and keys grading the card underneath both turned up.
 // Read the screenshots; report.txt has page width against viewport (equal = nothing overflows), the note lines,
 // the stroke count drawn in the popup and the recording's HTTP status and duration; the hub's 902-kanji grid and the drawing pad are the parts a phone squeezes.
-// A reading row with three met words is the widest line on a phone's card back, and 晴's sound family is the line under its components [大学生 puts セイ beside 先生].
+// A reading row with three list words is the widest line on a phone's card back, and 晴's sound family is the line under its components [大学生 puts セイ beside 先生].
 // 海's parts once read a bare 氵, so the parts lines of 海, 水, 漢 and 近 and the hub's next kanji in Heisig's order are reported too.
+// A history story is a paragraph a phone should only see on request, so the fold's height shut and open is reported for 来 東 帰 魚 and the popup.
 // Usage: node tools/drive-kanji.js . <out dir>
 const http = require("http"), fs = require("fs"), path = require("path");
 const [root, out] = process.argv.slice(2).map((p) => path.resolve(p));
@@ -52,7 +53,7 @@ const deck = { cards: { "大学生|だいがくせい#r": card(day - 5, day), "�
       };
     }, deck);
     const width = () => page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
-    const readings = (s) => page.evaluate((s) => [...document.querySelectorAll(`${s} .kanji-reading > div`)].map((d) => d.textContent).join(" | "), s);
+    const readings = (s) => page.evaluate((s) => [...document.querySelectorAll(`${s} .kanji-top, ${s} .kanji-reading > div`)].map((d) => d.textContent).join(" | "), s);
     await page.goto(base + "#words/review");
     await page.locator(".face.front").waitFor();
     await page.click("#card");
@@ -66,6 +67,8 @@ const deck = { cards: { "大学生|だいがくせい#r": card(day - 5, day), "�
     await page.click(".modal .stroke-toggle");
     await page.locator(".modal .strokes path").nth(7).waitFor();
     report.push(`${name} popup width ${await width()}, strokes ${await page.locator(".modal .strokes path").count()}, words ${await page.locator(".modal .kw-row").count()} (${await page.locator(".modal .kw-row:not(.unmet)").count()} met), readings ${await readings(".modal")}`);
+    await page.locator(".modal .kanji-story").waitFor();
+    report.push(`${name} popup history ${JSON.stringify(await page.textContent(".modal .kanji-why"))}, fold ${Math.round((await page.locator(".modal .kanji-story").boundingBox()).height)} px, open ${await page.locator(".modal .kanji-story").evaluate((d) => d.open)}`);
     await page.screenshot({ path: path.join(out, `${name}-popup.png`) });
     await page.keyboard.press("Escape");
     await page.goto(base + "#kanji");
@@ -96,6 +99,11 @@ const deck = { cards: { "大学生|だいがくせい#r": card(day - 5, day), "�
     await page.locator(".kanji-family").waitFor();
     report.push(`${name} 晴 page width ${await width()}, family ${JSON.stringify(await page.textContent(".kanji-family"))}, links ${JSON.stringify(await page.locator(".kanji-family a").evaluateAll((as) => as.map((a) => a.getAttribute("href"))))}, readings ${await readings(".kanji-page")}`);
     await page.screenshot({ path: path.join(out, `${name}-family.png`) });
+    // 四 has four readings and no met word, so its main reading's line and the three rows under the kanji are the tallest block.
+    await page.goto(base + "#kanji/四");
+    await page.locator(".kanji-top").waitFor();
+    report.push(`${name} 四 page width ${await width()}, readings ${await readings(".kanji-page")}`);
+    await page.screenshot({ path: path.join(out, `${name}-four.png`) });
     // Parts first: a radical form's full kanji, the full kanji's forms, a drift note, and the order the hub offers.
     for (const c of ["海", "水", "漢", "近"]) {
       await page.goto(base + `#kanji/${c}`);
@@ -104,6 +112,17 @@ const deck = { cards: { "大学生|だいがくせい#r": card(day - 5, day), "�
       const text = (s) => page.evaluate((s) => [...document.querySelectorAll(s)].map((d) => d.textContent).join(" | "), s);
       report.push(`${name} ${c} page width ${await width()}, parts ${JSON.stringify(await text(".kanji-comps"))}, why ${JSON.stringify(await text(".kanji-why"))}, forms ${JSON.stringify(await text(".kanji-forms"))}`);
       await page.screenshot({ path: path.join(out, `${name}-parts-${c.codePointAt(0).toString(16)}.png`) });
+    }
+    // A history note under the parts, and its story one closed line until a tap opens it [魚 has a note and no story].
+    for (const c of ["来", "東", "帰", "魚"]) {
+      await page.goto(base + `#kanji/${c}`);
+      await page.locator(`.kanji-page[data-c='${c}'] .kanji-why`).waitFor();
+      const fold = page.locator(".kanji-page .kanji-story");
+      const shut = (await fold.count()) ? Math.round((await fold.boundingBox()).height) : "none";
+      if (await fold.count()) await page.click(".kanji-story summary");
+      const open = (await fold.count()) ? Math.round((await fold.boundingBox()).height) : "none";
+      report.push(`${name} ${c} history width ${await width()}, note ${JSON.stringify(await page.textContent(".kanji-why"))}, fold ${shut} px shut, ${open} px open`);
+      await page.screenshot({ path: path.join(out, `${name}-history-${c.codePointAt(0).toString(16)}.png`) });
     }
     await page.goto(base + "#kanji");
     await page.locator("#k-new").waitFor();

@@ -20,6 +20,9 @@
   const loadKoohii = () => (koohiiLoading ||= shell.backend.signedUrls(["koohii.json"])
     .then((m) => (m.get("koohii.json") ? json(m.get("koohii.json")) : {}))
     .then((k) => { koohii = k; }, () => { koohiiLoading = null; }));
+  // Kanji histories, asked for by the first kanji view or popup [data/history.json; a failure leaves the notes out and the next view asks again].
+  let notes = {}, historyLoading = null;
+  const loadHistory = () => (historyLoading ||= json("data/history.json").then((h) => { notes = h; }, () => { historyLoading = null; }));
 
   // The deck on this device [cards keyed "会う|あう#r" for Japanese → English, "#p" the other way].
   const KEY = "hira.study";
@@ -381,6 +384,8 @@
     // Heisig's frame per kanji, empty until Koohii's file is in [学 = 346].
     frames: () => Object.fromEntries(Object.entries(koohii).filter(([, k]) => k.frame).map(([c, k]) => [c, k.frame])),
     loadKoohii: () => loadKoohii(),
+    history: (c) => notes[c],
+    loadHistory,
     keyword,
     // What the Kanji tab needs to run its deck on the Words machinery [gradeKanji("学", 3) on a new kanji = due tomorrow].
     runCards: (opts) => runCards(opts),

@@ -767,6 +767,7 @@ const reviewed = (over) => ({ st: "review", ivl: 1, ease: 2.5, due: day + 1, n: 
 const deckWith = (cards) => ({ cards, settings: { newPerDay: 20, at: 0 }, savedAt: 1 });
 // Every kanji started, so new words come in list order [秋 first] rather than only the kana words a fresh account gets.
 const KANJI = Object.keys(require("../data/kanji.json"));
+const HISTORY = require("../data/history.json");
 const started = (cfg = {}) => ({ ...listed, ...cfg, local: { "study.user": "u1", study: { ...deckWith({}),
   kanji: { cards: Object.fromEntries(KANJI.map((c) => [c, reviewed({ first: day - 1, last: day - 1, due: day + 30 })])), settings: { newPerDay: 10, at: 0 } } } } });
 // New words open as an introduction with a single Got it, and are asked a few cards later [a fresh deck: 4 introductions, then 秋 asked].
@@ -2264,11 +2265,12 @@ test("a word without a recording keeps the browser's speech and plays no clip [�
   await page.close();
 });
 
-// The readings block as [reading, its words] rows and the muted rest [学: [["ガク", "大学 · 学校 · 学生"]], "まな.ぶ"].
-const readings = (page, scope) => page.evaluate((s) => [
-  [...document.querySelectorAll(`${s} .kr-row`)].map((r) => [r.querySelector(".kr").textContent, r.querySelector(".kr-words").textContent]),
-  document.querySelector(`${s} .kr-rest`)?.textContent ?? null,
-], scope);
+// The main reading with its words, then the other readings' rows, a word not met yet marked ~ [学: ["ガク", "大学 · 学校 · 学生"], [["まな.ぶ", ""]]].
+const readings = (page, scope) => page.evaluate((s) => {
+  const ws = (el) => [...el.querySelectorAll(".kr-words > span")].map((w) => w.textContent + (w.classList.contains("unmet") ? "~" : "")).join(" · ");
+  const top = document.querySelector(`${s} .kanji-top`);
+  return [top && [top.querySelector(".kr-main").textContent, ws(top)], [...document.querySelectorAll(`${s} .kr-row`)].map((r) => [r.querySelector(".kr").textContent, ws(r)])];
+}, scope);
 
 // The note under a word's answer: one line per kanji with its meaning and the met words that share it, on the back only.
 const kanjiDeck = () => deckWith({
@@ -2444,7 +2446,7 @@ test("a popup opened while Koohii loads fills in when it lands", async () => {
   await page.click("#card");
   await page.click(".kn-k[data-kanji='学']");
   assert.equal(await page.textContent(".modal .kanji-kw"), "study, learning");
-  assert.deepEqual(await readings(page, ".modal"), [[["ガク", "大学 · 学校 · 学生"]], "まな.ぶ"]);
+  assert.deepEqual(await readings(page, ".modal"), [["ガク", "大学 · 学校 · 学生"], [["まな.ぶ", ""]]]);
   // A stroke order opened meanwhile stays open [the first redraw rebuilt the whole popup and wiped it].
   await page.click(".modal .stroke-toggle");
   await page.locator(".modal .strokes").waitFor();
@@ -2454,6 +2456,21 @@ test("a popup opened while Koohii loads fills in when it lands", async () => {
   assert.match(await page.textContent(".modal .kanji-meta"), /RTK 346/);
   assert.equal(await page.locator(".modal .strokes").count(), 1);
   assert.equal(await page.textContent(".modal .stroke-toggle"), "Hide stroke order");
+  await page.close();
+});
+
+// Koohii's late redraw rebuilds the head, so a History fold kept in the head, or a redraw of every slot, would shut a fold the reader opened.
+test("a History fold opened before Koohii's file lands stays open when it does", async () => {
+  const page = await open({ ...listed, koohii, koohiiHold: true, local: { "study.user": "u1", study: kanjiDeck() } }, "#words/review");
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  await page.click(".kn-k[data-kanji='学']");
+  await page.locator(".modal .kanji-story").waitFor({ timeout: 3000 });
+  await page.click(".modal .kanji-story summary");
+  await page.evaluate(() => window.__releaseKoohii());
+  await page.locator(".modal .story").first().waitFor({ timeout: 3000 });
+  assert.equal(await page.textContent(".modal .kanji-kw"), "study");
+  assert.equal(await page.locator(".modal .kanji-story").evaluate((d) => d.open), true);
   await page.close();
 });
 
@@ -2540,7 +2557,7 @@ test("a kanji card's back shows its readings, its parts, the stroke order and th
   await page.click("#go");
   await page.locator(".face.front .kanji-prompt", { hasText: "study" }).waitFor();
   await page.click("#card");
-  assert.deepEqual(await readings(page, ".face.back"), [[["ガク", "大学 · 学校 · 学生"]], "まな.ぶ"]);
+  assert.deepEqual(await readings(page, ".face.back"), [["ガク", "大学 · 学校 · 学生"], [["まな.ぶ", ""]]]);
   assert.match(await page.textContent(".face.back .kanji-comps"), /子 child/);
   assert.equal(await page.locator(".face.back .stroke-toggle").count(), 1, "Paper mode keeps the Stroke order button");
   assert.equal(await page.locator(".face.back .story").count(), 4);
@@ -2618,6 +2635,74 @@ test("a radical form names its full kanji, the full kanji names its forms, and a
   await page.close();
 });
 
+// A story is a paragraph, so on a phone it waits behind a fold of one line until asked for [漢: the Han river, then the bronze vessel].
+test("a kanji's page and popup show its history note and a closed History fold that opens to the story", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#kanji/漢");
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.locator(".kanji-page[data-c='漢'] .kanji-story").waitFor({ timeout: 3000 });
+  assert.equal(await page.textContent(".kanji-why"), HISTORY["漢"].note);
+  const fold = page.locator(".kanji-page .kanji-story");
+  assert.equal(await fold.evaluate((d) => d.open), false);
+  const { height } = await fold.boundingBox();
+  assert.ok(height <= 32, `the closed fold is ${height} px tall`);
+  assert.equal(await page.locator(".kanji-story p").isVisible(), false);
+  await page.click(".kanji-story summary");
+  assert.equal(await page.locator(".kanji-story p").isVisible(), true);
+  assert.equal(await page.textContent(".kanji-story p"), HISTORY["漢"].history);
+  await page.goto(base + "#words/review");
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  await page.click(".kn-k[data-kanji='学']");
+  await page.locator(".modal .kanji-story").waitFor({ timeout: 3000 });
+  assert.equal(await page.textContent(".modal .kanji-why"), HISTORY["学"].note);
+  assert.equal(await page.locator(".modal .kanji-story").evaluate((d) => d.open), false);
+  await page.close();
+});
+
+// A review card's back has room for the note, and the story stays on the page and the popup.
+test("a kanji review's answer shows the history note and no fold", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: withKanji({ 漢: reviewed({ first: day - 5, last: day - 1, due: day }) }) } }, "#kanji/review");
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  assert.equal(await page.textContent(".face.back .kanji-why"), HISTORY["漢"].note);
+  assert.equal(await page.locator(".face.back .kanji-story").count(), 0);
+  await page.close();
+});
+
+// history.json loads apart from the words, so a failed load must leave the page whole and be asked for again on the next view.
+test("a kanji page opens without its history when history.json fails, and the next view asks again", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  let calls = 0;
+  await page.route("**/data/history.json", (r) => (++calls === 1 ? r.fulfill({ status: 404 }) : r.continue()));
+  await page.goto(base + "#kanji/漢");
+  await page.locator(".kanji-page[data-c='漢'] .kanji-comps").waitFor({ timeout: 3000 });
+  assert.equal(await page.locator(".kanji-why, .kanji-story").count(), 0);
+  await page.goto(base + "#kanji/学");
+  await page.locator(".kanji-page[data-c='学'] .kanji-story").waitFor({ timeout: 3000 });
+  assert.equal(calls, 2);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+// A popup that waited for history.json opened late, so a quick 3 graded the card under it; it opens at once and fills in instead.
+test("a popup opened before history.json lands gets its note and fold when the file arrives", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#words/review");
+  let release;
+  const held = new Promise((r) => (release = r));
+  await page.route("**/data/history.json", async (r) => { await held; r.continue(); });
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  await page.click(".kn-k[data-kanji='学']");
+  await page.locator(".modal .kanji-comps").waitFor({ timeout: 3000 });
+  assert.equal(await page.locator(".modal .kanji-why, .modal .kanji-story").count(), 0);
+  release();
+  await page.locator(".modal .kanji-story").waitFor({ timeout: 3000 });
+  assert.equal(await page.textContent(".modal .kanji-why"), HISTORY["学"].note);
+  await page.close();
+});
+
 // The parts no word uses are deck kanji too, so their grid links and pages must open [未, only in 味 and 妹].
 test("a kanji that is only a part has a page, and the hub lists it under its own heading", async () => {
   const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#kanji");
@@ -2654,6 +2739,18 @@ test("a kanji's page opens for any kanji in the word list, with or without kanji
   await page.close();
 });
 
+// 四's page listed シ, よっ.つ, よ and よん in one line over the kanji, with nothing to say which one to learn first.
+test("a kanji's main reading sits large over it and its other readings under it, before the stroke order", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: deckWith({}) } }, "#kanji/四");
+  await page.locator(".kanji-page .kanji-top").waitFor({ timeout: 3000 });
+  assert.deepEqual(await readings(page, ".kanji-page"), [["シ", "四~"], [["よっ.つ", "四つ~"], ["よん", "四~"], ["よ", ""]]]);
+  const order = await page.$$eval(".kanji-page .kanji-top, .kanji-page .kanji-big, .kanji-page .kanji-reading, .kanji-page .stroke-toggle", (els) => els.map((e) => ["kanji-top", "kanji-big", "kanji-reading", "stroke-toggle"].find((c) => e.classList.contains(c))));
+  assert.deepEqual(order, ["kanji-top", "kanji-big", "kanji-reading", "stroke-toggle"]);
+  const [main, other] = await page.evaluate(() => [".kr-main", ".kanji-reading .kr"].map((x) => parseFloat(getComputedStyle(document.querySelector(`.kanji-page ${x}`)).fontSize)));
+  assert.ok(main > other * 1.5, `main reading ${main}px against ${other}px`);
+  await page.close();
+});
+
 // KanjiVG's sound parts were never shown, so 晴's page didn't say that 青 and 静 read セイ like it.
 test("a kanji's page lists the list's kanji sharing its sound and reading as links, and its popup lists them plain", async () => {
   const deck = deckWith({ "晴れる|はれる#r": reviewed({ first: day - 1, last: day - 1, due: day }) });
@@ -2661,7 +2758,7 @@ test("a kanji's page lists the list's kanji sharing its sound and reading as lin
   await page.locator(".kanji-family").waitFor({ timeout: 3000 });
   assert.equal(await page.textContent(".kanji-family"), "Same sound セイ: 青 静");
   assert.deepEqual(await page.locator(".kanji-family a").evaluateAll((as) => as.map((a) => a.getAttribute("href"))), ["#kanji/青", "#kanji/静"]);
-  assert.deepEqual(await readings(page, ".kanji-page"), [[["は.れる", "晴れる"]], "セイ"]);
+  assert.deepEqual(await readings(page, ".kanji-page"), [["は.れる", "晴れる · 晴れ~ · 素晴らしい~"], [["セイ", ""]]]);
   await page.goto(base + "#words/review");
   await page.locator(".face.front").waitFor();
   await page.click("#card");
@@ -2689,7 +2786,7 @@ test("a kanji's page, the hub and the review still open on a cached kanji.json w
   await page.locator(".kanji-page[data-c='海'] .kanji-comps").waitFor({ timeout: 3000 });
   await page.goto(base + "#kanji/学");
   await page.locator(".kanji-page").waitFor({ timeout: 3000 });
-  assert.equal(await page.locator(".kanji-page .kanji-reading").count(), 0);
+  assert.equal(await page.locator(".kanji-page .kanji-reading, .kanji-page .kanji-top").count(), 0);
   await page.goto(base + "#kanji/晴");
   await page.locator(".kanji-page[data-c='晴']").waitFor({ timeout: 3000 });
   assert.equal(await page.locator(".kanji-page .kanji-family").count(), 0);
@@ -2721,7 +2818,7 @@ test("a reload asks the server for the data files again, and uses the kept copy 
   try {
     await page.reload();
     await page.locator(".kanji-page").waitFor({ timeout: 3000 });
-    assert.deepEqual(await readings(page, ".kanji-page"), [[["ガク", "大学 · 学校 · 学生"]], "まな.ぶ"]);
+    assert.deepEqual(await readings(page, ".kanji-page"), [["ガク", "大学 · 学校 · 学生"], [["まな.ぶ", ""]]]);
   } finally {
     dropData = false;
   }

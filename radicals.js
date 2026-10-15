@@ -1,4 +1,4 @@
-// Names for the kanji parts that aren't deck kanji, and why a misleading radical is there, pure so node can test them [近's ⻌ = road, movement; 漢's 氵 = the Han river].
+// Names for the kanji parts that aren't deck kanji, pure so node can test them [近's ⻌ = road, movement].
 (function (root) {
   // A shape's name, KANJIDIC's meaning reworded where it says only "radical (no. 40)" [宀 = roof].
   const NAMES = {
@@ -37,49 +37,7 @@
     "彔": "carve wood", "侖": "in order", "粦": "flickering fire",
   };
 
-  // Why a kanji has a radical its meaning doesn't explain, old senses said "traditionally" where disputed [法 = law and water].
-  const NOTES = {
-    漢: "氵 because 漢 was the Han river, which named a dynasty and then China.",
-    法: "氵 is traditionally explained as law keeping things level, like water.",
-    決: "氵 because 決 first meant a river breaking through its bank.",
-    治: "氵 because governing first meant taming rivers, traditionally.",
-    活: "氵 because 活 first meant the sound of flowing water.",
-    済: "氵 because 済 first meant to ford a river; finishing came later.",
-    準: "氵 because 準 first meant a water level; standard came later.",
-    漫: "氵 because 漫 first meant water spreading without end.",
-    泊: "氵 because 泊 first meant a boat at anchor; staying the night came later.",
-    注: "氵 because 注 first meant to pour; attention is pouring your mind into it.",
-    洋: "氵 because 洋 is the ocean; 洋服 are clothes from across the sea.",
-    存: "亻 is not a person here: it is part of 才, which gives 存 its sound.",
-    何: "亻 because 何 first pictured a person carrying a load; \"what\" borrowed it.",
-    才: "扌 is not a hand here: 才 traditionally pictures a sprout breaking through the ground.",
-    帰: "刂 is not a knife here: it is what 帰 kept of the left side of its old form 歸.",
-    利: "刂 because 利 first meant a blade cutting grain: sharp, then profit.",
-    制: "刂 because 制 first meant cutting wood to shape, then to control.",
-    為: "灬 is the elephant's legs, not fire: 為 first pictured a hand leading an elephant to work.",
-    将: "⺤ is not a claw here: the old form 將 has meat, 月, in that place.",
-    愛: "⺤ is not a claw here: it is what is left of 旡, which gives 愛 its sound.",
-    無: "灬 is not fire here: 無 first pictured a dancer, borrowed for \"nothing\".",
-    然: "灬 because 然 first meant to burn; \"so\" was borrowed, and 燃 took burning back.",
-    点: "灬 is the bottom of 黑, black, in the old form 點: a black dot.",
-    魚: "灬 is the fish's tail, not fire.",
-    鳥: "灬 is the bird's feet and tail, not fire.",
-    馬: "灬 is the horse's legs and tail, not fire.",
-    社: "礻 because 社 was a shrine to the god of the land; companies came later.",
-    英: "艹 because 英 first meant a flower; excellent came later.",
-    荷: "艹 because 荷 was the lotus; load was borrowed.",
-    員: "貝 is a round pot here, not money: 員 first meant round.",
-    約: "糸 because 約 first meant tying with cord; a promise binds.",
-    経: "糸 for the warp threads of a loom; passing through came later.",
-    練: "糸 because 練 first meant boiling silk soft; practice came later.",
-    絵: "糸 because 絵 first meant embroidery.",
-    終: "糸 for the end of a thread.",
-    服: "月 was a boat here, not the moon.",
-    腹: "月 is the radical form of 肉, meat, not the moon: body parts take it.",
-    腕: "月 is the radical form of 肉, meat, not the moon: body parts take it.",
-  };
-
-  const api = { NAMES, NOTES };
+  const api = { NAMES };
   if (typeof module !== "undefined") module.exports = api;
   else root.HiraRadicals = api;
 })(this);

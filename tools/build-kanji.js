@@ -1,4 +1,4 @@
-// Builds data/kanji.json (KANJIDIC2's meanings, stroke count, level and readings, KanjiVG's components and sound parts) and data/kanji-strokes.json (KanjiVG's strokes) for every kanji in the word list and the jōyō kanji they're built from [大 = "large, big", 3 strokes, N5; 味 brings 未].
+// Builds data/kanji.json (KANJIDIC2's meanings, stroke count, level and readings, KanjiVG's components and sound parts, the main reading from Jiten's anime list) and data/kanji-strokes.json (KanjiVG's strokes) for every kanji in the word list and the jōyō kanji they're built from [大 = "large, big", 3 strokes, N5; 味 brings 未].
 // Usage: node tools/build-kanji.js _data data/vocab.json data
 const fs = require("fs");
 const path = require("path");
@@ -100,6 +100,36 @@ for (const c of deck) {
   if (p.length) kanji[c].p = p;
 }
 const off = deck.filter((c) => strokes[c].d.length !== kanji[c].sc);
+
+// The main reading: the one anime subtitles use most, each word weighted 1/rank in Jiten's anime list [今 = いま 30.7 against コン 10.9 per thousand; 上 = ジョウ from 以上].
+const { readingIn } = require("../kanji.js");
+// Every KANJIDIC2 reading, so a word with a kanji outside the deck or a reading past the cap still splits [上昇, 上る のぼる].
+const every = Object.fromEntries(chars.map((m) => [m[1], Object.fromEntries(["on", "kun"].map((t) => [t,
+  [...m[0].matchAll(new RegExp(`<reading r_type="ja_${t}">([^<]+)</reading>`, "g"))].map((x) => x[1]).filter((r) => !r.includes("-"))]))]));
+const hira = (s) => s.replace(/[ァ-ヶ]/g, (k) => String.fromCharCode(k.charCodeAt(0) - 0x60));
+const KANJI = /[一-鿿々]/;
+// A spelling's kanji runs given their share of the reading [四月 + しがつ = 四月 read しがつ; 生きる = 生 read い, then きる].
+const furigana = (w, r) => {
+  const runs = w.match(/[一-鿿々]+|[^一-鿿々]+/g);
+  const lit = (s) => hira(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const m = hira(r).match(new RegExp("^" + runs.map((s) => (KANJI.test(s) ? "(.+?)" : `(${lit(s)})`)).join("") + "$"));
+  return m && runs.map((s, i) => (KANJI.test(s) ? [s, m[i + 1]] : [s]));
+};
+const weight = {};
+for (const line of fs.readFileSync(path.join(dataDir, "jiten", "anime.csv"), "utf8").split(/\r?\n/).slice(1)) {
+  const [w, r, rank] = line.split(",");
+  const fu = w && KANJI.test(w) && furigana(w, r);
+  if (!fu) continue;
+  for (const c of new Set(w)) {
+    const rd = kanji[c] && readingIn(c, { fu }, every);
+    if (rd) (weight[c] ||= {})[rd] = (weight[c][rd] || 0) + 1 / rank;
+  }
+}
+// Only a reading the page shows can be the main one [入's い.る outweighs はい.る but isn't kept, so はい.る].
+for (const [c, ws] of Object.entries(weight)) {
+  const best = Object.entries(ws).filter(([r]) => [...kanji[c].on, ...kanji[c].kun].includes(r)).sort((a, b) => b[1] - a[1])[0];
+  if (best) kanji[c].top = best[0];
+}
 
 fs.mkdirSync(outDir, { recursive: true });
 for (const [name, data] of [["kanji.json", kanji], ["kanji-strokes.json", strokes]]) {
