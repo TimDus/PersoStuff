@@ -7,8 +7,8 @@ const by = (k) => vocab.find((w) => w.k === k);
 
 test("every N5 and N4 word is there once, all of N5 before any of N4", () => {
   assert.equal(new Set(vocab.map((w) => w.k)).size, vocab.length);
-  assert.deepEqual([vocab.filter((w) => w.lv === 5).length, vocab.filter((w) => w.lv === 4).length], [716, 668]);
-  assert.equal(vocab.findIndex((w) => w.lv === 4), 716);
+  assert.deepEqual([vocab.filter((w) => w.lv === 5).length, vocab.filter((w) => w.lv === 4).length], [718, 668]);
+  assert.equal(vocab.findIndex((w) => w.lv === 4), 718);
 });
 
 test("the list's dated spellings are written as today, and a second spelling of one word is dropped [終る = 終わる, 在る = 有る]", () => {
@@ -52,6 +52,16 @@ test("a word's examples use its own kanji, and a counter only after a number [no
   });
   assert.deepEqual(strays.map((w) => w.k), []);
   assert.ok(by("～円|～えん").ex.every(([jp]) => /[0-9０-９一二三四五六七八九十百千万何]円/.test(jp)));
+});
+
+test("a number said alone has its everyday reading, the list's own after it [四 = し, then よん \"four\"]", () => {
+  assert.deepEqual(["四|よん", "七|なな"].map((k) => by(k)?.m), ["four", "seven"]);
+  assert.equal(vocab.findIndex((w) => w.k === "四|よん"), vocab.findIndex((w) => w.k === "四|し") + 1);
+});
+
+test("a spelling with two readings gets only sentences Tatoeba tags with its own [七時 is しちじ, so none for なな]", () => {
+  assert.deepEqual([...by("七|なな").ex, ...by("十|とお").ex].filter(([jp]) => /[七十]時/.test(jp)), []);
+  assert.ok(by("十|じゅう").ex.some(([jp]) => jp.includes("十時")));
 });
 
 test("the list's own spellings resolve [運動|うんどうする is a suru verb, 回る、回す two words, いい; よい one]", () => {

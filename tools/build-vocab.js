@@ -65,6 +65,9 @@ for (const lv of [5, 4]) {
     }
   }
 }
+// Everyday readings the list leaves out, placed after the reading it has [四 read し only, while four said alone is よん].
+const ADD = [["四", "よん", "four", "四|し"], ["七", "なな", "seven", "七|しち"]];
+for (const [w, r, m, after] of ADD) words.splice(words.findIndex((x) => x.k === after) + 1, 0, { k: `${w}|${r}`, w, r, m, lv: 5, suru: false });
 
 // JMdict entries by spelling and by reading; pos carries over to later senses until one names its own.
 const byKeb = new Map(), byReb = new Map();
@@ -149,7 +152,8 @@ function furigana(w, r) {
 }
 
 // Tatoeba sentences whose index names the word, shortest first [会う: 駅で会いましょう。].
-const want = new Map(words.map((x) => [x.base, x]));
+const want = new Map();
+words.forEach((x) => push(want, x.base, x));
 const found = new Map();
 for (const line of read("tatoeba", "jpn_indices.csv").split(/\r?\n/)) {
   const [jid, eid, idx] = line.split("\t");
@@ -157,8 +161,10 @@ for (const line of read("tatoeba", "jpn_indices.csv").split(/\r?\n/)) {
   for (const tok of idx.split(" ")) {
     const m = tok.match(/^([^([{~]+)(?:\(([^)]+)\))?(?:\[\d+\])?(?:\{[^}]+\})?(~)?$/);
     if (!m) continue;
-    const word = want.get(m[1]);
-    if (!word || (m[2] && m[2] !== word.baseR) || (!m[2] && m[1] !== word.baseR && isKana(m[1]))) continue;
+    // A spelling with two readings takes only sentences tagged with one, else the list's last word of it [七(しち) to しち, an untagged 七 to neither].
+    const cands = (want.get(m[1]) || []).filter((x) => !m[2] || x.baseR === m[2]);
+    const word = new Set(cands.map((x) => x.baseR)).size === 1 && cands.at(-1);
+    if (!word || (!m[2] && m[1] !== word.baseR && isKana(m[1]))) continue;
     (found.get(word.k) || found.set(word.k, []).get(word.k)).push({ jid, eid, checked: !!m[3] });
   }
 }
