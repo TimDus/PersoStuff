@@ -29,10 +29,15 @@
     return list.map((s) => `
       <div class="story"><div class="story-by muted small">${esc(s.by)}</div><div class="story-text">${safe(s.text)}</div></div>`).join("");
   }
+  const big = (c) => {
+    // Readings missing from a kanji.json cached before they were added [GitHub Pages keeps it 10 minutes after a push].
+    const info = study.kanjiInfo()?.[c], all = [...(info?.on || []), ...(info?.kun || [])];
+    return `${all.length ? `<div class="kanji-reading jp">${all.map((r) => `<span>${esc(r)}</span>`).join(" · ")}</div>` : ""}<div class="kanji-big jp">${esc(c)}</div>`;
+  };
   const rows = (c, words, n = Infinity) => wordsWith(c, words, study.cards()).slice(0, n).map((w) => `
     <div class="kw-row${study.met(w.k) ? "" : " unmet"}"><span class="jp">${study.ruby(w)}</span> <span class="small">${esc(w.m)}</span></div>`).join("");
   const body = (c, words, page) => `
-    <div class="kanji-big jp">${esc(c)}</div>
+    ${big(c)}
     <div class="kanji-head">${head(c, page)}</div>
     ${window.HiraStrokes.button(c)}
     <div class="stories">${stories(c)}</div>
@@ -137,7 +142,7 @@
     const front = `<div class="kanji-prompt">${esc(prompt(c, words))}</div>${draw
       ? `<div class="kpad" data-noflip><svg viewBox="0 0 109 109" aria-label="Drawing pad"></svg><button class="ghost small" type="button" data-clear>Clear</button></div>`
       : `<div class="muted small">Write it on paper, then turn the card</div>`}`;
-    const back = `<div class="kanji-big jp">${esc(c)}</div>${draw ? window.HiraStrokes.shown(c) : window.HiraStrokes.button(c)}
+    const back = `${big(c)}${draw ? window.HiraStrokes.shown(c) : window.HiraStrokes.button(c)}
       <div class="stories">${stories(c)}</div><div class="kanji-words">${rows(c, words, 5)}</div>`;
     return { front, back };
   }

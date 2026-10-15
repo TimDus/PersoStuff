@@ -11,7 +11,10 @@ const { chromium } = require("playwright");
 
 const root = path.join(__dirname, "..");
 const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".mp3": "audio/mpeg" };
-let server, base, browser;
+let server, base, browser, cachingBrowser;
+// Requests per path, and a switch that drops every data file [a server gone mid-visit].
+const hits = {};
+let dropData = false;
 
 test.before(async () => {
   if (!fs.existsSync(path.join(root, "content", "worksheets.json"))) throw new Error("run `npm run build-content` first");
@@ -23,7 +26,11 @@ test.before(async () => {
     }
     const head = fs.readFileSync(file).subarray(0, 2);
     const sniffed = head[0] === 0x89 ? "image/png" : head[0] === 0xff && head[1] === 0xd8 ? "image/jpeg" : "application/octet-stream";
-    res.writeHead(200, { "content-type": types[path.extname(file)] || sniffed });
+    const name = new URL(req.url, "http://x").pathname;
+    hits[name] = (hits[name] || 0) + 1;
+    if (dropData && name.startsWith("/data/")) return req.socket.destroy();
+    // Data files kept like GitHub Pages keeps them [max-age=600], which only a page without routes caches.
+    res.writeHead(200, { "content-type": types[path.extname(file)] || sniffed, ...(name.startsWith("/data/") && { "cache-control": "max-age=600" }) });
     fs.createReadStream(file).pipe(res);
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
@@ -32,13 +39,16 @@ test.before(async () => {
 });
 test.after(async () => {
   await browser?.close();
+  await cachingBrowser?.close();
   server?.close();
 });
 
 // A page wired to a fake backend [cfg.offline, or localStorage.__offline set mid-test, fails every call like a dead network].
 async function open(cfg, hash = "") {
-  const page = await browser.newPage();
-  await page.route("**/cdn.jsdelivr.net/**", (r) => r.abort());
+  // A route turns Chrome's HTTP cache off, so a case about caching blocks the CDN by DNS instead [cfg.cached].
+  cachingBrowser ||= cfg.cached && await chromium.launch({ channel: "chrome", args: ["--host-resolver-rules=MAP cdn.jsdelivr.net ~NOTFOUND"] });
+  const page = await (cfg.cached ? cachingBrowser : browser).newPage();
+  if (!cfg.cached) await page.route("**/cdn.jsdelivr.net/**", (r) => r.abort());
   await page.addInitScript((cfg) => {
     if (cfg.local && !localStorage.getItem("__seeded")) {
       Object.entries(cfg.local).forEach(([k, v]) => localStorage.setItem("hira." + k, JSON.stringify(v)));
@@ -645,14 +655,17 @@ test("a flashcard's stroke order waits behind the flip with the drawing", async 
 
 test("stroke order that fails to load says so, and the next press tries again", async () => {
   const page = await open(listed, "#learn/1");
-  let calls = 0;
-  await page.route("**/data/strokes.json", (r) => (++calls === 1 ? r.abort() : r.continue()));
+  // Offline until the second press, so the fresh ask and its kept-copy fallback both fail [the train, then a station].
+  let calls = 0, offline = true;
+  await page.route("**/data/strokes.json", (r) => (++calls, offline ? r.abort() : r.continue()));
   const toggle = page.locator(".kana-card").first().locator(".stroke-toggle");
   await toggle.click();
   await page.waitForFunction(() => /Can.t load/.test(document.querySelector(".stroke-toggle").textContent));
+  const failed = calls;
+  offline = false;
   await toggle.click();
   await page.locator(".kana-card").first().locator(".strokes path").first().waitFor();
-  assert.equal(calls, 2);
+  assert.equal(calls, failed + 1);
   await page.close();
 });
 
@@ -910,13 +923,16 @@ test("fewer new words a day means fewer new cards", async () => {
 
 test("a word list that fails to load says so, and Try again loads it", async () => {
   const p = await open(listed, "#learn");
-  let calls = 0;
-  await p.route("**/data/vocab.json", (r) => (++calls === 1 ? r.abort() : r.continue()));
+  // Offline until Try again, so the fresh ask and its kept-copy fallback both fail.
+  let calls = 0, offline = true;
+  await p.route("**/data/vocab.json", (r) => (++calls, offline ? r.abort() : r.continue()));
   await p.goto(base + "#words");
   await p.locator("#retry").waitFor();
+  const failed = calls;
+  offline = false;
   await p.click("#retry");
   await p.locator("#new").waitFor();
-  assert.equal(calls, 2);
+  assert.equal(calls, failed + 1);
   await p.close();
 });
 
@@ -2412,6 +2428,7 @@ test("a popup opened while Koohii loads fills in when it lands", async () => {
   await page.click("#card");
   await page.click(".kn-k[data-kanji='学']");
   assert.equal(await page.textContent(".modal .kanji-kw"), "study, learning");
+  assert.equal(await page.textContent(".modal .kanji-reading"), "ガク · まな.ぶ");
   // A stroke order opened meanwhile stays open [the first redraw rebuilt the whole popup and wiped it].
   await page.click(".modal .stroke-toggle");
   await page.locator(".modal .strokes").waitFor();
@@ -2488,6 +2505,7 @@ test("the Kanji hub counts the kanji met words unlocked, and a review introduces
   assert.equal(await page.textContent(".face.front .kanji-prompt"), "study");
   assert.equal(await page.locator(".face.back").isVisible(), true);
   assert.equal(await page.textContent(".face.back .kanji-big"), "学");
+  assert.equal(await page.textContent(".face.back .kanji-reading"), "ガク · まな.ぶ");
   assert.equal(await page.locator(".face.back .stroke-toggle").count(), 1, "Paper mode keeps the Stroke order button");
   assert.equal(await page.locator(".face.back .story").count(), 4);
   assert.match(await page.textContent(".hint"), /New kanji/);
@@ -2577,6 +2595,41 @@ test("a kanji's page opens for any kanji in the word list, with or without kanji
   await page.locator(".kanji-page").waitFor({ timeout: 3000 });
   assert.equal(await page.locator(".kanji-page .kanji-words .kw-row").count(), 13);
   assert.deepEqual(errors, []);
+  await page.close();
+});
+
+// A kanji.json cached from before the readings threw on `on` and left the Kanji page blank [no error on screen, just nothing].
+test("a kanji's page and review still open on a cached kanji.json without readings", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const old = Object.fromEntries(Object.entries(require("../data/kanji.json")).map(([c, { on, kun, ...rest }]) => [c, rest]));
+  await page.route("**/data/kanji.json", (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify(old) }));
+  await page.goto(base + "#kanji/学");
+  await page.locator(".kanji-page").waitFor({ timeout: 3000 });
+  assert.equal(await page.locator(".kanji-page .kanji-reading").count(), 0);
+  await page.goto(base + "#kanji/review");
+  await page.locator(".face.back .kanji-big").waitFor({ state: "attached", timeout: 3000 });
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+// Chrome kept serving the kanji.json from before the readings, so the readings never showed while the server had them.
+test("a reload asks the server for the data files again, and uses the kept copy when it can't reach it", async () => {
+  const page = await open({ ...listed, cached: true, local: { "study.user": "u1", study: kanjiDeck() } }, "#kanji/学");
+  await page.locator(".kanji-page .kanji-reading").waitFor({ timeout: 3000 });
+  const before = hits["/data/kanji.json"];
+  await page.reload();
+  await page.locator(".kanji-page .kanji-reading").waitFor({ timeout: 3000 });
+  assert.equal(hits["/data/kanji.json"], before + 1, "the reload revalidated kanji.json");
+  dropData = true;
+  try {
+    await page.reload();
+    await page.locator(".kanji-page").waitFor({ timeout: 3000 });
+    assert.equal(await page.textContent(".kanji-page .kanji-reading"), "ガク · まな.ぶ");
+  } finally {
+    dropData = false;
+  }
   await page.close();
 });
 

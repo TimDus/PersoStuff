@@ -9,7 +9,7 @@
   const SETTLE = 800;
   let data = null, loading = null;
   // Fetched on the first visit and kept [data/grammar.json, 40 points, 368 sentences].
-  const load = () => (loading ||= fetch("data/grammar.json")
+  const load = () => (loading ||= fetch("data/grammar.json", { cache: "no-cache" }).catch(() => fetch("data/grammar.json", { cache: "force-cache" }))
     .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
     .then((d) => (data = d))
     .catch((e) => { loading = null; throw e; }));

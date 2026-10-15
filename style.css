@@ -325,12 +325,14 @@ body[data-section="japanese"] footer .credits-ja { display: block; }
 /* A word's kanji under its answer, each kanji a button to its popup [学 study, learning · also in 大学, 学校]. */
 .kanji-note { margin-top: .8rem; border-top: 1px solid var(--line); padding-top: .6rem; display: grid; gap: .3rem; text-align: left; width: 100%; }
 .kn-k { font-family: var(--jp); font-size: 1.3rem; padding: .1rem .45rem; min-width: 2.4rem; background: transparent; color: var(--accent); border: 1px solid var(--line); border-radius: 8px; }
+.kanji-reading { font-size: 1.5rem; }
+.kanji-reading span { white-space: nowrap; }
 .kanji-big { font-family: var(--jp); font-size: 5rem; line-height: 1.1; }
 .kanji-kw { font-size: 1.3rem; font-weight: 600; }
 .kanji-words { margin-top: .8rem; display: grid; gap: .35rem; text-align: left; }
-.kw-row .jp { font-size: 1.15rem; }
+.kw-row .jp { font-size: 1.4rem; }
 .kw-row.unmet { color: var(--muted); }
-.kw-row rt { font-size: .5em; color: var(--muted); }
+.kw-row rt { font-size: .7em; color: inherit; }
 /* Koohii stories under the stroke order, each author above its text [the Koohii account's story, then three by stars]. */
 .stories { margin-top: .8rem; display: grid; gap: .6rem; text-align: left; }
 .stories:empty { display: none; }

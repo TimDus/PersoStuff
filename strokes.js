@@ -2,7 +2,7 @@
 (function () {
   const files = {};
   // A failed fetch is forgotten so the next press tries again [offline on the train, then back online].
-  const fetchOnce = (name) => (files[name] ||= fetch(`data/${name}`)
+  const fetchOnce = (name) => (files[name] ||= fetch(`data/${name}`, { cache: "no-cache" }).catch(() => fetch(`data/${name}`, { cache: "force-cache" }))
     .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
     .catch((e) => { delete files[name]; throw e; }));
   const load = () => fetchOnce("strokes.json");

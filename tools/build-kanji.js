@@ -1,4 +1,4 @@
-// Builds data/kanji.json (KANJIDIC2's meanings, stroke count and level, KanjiVG's components) and data/kanji-strokes.json (KanjiVG's strokes) for every kanji in the word list [大 = "large, big", 3 strokes, N5].
+// Builds data/kanji.json (KANJIDIC2's meanings, stroke count, level and readings, KanjiVG's components) and data/kanji-strokes.json (KanjiVG's strokes) for every kanji in the word list [大 = "large, big", 3 strokes, N5].
 // Usage: node tools/build-kanji.js _data data/vocab.json data
 const fs = require("fs");
 const path = require("path");
@@ -14,13 +14,31 @@ const want = new Set(listed);
 
 // Today's N level from KANJIDIC2's pre-2010 JLPT level, 0 for none, as build-vocab.js reads it [old 4 = N5].
 const OLD_TO_N = { 4: 5, 3: 4, 2: 2, 1: 1 };
+// A kun reading a listed word spells with the kanji alone [生きる = [生, い] then きる, so い.きる].
+const used = (c, kun) => {
+  const [stem, oku = ""] = kun.split(".");
+  return words.some((w) => w.fu.some(([text, rt], i) => text === c && rt === stem && (w.fu[i + 1]?.[0] || "").startsWith(oku[0] || "")));
+};
+// Up to 3 kun, the word list's first, one per stem and spelling [生: い.きる, う.まれる, お.う, not い.かす or うま.れる].
+function kunOf(c, all) {
+  const seen = new Set(), out = [];
+  for (const r of [...all.filter((r) => used(c, r)), ...all.filter((r) => !used(c, r))]) {
+    const keys = [r.split(".")[0], r.replace(".", "")];
+    if (!keys.some((k) => seen.has(k))) out.push(r);
+    keys.forEach((k) => seen.add(k));
+  }
+  return out.slice(0, 3);
+}
 const kanji = {};
 for (const m of fs.readFileSync(path.join(dataDir, "kanjidic", "kanjidic2.xml"), "utf8").matchAll(/<literal>([^<]+)<\/literal>[\s\S]*?<\/character>/g)) {
   if (!want.has(m[1])) continue;
   const old = m[0].match(/<jlpt>(\d)<\/jlpt>/);
   // English meanings only, the first two [大: large, big; French and Spanish carry m_lang].
   const meanings = [...m[0].matchAll(/<meaning>([^<]+)<\/meaning>/g)].map((x) => x[1]).slice(0, 2);
-  kanji[m[1]] = { m: meanings.join(", "), sc: +m[0].match(/<stroke_count>(\d+)<\/stroke_count>/)[1], lv: old ? OLD_TO_N[old[1]] : 0 };
+  // Readings without the affix forms [大's おお- and -おお.いに], on in KANJIDIC2's order.
+  const read = (type) => [...m[0].matchAll(new RegExp(`<reading r_type="${type}">([^<]+)</reading>`, "g"))].map((x) => x[1]).filter((r) => !r.includes("-"));
+  kanji[m[1]] = { m: meanings.join(", "), sc: +m[0].match(/<stroke_count>(\d+)<\/stroke_count>/)[1], lv: old ? OLD_TO_N[old[1]] : 0,
+    on: read("ja_on").slice(0, 3), kun: kunOf(m[1], read("ja_kun")) };
 }
 
 const missing = listed.filter((c) => !kanji[c]);

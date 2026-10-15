@@ -13,7 +13,18 @@ test("every kanji in the word list has a meaning, a stroke count and a level", (
   assert.equal(listed.length, 778);
   assert.deepEqual(listed.filter((c) => !kanji[c]?.m || !(kanji[c].sc > 0) || !(kanji[c].lv >= 0)), []);
   assert.deepEqual(Object.keys(kanji).filter((c) => !listed.includes(c)), []);
-  assert.deepEqual(kanji["大"], { m: "large, big", sc: 3, lv: 5, c: [] });
+  assert.deepEqual(kanji["大"], { m: "large, big", sc: 3, lv: 5, on: ["ダイ", "タイ"], kun: ["おお.きい"], c: [] });
+});
+
+test("every kanji has up to 3 on and 3 kun readings, without KANJIDIC's prefix and suffix forms", () => {
+  assert.deepEqual(listed.filter((c) => !kanji[c].on.length && !kanji[c].kun.length), []);
+  assert.deepEqual(listed.filter((c) => kanji[c].on.length > 3 || kanji[c].kun.length > 3), []);
+  assert.deepEqual(listed.filter((c) => [...kanji[c].on, ...kanji[c].kun].some((r) => r.includes("-"))), []);
+  assert.deepEqual([kanji["学"].on, kanji["学"].kun], [["ガク"], ["まな.ぶ"]]);
+  // One kun per stem, else 生 spends its three on い.きる, い.かす and い.ける.
+  assert.deepEqual(kanji["生"].kun, ["い.きる", "う.まれる", "お.う"]);
+  // The word list's readings first, else 下 shows しも and もと where the list has 下げる and 下さい.
+  assert.deepEqual(kanji["下"].kun, ["した", "さ.げる", "くだ.さる"]);
 });
 
 test("every kanji has KanjiVG's strokes, one number per stroke, as many as KANJIDIC counts", () => {
