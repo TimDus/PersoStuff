@@ -252,7 +252,7 @@
   function openModal(html) {
     const back = document.createElement("div");
     back.className = "modal-back";
-    back.innerHTML = `<div class="modal panel">${html}<div class="row" style="justify-content:center;margin-top:1rem"><button class="ghost" data-close>Close</button></div></div>`;
+    back.innerHTML = `<div class="modal panel"><div class="modal-top"><button class="modal-x" data-close aria-label="Close">×</button></div>${html}<div class="row" style="justify-content:center;margin-top:1rem"><button class="ghost" data-close>Close</button></div></div>`;
     // The page under a popup is out of reach of Tab and clicks until it closes [two Tabs reached Again behind a kanji's popup].
     const close = () => { back.remove(); app.inert = false; document.removeEventListener("keydown", esc_); };
     const esc_ = (e) => { if (e.key === "Escape") close(); };

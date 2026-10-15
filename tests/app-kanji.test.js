@@ -81,6 +81,22 @@ test("a note's kanji opens a popup over the card, keys don't grade under it, and
   await page.close();
 });
 
+// The only Close sat under the popup, so a phone scrolled past a whole kanji to shut it.
+test("a popup's × stays in its corner while a long popup scrolls, and closes it", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#words/review");
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  await page.click(".kn-k[data-kanji='学']");
+  assert.equal(await page.$eval(".modal", (m) => { m.scrollTop = m.scrollHeight; return m.scrollTop > 0; }), true);
+  const [x, box] = await Promise.all([page.locator(".modal-x").boundingBox(), page.locator(".modal").boundingBox()]);
+  assert.ok(x.y >= box.y && x.y + x.height <= box.y + box.height, `× at ${x.y} outside the popup at ${box.y}–${box.y + box.height}`);
+  await page.click(".modal-x");
+  assert.equal(await page.locator(".modal").count(), 0);
+  assert.match(page.url(), /#words\/review$/);
+  await page.close();
+});
+
 // Words, Verbs and the rest share the words load, so the kanji meanings it fetches alongside must not be able to sink it.
 test("without data/kanji.json the cards still run, their note lines just lack the meaning", async () => {
   const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } });

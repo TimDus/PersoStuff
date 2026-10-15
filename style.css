@@ -209,6 +209,9 @@ button.bad { background: var(--bad); border-color: var(--bad); }
 .modal-back { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 1rem; }
 .modal { max-width: 380px; width: 100%; text-align: center; max-height: calc(100dvh - 2rem); overflow-y: auto; }
 .modal .kana { font-size: 6rem; line-height: 1.1; }
+/* A zero-height sticky row, so the × stays in the corner while a long popup scrolls and takes no line of its own [学's popup at 360 px]. */
+.modal-top { position: sticky; top: -.6rem; height: 0; text-align: right; z-index: 1; }
+.modal-x { margin: -.6rem -.6rem 0 0; background: var(--panel); border: 1px solid var(--line); color: var(--ink); border-radius: 99px; width: 2rem; height: 2rem; padding: 0; font-size: 1.2rem; line-height: 1; }
 
 .speak { background: transparent; border: 1px solid var(--line); color: var(--ink); padding: .2rem .55rem; border-radius: 8px; font-size: .9rem; }
 .badge { display: inline-block; font-size: .75rem; padding: .05rem .5rem; border-radius: 99px; background: var(--good-soft); color: var(--good); font-weight: 600; }
@@ -303,7 +306,10 @@ body[data-section="kana"] .sections [data-section-link="kana"], body[data-sectio
 body:not([data-section="japanese"]) nav a[data-section="japanese"], body[data-section="japanese"] nav a[data-section="kana"] { display: none; }
 body.gated .sections { display: none; }
 footer .credits-ja { display: none; margin-top: .3rem; }
-body[data-section="japanese"] footer .credits-ja { display: block; }
+body[data-section="japanese"] footer div.credits-ja { display: block; }
+body[data-section="japanese"] footer summary .credits-ja { display: inline; }
+footer .credits summary { cursor: pointer; margin-top: .3rem; }
+footer .credits[open] summary { margin-bottom: .3rem; }
 /* A phone keeps the logo and the short labels so the header stays one row [ひ, かな | 日本語, Font at 360 px]. */
 @media (max-width: 600px) {
   .sections .long, .brand .long { display: none; }

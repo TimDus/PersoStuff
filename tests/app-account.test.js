@@ -40,6 +40,20 @@ test("a listed account gets the worksheets and Tofugu's audio", async () => {
   await page.close();
 });
 
+// The credits filled half a phone screen under every page once the Japanese sources joined them.
+test("the credits sit folded under one line, the EDRDG named on it in the Japanese section", async () => {
+  const page = await open(listed, "#learn");
+  await page.locator(".lesson-card").first().waitFor();
+  assert.equal(await page.locator("footer .credits a[href*='kanjivg']").isVisible(), false);
+  assert.equal(await page.locator("footer summary .credits-ja").isVisible(), false);
+  await page.click("footer summary");
+  assert.equal(await page.locator("footer .credits a[href*='kanjivg']").isVisible(), true);
+  await page.goto("#words");
+  assert.match(await page.textContent("footer summary"), /JMdict and KANJIDIC2 by the EDRDG/);
+  assert.equal(await page.locator("footer summary .credits-ja").isVisible(), true);
+  await page.close();
+});
+
 test("progress from another device merges in, and new answers sync back", async () => {
   const page = await open({
     user: me, allowed: true,
