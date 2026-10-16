@@ -6,6 +6,7 @@
 // A reading row with three list words is the widest line on a phone's card back, and 晴's sound family is the line under its components [大学生 puts セイ beside 先生].
 // 海's parts once read a bare 氵, so the parts lines of 海, 水, 漢 and 近 and the hub's next kanji in Heisig's order are reported too.
 // A history story is a paragraph a phone should only see on request, so the fold's height shut and open is reported for 来 東 帰 魚 and the popup.
+// A review back once listed every reading with every word, so the Draw card reports its met readings apart from the All readings fold, and 旦 and 昼 their plain keywords.
 // Usage: node tools/drive-kanji.js . <out dir>
 const http = require("http"), fs = require("fs"), path = require("path");
 const [root, out] = process.argv.slice(2).map((p) => path.resolve(p));
@@ -53,7 +54,7 @@ const deck = { cards: { "大学生|だいがくせい#r": card(day - 5, day), "�
       };
     }, deck);
     const width = () => page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
-    const readings = (s) => page.evaluate((s) => [...document.querySelectorAll(`${s} .kanji-top, ${s} .kanji-reading > div`)].map((d) => d.textContent).join(" | "), s);
+    const readings = (s) => page.evaluate((s) => [...document.querySelectorAll(`${s} .kanji-top, ${s} .kanji-reading > div`)].filter((d) => !d.closest(".kr-all")).map((d) => d.textContent).join(" | "), s);
     await page.goto(base + "#words/review");
     await page.locator(".face.front").waitFor();
     await page.click("#card");
@@ -90,6 +91,18 @@ const deck = { cards: { "大学生|だいがくせい#r": card(day - 5, day), "�
     await page.waitForTimeout(800);
     report.push(`${name} draw back width ${await width()}, KanjiVG strokes ${await page.locator(".face.back .strokes path").count()}, readings ${await readings(".face.back")}`);
     await page.screenshot({ path: path.join(out, `${name}-draw-back.png`) });
+    const fold = page.locator(".face.back .kr-all");
+    const shut = (await fold.boundingBox())?.height;
+    await fold.locator("summary").click();
+    report.push(`${name} draw back fold ${Math.round(shut)} px shut, ${Math.round((await fold.boundingBox()).height)} open, rows ${(await fold.locator(".kr-row").allTextContents()).join(" | ")}, width ${await width()}`);
+    await fold.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(out, `${name}-draw-fold.png`) });
+    for (const c of ["旦", "昼"]) {
+      await page.goto(base + `#kanji/${c}`);
+      await page.locator(".kanji-page .story").first().waitFor();
+      report.push(`${name} ${c} keyword ${await page.textContent(".kanji-page .kanji-kw")}, parts ${JSON.stringify(await page.textContent(".kanji-comps"))}, stories head ${JSON.stringify((await page.textContent(".kanji-page .stories")).trim().slice(0, 90))}`);
+      await page.screenshot({ path: path.join(out, `${name}-plain-${c.codePointAt(0).toString(16)}.png`) });
+    }
     await page.goto(base + "#kanji/学");
     await page.locator(".kanji-comps").waitFor();
     await page.waitForTimeout(500);

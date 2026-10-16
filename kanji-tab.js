@@ -1,7 +1,7 @@
 // The Kanji tab, its deck and a kanji's page, which a word card's note opens as a popup so the review underneath goes on [学 = study, its strokes and the 13 words with it].
 (function () {
   const study = window.HiraStudy;
-  const { wordsWith, kanjiOf, order, forms, kanjiQueue, mature, byReading, family } = window.HiraKanji;
+  const { wordsWith, kanjiOf, order, forms, kanjiQueue, mature, partsOf, byReading, metReadings, family } = window.HiraKanji;
   const { NAMES } = window.HiraRadicals;
   const esc = (s) => study.shell().esc(s);
   // Stories are other members' HTML, so every < that doesn't open an em or strong is shown as text [a broken <img onerror= stays text].
@@ -32,28 +32,41 @@
   }
   // The list's kanji sharing its sound part and an on'yomi, each a link on its page and plain in a popup [晴: Same sound セイ: 青 静].
   const fam = (c, page) => family(c, study.kanjiInfo() || {}).map(({ r, cs }) => `<div class="kanji-family small">Same sound <span class="jp">${r.map(esc).join(" · ")}</span>: ${listed(cs, page)}</div>`).join("");
-  // The parts Koohii's data decides, drawn from whatever has arrived [before it lands: KANJIDIC's meaning, no frame, no stories].
+  // The parts Koohii's data decides, drawn from whatever has arrived [before it lands: a plain keyword or KANJIDIC's meaning, no frame, no stories].
   function head(c, page) {
     const info = study.kanjiInfo()?.[c] || {}, k = study.koohii(c);
     return `
       <div class="kanji-kw">${esc(study.keyword(c))}</div>
       <div class="muted small kanji-meta">${[info.sc && `${info.sc} strokes`, info.lv >= 4 && `N${info.lv}`, k?.frame && `RTK ${k.frame}`].filter(Boolean).join(" · ")}</div>
-      ${k ? `<div class="muted small">Keyword from Remembering the Kanji © James W. Heisig</div>` : ""}
+      ${k && study.keyword(c) === k.kw ? `<div class="muted small">Keyword from Remembering the Kanji © James W. Heisig</div>` : ""}
       ${parts(c, page)}`;
   }
   function stories(c) {
     const k = study.koohii(c);
     const list = k ? [...(k.mine ? [{ by: "From the site's Koohii account", text: k.mine }] : []), ...k.stories] : [];
-    return list.map((s) => `
+    // Heisig's keywords the stories use where the page shows a plain one, the kanji's or a part's, matched at a word's start through tags [封's <em>measure</em>ments = 寸; 重's primidi.com isn't 里 ri].
+    const said = list.map((x) => x.text).join(" ").replace(/<[^>]*>/g, "").toLowerCase();
+    const uses = (kw) => { for (let i = said.indexOf(kw); i >= 0; i = said.indexOf(kw, i + 1)) if (!/[a-z]/.test(said[i - 1] || "")) return true; return false; };
+    const swapped = [c, ...partsOf(c, study.kanjiInfo() || {})].filter((d) => { const kw = study.koohii(d)?.kw; return kw && study.keyword(d) !== kw && uses(kw.toLowerCase()); });
+    const his = swapped.length ? `<div class="muted small">Heisig's keyword${swapped.length > 1 ? "s" : ""} in these stories: ${swapped.map((d) => `${esc(d)} ${esc(study.koohii(d).kw)}`).join(", ")} · Remembering the Kanji © James W. Heisig</div>` : "";
+    return his + list.map((s) => `
       <div class="story"><div class="story-by muted small">${esc(s.by)}</div><div class="story-text">${safe(s.text)}</div></div>`).join("");
   }
+  const ws = (x) => `<span class="kr-words">${x.words.map(({ w, met }) => `<span${met ? "" : ` class="unmet"`}>${esc(w.w)}</span>`).join(" · ")}</span>`;
+  const readingRows = (rs) => rs.map((x) => `<div class="kr-row"><span class="kr">${esc(x.r)}</span>${ws(x)}</div>`).join("");
   // The main reading large over the kanji, the others in rows under it, all off on a kanji.json cached without them [四: シ 四 over 四, then よっ.つ, よん, よ].
-  const big = (c, words) => {
-    const { top, rest } = byReading(c, words, study.cards(), study.kanjiInfo() || {});
-    const ws = (x) => `<span class="kr-words">${x.words.map(({ w, met }) => `<span${met ? "" : ` class="unmet"`}>${esc(w.w)}</span>`).join(" · ")}</span>`;
+  const big = (c, { top, rest }) => {
     const main = top ? `<div class="kanji-top jp"><div class="kr-main">${esc(top.r)}</div>${ws(top)}</div>` : "";
-    const rows = rest.map((x) => `<div class="kr-row"><span class="kr">${esc(x.r)}</span>${ws(x)}</div>`).join("");
+    const rows = readingRows(rest);
     return `${main}<div class="kanji-big jp">${esc(c)}</div>${rows ? `<div class="kanji-reading jp">${rows}</div>` : ""}`;
+  };
+  const readings = (c, words) => byReading(c, words, study.cards(), study.kanjiInfo() || {});
+  // A review's back: the met readings, then every reading in a shut fold when that shows more [学 with 大学 met: ガク 大学, the fold adds 学校 学生 and まな.ぶ].
+  const metBig = (c, words) => {
+    const all = readings(c, words), met = metReadings(c, words, study.cards(), study.kanjiInfo() || {});
+    const size = ({ top, rest }) => [top, ...rest].filter(Boolean).reduce((n, x) => n + 1 + x.words.length, 0);
+    const every = [all.top, ...all.rest].filter(Boolean);
+    return `${big(c, met)}${size(all) > size(met) ? `<details class="kr-all small"><summary>All readings</summary><div class="kanji-reading jp">${readingRows(every)}</div></details>` : ""}`;
   };
   const rows = (c, words, n = Infinity) => wordsWith(c, words, study.cards()).slice(0, n).map((w) => `
     <div class="kw-row${study.met(w.k) ? "" : " unmet"}"><span class="jp">${study.ruby(w)}</span> <span class="small">${esc(w.m)}</span></div>`).join("");
@@ -63,7 +76,7 @@
     return h ? `<details class="kanji-story small"><summary>History</summary><p>${esc(h)}</p></details>` : "";
   };
   const body = (c, words, page) => `
-    ${big(c, words)}
+    ${big(c, readings(c, words))}
     <div class="kanji-head">${head(c, page)}</div>
     <div class="kanji-hist">${story(c)}</div>
     ${fam(c, page)}
@@ -149,7 +162,7 @@
     app.innerHTML = `
       <h1>Kanji</h1>
       <p class="lead">Kanji come in Heisig's order, each one's parts before it, and a word opens in Words once you've started
-        all its kanji. A card shows Heisig's keyword: recall the kanji on paper, or draw it here, then turn the card and grade yourself.</p>
+        all its kanji. A card shows Heisig's keyword, or a plainer one where his misleads: recall the kanji on paper, or draw it here, then turn the card and grade yourself.</p>
       <div class="panel">
         <div class="stats" style="margin-bottom:1rem">
           <div><div class="big-number" id="k-due">${q.length - next.size}</div>to review</div>
@@ -189,8 +202,8 @@
     const front = `<div class="kanji-prompt">${esc(prompt(c, words))}</div>${draw
       ? `<div class="kpad" data-noflip><svg viewBox="0 0 109 109" aria-label="Drawing pad"></svg><button class="ghost small" type="button" data-clear>Clear</button></div>`
       : `<div class="muted small">Write it on paper, then turn the card</div>`}`;
-    const back = `${big(c, words)}${parts(c, false)}${draw ? window.HiraStrokes.shown(c) : window.HiraStrokes.button(c)}
-      <div class="stories">${stories(c)}</div><div class="kanji-words">${rows(c, words, 5)}</div>`;
+    const back = `${metBig(c, words)}${parts(c, false)}${draw ? window.HiraStrokes.shown(c) : window.HiraStrokes.button(c)}
+      <div class="stories">${stories(c)}</div><div class="kanji-words">${rows(c, words.filter((w) => study.met(w.k)), 5)}</div>`;
     return { front, back };
   }
 
@@ -257,6 +270,8 @@
   const end = (e) => { if (stroke?.id === e.pointerId) stroke = null; };
   document.addEventListener("pointerup", end);
   document.addEventListener("pointercancel", end);
+  // A fold clicked with the mouse gives the focus back, so Space still moves an introduction on [Enter on it is a click with detail 0 and keeps it].
+  document.addEventListener("click", (e) => { if (e.detail) e.target.closest(".kr-all summary")?.blur(); });
   document.addEventListener("click", (e) => {
     const b = e.target.closest(".kpad [data-clear]");
     if (!b) return;

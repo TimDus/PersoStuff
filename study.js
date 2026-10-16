@@ -3,6 +3,7 @@
   const { dayOf, grade, preview, queue, mergeStudy, DRILLS } = window.HiraSRS;
   const { same, bump, wordClip } = window.HiraSync;
   const { note, learned, ready: hasKanji } = window.HiraKanji;
+  const { keywordOf } = window.HiraKeywords;
   let shell = null;
   let words = null;
   let kanjiInfo = null;
@@ -77,7 +78,7 @@
   const speak = (text, w) => `<button class="speak${w?.au ? " rec" : ""}" data-say="${esc(text)}"${w?.au ? ` data-rec="${wordClip(w.k)}"` : ""} title="Listen">🔊</button>`;
   const examples = (w) => (w.ex.length ? `<div class="examples">${w.ex.map(([jp, en]) => `
     <div class="ex"><span class="jp">${esc(jp)}</span> ${speak(jp)}<div class="muted small">${esc(en)}</div></div>`).join("")}</div>` : "");
-  const keyword = (c) => koohii[c]?.kw || kanjiInfo?.[c]?.m || "";
+  const keyword = (c) => keywordOf(c, koohii, kanjiInfo);
   // Under the answer, a line per kanji with the met words that share it [学 study, learning · also in 大学, 学校].
   const kanjiNote = (w) => {
     const lines = note(w, words, deck.cards);
@@ -245,8 +246,8 @@
     shell.onKey((e) => {
       if (e.target.matches("input, textarea, select") || !run.length) return;
       if (e.key === " " || e.key === "Enter") {
-        // A focused button or link takes its own key [Enter on a focused Easy grades Easy, not flips].
-        if (e.target.closest("button, a")) return;
+        // A focused button, link or fold takes its own key [Enter on a focused Easy grades Easy, not flips].
+        if (e.target.closest("button, a, summary")) return;
         e.preventDefault();
         showing ? gotIt() : flip();
         return;

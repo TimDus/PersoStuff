@@ -94,6 +94,12 @@
     }));
     return { top: rows.find((x) => x.r === info[c]?.top) || null, rest: rows.filter((x) => x.r !== info[c]?.top) };
   }
+  // Only the readings met words use, with only those words, the first in kanji.json's order large when the main one isn't met [四 read よん met: よん, no シ].
+  function metReadings(c, words, cards, info) {
+    const { top, rest } = byReading(c, words, cards, info);
+    const met = [top, ...rest].filter(Boolean).map((x) => ({ ...x, words: x.words.filter((w) => w.met) })).filter((x) => x.words.length);
+    return { top: met[0] || null, rest: met.slice(1) };
+  }
   // The list's kanji sharing a sound part with c, being its part or having c as theirs, grouped by the on'yomi they still share [晴: セイ 青 静; 青: セイ 晴 静; 活 and 話 share 舌, not a reading].
   function family(c, info) {
     const mine = info[c]?.p || [], on = info[c]?.on || [], groups = new Map();
@@ -105,7 +111,7 @@
     return [...groups.values()];
   }
 
-  const api = { kanjiOf, wordsWith, note, partsOf, order, forms, kanjiQueue, mature, ready, learned, readingIn, byReading, family };
+  const api = { kanjiOf, wordsWith, note, partsOf, order, forms, kanjiQueue, mature, ready, learned, readingIn, byReading, metReadings, family };
   if (typeof module !== "undefined") module.exports = api;
   else root.HiraKanji = api;
 })(this);

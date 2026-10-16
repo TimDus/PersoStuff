@@ -25,12 +25,15 @@ test("a word without a recording keeps the browser's speech and plays no clip [�
   await page.close();
 });
 
-// The main reading with its words, then the other readings' rows, a word not met yet marked ~ [学: ["ガク", "大学 · 学校 · 学生"], [["まな.ぶ", ""]]].
+// The main reading with its words, then the other readings' rows, a word not met yet marked ~, the All readings fold left out [学: ["ガク", "大学 · 学校 · 学生"], [["まな.ぶ", ""]]].
 const readings = (page, scope) => page.evaluate((s) => {
   const ws = (el) => [...el.querySelectorAll(".kr-words > span")].map((w) => w.textContent + (w.classList.contains("unmet") ? "~" : "")).join(" · ");
   const top = document.querySelector(`${s} .kanji-top`);
-  return [top && [top.querySelector(".kr-main").textContent, ws(top)], [...document.querySelectorAll(`${s} .kr-row`)].map((r) => [r.querySelector(".kr").textContent, ws(r)])];
+  return [top && [top.querySelector(".kr-main").textContent, ws(top)], [...document.querySelectorAll(`${s} .kr-row`)].filter((r) => !r.closest(".kr-all")).map((r) => [r.querySelector(".kr").textContent, ws(r)])];
 }, scope);
+// The rows inside a review back's All readings fold [学: [["ガク", "大学 · 学校~ · 学生~"], ["まな.ぶ", ""]]].
+const folded = (page) => page.$$eval(".face.back .kr-all .kr-row", (rs) => rs.map((r) => [r.querySelector(".kr").textContent,
+  [...r.querySelectorAll(".kr-words > span")].map((w) => w.textContent + (w.classList.contains("unmet") ? "~" : "")).join(" · ")]));
 
 // The note under a word's answer: one line per kanji with its meaning and the met words that share it, on the back only.
 const kanjiDeck = () => deckWith({
@@ -327,16 +330,132 @@ test("the Kanji hub offers the next kanji in Heisig's order, and a review introd
 });
 
 // 学 due as a review, so its back is the one asked for whatever the order of new kanji.
-test("a kanji card's back shows its readings, its parts, the stroke order and the stories", async () => {
+test("a kanji card's back shows its met readings, the rest folded, its parts, the stroke order and the stories", async () => {
   const page = await open({ ...listed, koohii, local: { "study.user": "u1", study: withKanji({ 学: reviewed({ first: day - 5, last: day - 1, due: day }) }, { newPerDay: 5, at: 0 }) } }, "#kanji");
   await page.locator("#k-due").waitFor();
   await page.click("#go");
   await page.locator(".face.front .kanji-prompt", { hasText: "study" }).waitFor();
   await page.click("#card");
-  assert.deepEqual(await readings(page, ".face.back"), [["ガク", "大学 · 学校 · 学生"], [["まな.ぶ", ""]]]);
+  assert.deepEqual(await readings(page, ".face.back"), [["ガク", "大学 · 学校 · 学生"], []]);
+  assert.deepEqual(await folded(page), [["ガク", "大学 · 学校 · 学生"], ["まな.ぶ", ""]]);
+  assert.equal(await page.locator(".face.back .kr-all").getAttribute("open"), null, "the fold starts shut");
   assert.match(await page.textContent(".face.back .kanji-comps"), /子 child/);
   assert.equal(await page.locator(".face.back .stroke-toggle").count(), 1, "Paper mode keeps the Stroke order button");
   assert.equal(await page.locator(".face.back .story").count(), 4);
+  await page.close();
+});
+
+// 学 due with only 大学 met: 学校 and 学生 read ガク too, but their furigana are readings the user hasn't met.
+const metOnly = (words, cards) => ({ ...deckWith(Object.fromEntries(words.map((k) => [`${k}#r`, reviewed({ first: day - 1, last: day - 1, due: day + 9 })]))),
+  kanji: { cards, settings: { newPerDay: 5, at: 0 } } });
+test("a kanji card's back leaves an unmet word off a met reading and out of its word list", async () => {
+  const page = await open({ ...listed, koohii, local: { "study.user": "u1", study: metOnly(["大学|だいがく"], { 学: reviewed({ first: day - 5, last: day - 1, due: day }) }) } }, "#kanji/review");
+  await page.locator(".face.front .kanji-prompt", { hasText: "study" }).waitFor();
+  await page.click("#card");
+  assert.deepEqual(await readings(page, ".face.back"), [["ガク", "大学"], []]);
+  assert.deepEqual(await page.locator(".face.back .kanji-words .kw-row .jp").allTextContents(), ["大学だいがく"]);
+  await page.close();
+});
+
+test("a kanji card's back with no met word shows no readings, and its fold holds them all", async () => {
+  const page = await open({ ...listed, koohii, local: { "study.user": "u1", study: metOnly([], { 学: reviewed({ first: day - 5, last: day - 1, due: day }) }) } }, "#kanji/review");
+  await page.locator(".face.front .kanji-prompt", { hasText: "study" }).waitFor();
+  await page.click("#card");
+  assert.deepEqual(await readings(page, ".face.back"), [null, []]);
+  assert.equal(await page.locator(".face.back .kanji-words .kw-row").count(), 0);
+  assert.deepEqual(await folded(page), [["ガク", "学生~ · 学校~ · 大学~"], ["まな.ぶ", ""]]);
+  await page.close();
+});
+
+// The review's own Enter and Space took the key from a focused summary, so the fold never opened by keyboard and an introduction moved on.
+test("Enter on a focused All readings fold opens it and leaves the card where it is", async () => {
+  const page = await open({ ...listed, koohii, local: { "study.user": "u1", study: metOnly([], {}) } }, "#kanji/review");
+  await page.locator("#got").waitFor();
+  const prompt = await page.textContent(".face.front .kanji-prompt");
+  await page.focus(".face.back .kr-all summary");
+  await page.keyboard.press("Enter");
+  assert.equal(await page.locator(".face.back .kr-all").getAttribute("open"), "");
+  assert.equal(await page.textContent(".face.front .kanji-prompt"), prompt);
+  assert.equal(await page.locator("#got").count(), 1);
+  // A second Enter shuts it again rather than moving the introduction on.
+  await page.keyboard.press("Enter");
+  assert.equal(await page.locator(".face.back .kr-all").getAttribute("open"), null);
+  assert.equal(await page.textContent(".face.front .kanji-prompt"), prompt);
+  await page.close();
+});
+
+// A clicked summary kept the focus, so the next Space shut the fold again instead of pressing Got it.
+test("after a click on the All readings fold, Space still moves an introduction on", async () => {
+  const page = await open({ ...listed, koohii, local: { "study.user": "u1", study: metOnly([], {}) } }, "#kanji/review");
+  await page.locator("#got").waitFor();
+  const prompt = await page.textContent(".face.front .kanji-prompt");
+  await page.click(".face.back .kr-all summary");
+  assert.equal(await page.locator(".face.back .kr-all").getAttribute("open"), "");
+  await page.keyboard.press(" ");
+  await page.waitForFunction((p) => document.querySelector(".face.front .kanji-prompt")?.textContent !== p, prompt, { timeout: 2000 });
+  await page.close();
+});
+
+// 封's story writes <em>measure</em>ments and 重's links primidi.com, so a match on the raw HTML missed one and found ri in the other.
+test("a story's keyword counts through its tags and only at the start of a word", async () => {
+  const his = { 封: { kw: "seal", frame: 168, mine: null, stories: [{ by: "first", text: "Take <em>measure</em>ments to <strong>seal</strong> it.", stars: 9 }] },
+    寸: { kw: "measurement", frame: 45, mine: null, stories: [] },
+    重: { kw: "heavy", frame: 1805, mine: null, stories: [{ by: "first", text: "A <strong>heavy</strong> computer, see http://www.primidi.com/ for more.", stars: 9 }] },
+    里: { kw: "ri", frame: 185, mine: null, stories: [] } };
+  const page = await open({ ...listed, koohii: { ...koohii, ...his }, local: { "study.user": "u1", study: deckWith({}) } }, "#kanji/封");
+  await page.locator(".kanji-page .story").waitFor({ timeout: 3000 });
+  assert.match(await page.textContent(".kanji-page .stories"), /in these stories: 寸 measurement ·/);
+  await page.evaluate(() => { location.hash = "#kanji/重"; });
+  await page.locator(".kanji-page[data-c='重'] .story").waitFor();
+  assert.doesNotMatch(await page.textContent(".kanji-page .stories"), /in these stories/);
+  await page.close();
+});
+
+// 駅 has one reading and one word, so with 駅 met the fold would only repeat the card.
+test("a kanji card's back with every reading and word shown has no fold", async () => {
+  const page = await open({ ...listed, koohii, local: { "study.user": "u1", study: metOnly(["駅|えき"], { 駅: reviewed({ first: day - 5, last: day - 1, due: day }) }) } }, "#kanji/review");
+  await page.locator(".face.front .kanji-prompt", { hasText: "station" }).waitFor();
+  await page.click("#card");
+  assert.deepEqual(await readings(page, ".face.back"), [["エキ", "駅"], []]);
+  assert.equal(await page.locator(".face.back .kr-all").count(), 0);
+  await page.close();
+});
+
+// 旦's Heisig keyword is "nightbreak" while its stories say the sun rises, so it shows a plain one and names his beside the stories.
+test("a kanji with a plain keyword shows it, with Heisig's over the stories and no keyword credit in its head", async () => {
+  const stories = { 旦: { kw: "nightbreak", frame: 30, mine: null, stories: [{ by: "first", text: "A <strong>nightbreak</strong> story.", stars: 9 }] } };
+  const page = await open({ ...listed, koohii: { ...koohii, ...stories }, local: { "study.user": "u1", study: deckWith({}) } }, "#kanji/旦");
+  await page.locator(".kanji-page .story").waitFor({ timeout: 3000 });
+  assert.equal(await page.textContent(".kanji-page .kanji-kw"), "dawn");
+  assert.doesNotMatch(await page.textContent(".kanji-page .kanji-head"), /Heisig/);
+  assert.match(await page.textContent(".kanji-page .stories"), /^\s*Heisig's keyword in these stories: 旦 nightbreak · Remembering the Kanji © James W\. Heisig/);
+  // 学 keeps Heisig's keyword and its credit where it was.
+  await page.evaluate(() => { location.hash = "#kanji/学"; });
+  await page.locator(".kanji-page[data-c='学'] .story").first().waitFor();
+  assert.match(await page.textContent(".kanji-page .kanji-head"), /Keyword from Remembering the Kanji/);
+  assert.doesNotMatch(await page.textContent(".kanji-page .stories"), /in these stories/);
+  await page.close();
+});
+
+// 昼's top story plays the shakuhachi at nightbreak, while its parts line now says Japanese foot and dawn.
+test("a kanji built from parts with plain keywords names Heisig's for them over its stories", async () => {
+  const his = { 昼: { kw: "daytime", frame: 1156, mine: null, stories: [{ by: "first", text: "A <em>shaku</em> at <em>nightbreak</em>.", stars: 9 }] },
+    尺: { kw: "shaku", frame: 1151, mine: null, stories: [] }, 旦: { kw: "nightbreak", frame: 30, mine: null, stories: [] } };
+  const page = await open({ ...listed, koohii: { ...koohii, ...his }, local: { "study.user": "u1", study: deckWith({}) } }, "#kanji/昼");
+  await page.locator(".kanji-page .story").waitFor({ timeout: 3000 });
+  assert.equal(await page.textContent(".kanji-page .kanji-kw"), "daytime");
+  assert.match(await page.textContent(".kanji-page .kanji-head"), /Keyword from Remembering the Kanji/);
+  assert.match(await page.textContent(".kanji-page .stories"), /^\s*Heisig's keywords in these stories: 尺 shaku, 旦 nightbreak · Remembering the Kanji/);
+  await page.close();
+});
+
+// 村's stories call 寸 "glue", its primitive, so naming Heisig's "measurement" over them was a new contradiction.
+test("a part's Heisig keyword is named over the stories only when they use it", async () => {
+  const his = { 村: { kw: "village", frame: 221, mine: null, stories: [{ by: "first", text: "Trees <em>glued</em> into a <strong>village</strong>.", stars: 9 }] },
+    寸: { kw: "measurement", frame: 45, mine: null, stories: [] } };
+  const page = await open({ ...listed, koohii: { ...koohii, ...his }, local: { "study.user": "u1", study: deckWith({}) } }, "#kanji/村");
+  await page.locator(".kanji-page .story").waitFor({ timeout: 3000 });
+  assert.doesNotMatch(await page.textContent(".kanji-page .stories"), /in these stories/);
   await page.close();
 });
 
