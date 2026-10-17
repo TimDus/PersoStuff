@@ -1,5 +1,5 @@
 // A kanji's history is a hand-written note and story in data/history.json, read on the page, the popup and a review card's back.
-// The note sits on one line under the parts and the story behind a fold that costs one line on a phone, so both have a length
+// The note sits on one line under the parts and the story is a short paragraph under it, so both have a length
 // the layout was built for [the 38 drift notes ran 26 to 88 characters]. The drift notes once lived in radicals.js; moving
 // them here is how 漢 could have lost "the Han river" with every other test still green.
 const test = require("node:test");

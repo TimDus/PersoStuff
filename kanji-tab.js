@@ -1,7 +1,7 @@
 // The Kanji tab, its deck and a kanji's page, which a word card's note opens as a popup so the review underneath goes on [学 = study, its strokes and the 13 words with it].
 (function () {
   const study = window.HiraStudy;
-  const { wordsWith, kanjiOf, order, forms, kanjiQueue, mature, partsOf, byReading, metReadings, family } = window.HiraKanji;
+  const { wordsWith, kanjiOf, order, forms, kanjiQueue, mature, partsOf, byReading, family } = window.HiraKanji;
   const { NAMES, HEISIG } = window.HiraRadicals;
   const esc = (s) => study.shell().esc(s);
   // Stories are other members' HTML, so every < that doesn't open an em or strong is shown as text [a broken <img onerror= stays text].
@@ -61,27 +61,21 @@
       <div class="story"><div class="story-by muted small">${esc(s.by)}</div><div class="story-text">${safe(s.text)}</div></div>`).join("");
   }
   const ws = (x) => `<span class="kr-words">${x.words.map(({ w, met }) => `<span${met ? "" : ` class="unmet"`}>${esc(w.w)}</span>`).join(" · ")}</span>`;
-  const readingRows = (rs) => rs.map((x) => `<div class="kr-row"><span class="kr">${esc(x.r)}</span>${ws(x)}</div>`).join("");
+  // A reading no met word uses is muted like its words [学 with only 大学 met: まな.ぶ grey].
+  const off = (x) => (x.words.some((w) => w.met) ? "" : " unmet");
   // The main reading large over the kanji, the others in rows under it, all off on a kanji.json cached without them [四: シ 四 over 四, then よっ.つ, よん, よ].
   const big = (c, { top, rest }) => {
-    const main = top ? `<div class="kanji-top jp"><div class="kr-main">${esc(top.r)}</div>${ws(top)}</div>` : "";
-    const rows = readingRows(rest);
+    const main = top ? `<div class="kanji-top jp${off(top)}"><div class="kr-main">${esc(top.r)}</div>${ws(top)}</div>` : "";
+    const rows = rest.map((x) => `<div class="kr-row${off(x)}"><span class="kr">${esc(x.r)}</span>${ws(x)}</div>`).join("");
     return `${main}<div class="kanji-big jp">${esc(c)}</div>${rows ? `<div class="kanji-reading jp">${rows}</div>` : ""}`;
   };
   const readings = (c, words) => byReading(c, words, study.cards(), study.kanjiInfo() || {});
-  // A review's back: the met readings, then every reading in a shut fold when that shows more [学 with 大学 met: ガク 大学, the fold adds 学校 学生 and まな.ぶ].
-  const metBig = (c, words) => {
-    const all = readings(c, words), met = metReadings(c, words, study.cards(), study.kanjiInfo() || {});
-    const size = ({ top, rest }) => [top, ...rest].filter(Boolean).reduce((n, x) => n + 1 + x.words.length, 0);
-    const every = [all.top, ...all.rest].filter(Boolean);
-    return `${big(c, met)}${size(all) > size(met) ? `<details class="kr-all small"><summary>All readings</summary><div class="kanji-reading jp">${readingRows(every)}</div></details>` : ""}`;
-  };
   const rows = (c, words, n = Infinity) => wordsWith(c, words, study.cards()).slice(0, n).map((w) => `
     <div class="kw-row${study.met(w.k) ? "" : " unmet"}"><span class="jp">${study.ruby(w)}</span> <span class="small">${esc(w.m)}</span></div>`).join("");
-  // The story behind a shut fold, in a slot fillHistory fills and Koohii's fill-in never redraws [魚 has a note and no story, so no fold].
+  // The story, in a slot fillHistory fills and Koohii's fill-in never redraws [魚 has a note and no story].
   const story = (c) => {
     const h = study.history(c)?.history;
-    return h ? `<details class="kanji-story small"><summary>History</summary><p>${esc(h)}</p></details>` : "";
+    return h ? `<p class="kanji-story small">${esc(h)}</p>` : "";
   };
   const body = (c, words, page) => `
     ${big(c, readings(c, words))}
@@ -92,7 +86,7 @@
     <div class="stories">${stories(c)}</div>
     <div class="kanji-words">${rows(c, words)}</div>`;
 
-  // Redraws the head of every open page or popup of c and one slot below it, from whatever has landed [an open stroke order or History fold outside the slot stays].
+  // Redraws the head of every open page or popup of c and one slot below it, from whatever has landed [an open stroke order outside the slot stays].
   const redraw = (c, slot, html) => document.querySelectorAll(".kanji-pop").forEach((el) => {
     if (el.dataset.c !== c) return;
     el.querySelector(".kanji-head").innerHTML = head(c, "page" in el.dataset);
@@ -210,7 +204,7 @@
     const front = `<div class="kanji-prompt">${esc(prompt(c, words))}</div>${draw
       ? `<div class="kpad" data-noflip><svg viewBox="0 0 109 109" aria-label="Drawing pad"></svg><button class="ghost small" type="button" data-clear>Clear</button></div>`
       : `<div class="muted small">Write it on paper, then turn the card</div>`}`;
-    const back = `${metBig(c, words)}${parts(c, false)}${draw ? window.HiraStrokes.shown(c) : window.HiraStrokes.button(c)}
+    const back = `${big(c, readings(c, words))}${parts(c, false)}${draw ? window.HiraStrokes.shown(c) : window.HiraStrokes.button(c)}
       <div class="stories">${stories(c)}</div><div class="kanji-words">${rows(c, words.filter((w) => study.met(w.k)), 5)}</div>`;
     return { front, back };
   }
@@ -278,8 +272,6 @@
   const end = (e) => { if (stroke?.id === e.pointerId) stroke = null; };
   document.addEventListener("pointerup", end);
   document.addEventListener("pointercancel", end);
-  // A fold clicked with the mouse gives the focus back, so Space still moves an introduction on [Enter on it is a click with detail 0 and keeps it].
-  document.addEventListener("click", (e) => { if (e.detail) e.target.closest(".kr-all summary")?.blur(); });
   document.addEventListener("click", (e) => {
     const b = e.target.closest(".kpad [data-clear]");
     if (!b) return;

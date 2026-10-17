@@ -245,18 +245,6 @@ test("the main reading comes apart from the rest, each with up to 3 list words u
   assert.deepEqual(rows("生", {}, { 生: old })[1].map(([r]) => r), ["セイ", "ショウ", "い.きる", "う.まれる", "お.う"]);
 });
 
-// A review card's back listed every reading with every word, unmet ones muted, and the user found the pronunciations the overwhelming part.
-const { metReadings } = require("../kanji.js");
-test("a review's readings are only those of met words, with only the met words, the main one large when it is met", () => {
-  const rows = (c, cs) => { const b = metReadings(c, vocab, cs, kanji); const ws = (x) => [x.r, x.words.map(({ w }) => w.w)]; return [b.top && ws(b.top), b.rest.map(ws)]; };
-  assert.deepEqual(rows("学", { "大学|だいがく#r": met(14) }), [["ガク", ["大学"]], []]);
-  // 四 read よん met and 四 read し not: よん goes large, シ isn't shown.
-  assert.deepEqual(rows("四", { "四|よん#r": met(10) }), [["よん", ["四"]], []]);
-  assert.deepEqual(rows("生", { "生きる|いきる#r": met(12), "先生|せんせい#r": met(10) }), [["セイ", ["先生"]], [["い.きる", ["生きる"]]]]);
-  assert.deepEqual(rows("学", {}), [null, []]);
-  assert.deepEqual(rows("学", { "学生|がくせい#p": met(10) }), [null, []]);
-});
-
 // A kanji page listed 四's シ, よっ.つ, よ and よん alike, with nothing to say which one to learn first.
 test("kanji.json marks the reading anime subtitles use most, always one of the kanji's own [今 = いま, 人 = ひと, 上 = ジョウ]", () => {
   assert.deepEqual(["今", "人", "何", "行", "上", "四", "晴"].map((c) => kanji[c].top), ["いま", "ひと", "なに", "い.く", "ジョウ", "シ", "は.れる"]);
