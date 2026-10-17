@@ -1,7 +1,7 @@
 // The kana pages in the browser: lessons, the quiz, worksheets, katakana and stroke order, each case a way they broke [a miss sat at 15 / 15 while the quiz kept asking].
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { open, next, me, listed, romajiOf, answerOne } = require("./browser.js");
+const { open, next, me, listed, drill, romajiOf, answerOne } = require("./browser.js");
 
 test("a lesson card reveals Tofugu's drawing on request, and hides it again", async () => {
   const page = await open({ user: me, allowed: true }, "#learn/2");
@@ -228,6 +228,46 @@ test("a quiz link naming no known kana opens the picker, not a 0-kana run", asyn
   const page = await open(listed, "#quiz/zz/1");
   assert.equal(await page.locator("#go").count(), 1);
   assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("hira.quiz.best"))), {});
+  await page.close();
+});
+
+// Typed hashes threw or hung: #__proto__ found Object.prototype, a group named twice left holes in the order, 1e9 rounds never finished.
+test("a hand-typed hash with an odd name, a repeated group or a huge round count still opens a page", async () => {
+  const page = await open(listed, "#learn");
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  for (const hash of ["#__proto__", "#constructor"]) {
+    await page.goto(hash);
+    await page.locator(".lesson-card").first().waitFor();
+  }
+  await page.goto("#quiz/a,a/1");
+  assert.equal(await page.textContent("#prog"), "1 / 5");
+  await page.goto("#quiz/a/1e9");
+  assert.equal(await page.textContent("#prog"), "1 / 25");
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+// A skipped break kept counting, and at its end took over the next break [4:59 left beside "Start round 3" and "⏰ Break's over"].
+test("a skipped worksheet break stops its clock", async () => {
+  const page = await open(drill, "#sheets/k");
+  await page.click("#check");
+  await page.click("#brk");
+  await page.click("#go");
+  await page.click("#check");
+  await page.click("#brk");
+  await page.clock.fastForward(6 * 60000);
+  assert.match(await page.textContent("#left"), /^4:0\d$/);
+  assert.match(await page.textContent("#go"), /^Skip/);
+  await page.close();
+});
+
+// A double-click on Check put its second click on the Break button drawn in the same spot, so the corrections went by unseen.
+test("a double-clicked Check answers shows the corrections", async () => {
+  const page = await open(listed, "#sheets/k");
+  await page.dblclick("#check");
+  assert.equal(await page.locator("#brk").count(), 1);
+  assert.ok(await page.locator(".cell.wrong").count() > 0);
   await page.close();
 });
 

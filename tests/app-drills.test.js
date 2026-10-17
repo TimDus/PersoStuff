@@ -145,6 +145,25 @@ test("a best is kept per question count", async () => {
   await page.close();
 });
 
+// A 20 picked with only 15 questions to ask was filed under 20, so a later full run of 20 could never beat it.
+test("a best is filed under the number of questions asked, not the number picked", async () => {
+  const page = await open({ ...drill, local: verbsSel({ count: 20 }) }, "#verbs/run");
+  await page.locator(".verb-q").waitFor();
+  assert.match(await page.textContent("#prog"), /\/ 15$/);
+  while (!(await page.locator("h1", { hasText: "Done!" }).count())) await answerRight(page);
+  assert.deepEqual(Object.keys((await deckOf(page)).verbs.best), ["masu|verb|15"]);
+  await page.close();
+});
+
+// An adjective has no ます form, so masu,nai and nai alone were one drill with two bests.
+test("a best leaves out the forms that gave no question", async () => {
+  const page = await open({ ...drill, local: verbsSel({ forms: ["masu", "nai"], kinds: ["adj-i"] }) }, "#verbs/run");
+  await page.locator(".verb-q").waitFor();
+  while (!(await page.locator("h1", { hasText: "Done!" }).count())) await answerRight(page);
+  assert.deepEqual(Object.keys((await deckOf(page)).verbs.best), ["nai|adj-i|10"]);
+  await page.close();
+});
+
 // The list keeps most する nouns bare, so the drill shows and wants the する [電話 → polite = 電話します].
 test("a noun that takes する is asked with it and answered with it", async () => {
   const page = await open({ ...drill, local: { ...verbsSel({}), "study.user": "u1", study: deckWith({ "電話|でんわ#r": reviewed() }) } }, "#verbs/run");

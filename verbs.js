@@ -22,8 +22,12 @@
       count: [10, 20, 40].includes(sel.count) ? sel.count : 20,
     };
   };
-  // The best a selection has scored is kept per forms, word kinds and question count [masu,te|verb|20].
-  const selKey = (sel) => `${[...sel.forms].sort().join(",")}|${[...sel.kinds].sort().join(",")}|${sel.count}`;
+  // The best a selection has scored, per the forms and kinds that gave questions and the number asked [masu,te|verb|20; 20 picked, 15 asked = |15].
+  const selKey = (words, sel) => {
+    const gives = (f, k) => words.some((w) => kindOf(w) === k && conjugate(w, f));
+    const forms = sel.forms.filter((f) => sel.kinds.some((k) => gives(f, k))), kinds = sel.kinds.filter((k) => sel.forms.some((f) => gives(f, k)));
+    return `${[...forms].sort().join(",")}|${[...kinds].sort().join(",")}|${Math.min(sel.count, questions(words, sel).length)}`;
+  };
   const fmt = (ms) => study.shell().fmtTime(ms);
   const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const sameWord = (a, b) => a.word === b.word;
@@ -60,7 +64,7 @@
 
   function picker(words, sel) {
     const { app } = study.shell();
-    const best = study.verbs.best(selKey(sel));
+    const best = study.verbs.best(selKey(words, sel));
     const chip = (f) => `<span class="chip ${sel.forms.includes(f.id) ? "on" : ""}" role="button" data-form="${f.id}">${esc(f.label)}</span>`;
     const set = (n) => FORMS.filter((f) => f.set === n);
     app.innerHTML = `
@@ -126,7 +130,7 @@
         return `<div class="ans jp">${esc(q.want.w)}${q.want.w !== q.want.r ? ` <small>${esc(q.want.r)}</small>` : ""}</div>`;
       },
       missLine: (q) => `<span class="jp">${shown(q.word)}</span> · ${esc(label(q.form))} → <b class="jp">${esc(q.want.w)}</b>`,
-      best: given ? null : { key: selKey(sel), store: study.verbs },
+      best: given ? null : { key: selKey(words, sel), store: study.verbs },
       again: () => run(words, sel, given),
       drillMissed: (misses) => run(words, sel, misses),
     });

@@ -24,12 +24,11 @@
       && groups.every((g) => g.script !== cat.get(id).script || g.kind !== cat.get(id).kind || gids.includes(g.id)));
   };
 
-  // More history wins, then the higher box [12 answers at box 2 beats 3 answers at box 4].
+  // More history wins, then the higher box, then more right, so two devices settle on one copy [12 answers at box 2 beats 3 at box 4; 3 right 1 wrong beats 2 and 2].
+  const wins = (p, cur) => (seen(p) !== seen(cur) ? seen(p) > seen(cur) : p.box !== cur.box ? p.box > cur.box
+    : p.right !== cur.right ? p.right > cur.right : JSON.stringify(canon(p)) > JSON.stringify(canon(cur)));
   const addProgress = (out, from) => {
-    for (const [kana, p] of Object.entries(from || {})) {
-      const cur = out[kana];
-      if (!cur || seen(p) > seen(cur) || (seen(p) === seen(cur) && p.box > cur.box)) out[kana] = p;
-    }
+    for (const [kana, p] of Object.entries(from || {})) if (!out[kana] || wins(p, out[kana])) out[kana] = p;
   };
   const addBests = (out, from, keep = () => true) => {
     for (const [key, best] of Object.entries(from || {})) if (keep(key)) out[key] = out[key] ? better(out[key], best) : best;
@@ -59,7 +58,8 @@
   function mergeWrite(a, b) {
     if (!a && !b) return undefined;
     const resetAt = Math.max(a?.resetAt || 0, b?.resetAt || 0);
-    const out = { kana: {}, best: {}, resetAt };
+    // Keys a later version adds ride along, since a merge that rebuilds from known keys deletes the rest [study.verbs.picked].
+    const out = { ...b, ...a, kana: {}, best: {}, resetAt };
     for (const w of [a, b].filter((w) => w && (w.resetAt || 0) >= resetAt)) {
       addProgress(out.kana, w.kana);
       addBests(out.best, w.best);

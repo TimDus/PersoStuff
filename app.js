@@ -35,7 +35,10 @@
     return a;
   };
   const norm = (s) => s.trim().toLowerCase().replace(/\s+/g, "");
-  const kanaOf = (groupIds) => groupIds.flatMap((id) => groupById.get(id)?.kana || []);
+  // Each group once, however often a typed hash names it [#quiz/a,a/1 = あいうえお, not ten kana that left the order holes].
+  const kanaOf = (groupIds) => [...new Set(groupIds)].flatMap((id) => groupById.get(id)?.kana || []);
+  // A typed round count within the picker's 1 to 5 [#quiz/a/1e9 = 5, where it hung the tab].
+  const roundsOf = (r) => Math.min(5, Math.max(1, Math.floor(+r) || 1));
   const fmtTime = (ms) => {
     const s = Math.round(ms / 1000);
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -50,7 +53,8 @@
     set(key, value) {
       localStorage.setItem("hira." + key, JSON.stringify(value));
       if (SYNCED.includes(key)) {
-        localStorage.setItem("hira.sync.savedAt", Date.now());
+        // Past the last push even on a slow clock, as the deck's save() does [pushed at a fast device's 13:00, answered at 12:10].
+        localStorage.setItem("hira.sync.savedAt", Math.max(Date.now(), store.get("sync.savedAt", 0) + 1, store.get("sync.pushedAt", 0) + 1));
         scheduleSync();
       }
     },
@@ -66,6 +70,8 @@
   const mastery = (list) => (list.length ? list.filter((k) => boxOf(k.kana) >= 3).length / list.length : 0);
 
   let user = null;
+  // Set once this device's copy is known to be the account's, so an early online event can't push another account's answers [boot stopped at "Can't reach the server"].
+  let owned = false;
   let syncTimer = null;
   let syncChain = Promise.resolve();
   const snapshot = () => ({
@@ -95,7 +101,7 @@
     clearTimeout(syncTimer);
     syncTimer = null;
     syncChain = syncChain.then(async () => {
-      if (!user || !backend) return;
+      if (!user || !backend || !owned) return;
       try {
         const remote = await (pulled || backend.loadProgress());
         const merged = merge(snapshot(), remote, keepBest);
@@ -128,7 +134,10 @@
   const every = (ms, fn) => {
     const t = setInterval(fn, ms);
     teardown.push(() => clearInterval(t));
+    return () => clearInterval(t);
   };
+  // A click that isn't the second of a double-click, which lands on the button drawn where the first one was [Check, then Break].
+  const single = (fn) => (e) => { if (e.detail <= 1) fn(e); };
   const after = (ms, fn) => {
     const t = setTimeout(fn, ms);
     teardown.push(() => clearTimeout(t));
@@ -204,9 +213,10 @@
     slot.insertAdjacentHTML("beforeend", `<img class="art" src="${esc(url)}" alt="Mnemonic drawing for ${esc(slot.dataset.art)}">`);
     b.textContent = "Hide illustration";
   });
+  // A speaker clicked with the mouse gives the focus back, so Space still moves a card on [Enter on it is a click with detail 0 and keeps it].
   document.addEventListener("click", (e) => {
     const b = e.target.closest("[data-say]");
-    if (b) say(b.dataset.say, b.dataset.rec);
+    if (b) { say(b.dataset.say, b.dataset.rec); if (e.detail) b.blur(); }
   });
 
   // Letter-by-letter romaji for hiragana or katakana [いっしょ = issho, まっちゃ = matcha, ベーコン = beekon].
@@ -543,8 +553,8 @@
   function viewQuiz([sel, rounds]) {
     // A hand-typed hash can name no known group [#quiz/zz/1 = the picker, not a 0-kana run at NaN%].
     if (sel && kanaOf(sel.split(",")).length) {
-      const key = `${sel}/${+rounds || 1}`;
-      return runQuiz(kanaOf(sel.split(",")), Math.max(1, +rounds || 1), keepBest(key) ? key : null);
+      const key = `${sel}/${roundsOf(rounds)}`;
+      return runQuiz(kanaOf(sel.split(",")), roundsOf(rounds), keepBest(key) ? key : null);
     }
     const selected = new Set(store.get("quiz.sel", main));
     let r = store.get("quiz.rounds", 1);
@@ -724,8 +734,8 @@
   // ---------- Writing ----------
   function viewWrite([sel, rounds, mode]) {
     if (!sel || !kanaOf(sel.split(",")).length) return location.replace("#quiz");
-    const key = `${sel}/${+rounds || 1}`;
-    runWrite(kanaOf(sel.split(",")), Math.max(1, +rounds || 1), keepBest(key) ? key : null, mode === "learn" ? "learn" : null);
+    const key = `${sel}/${roundsOf(rounds)}`;
+    runWrite(kanaOf(sel.split(",")), roundsOf(rounds), keepBest(key) ? key : null, mode === "learn" ? "learn" : null);
   }
 
   // A run of kana written from their romaji [あ: Learn traces its 3 strokes first, Self shows it over your drawing, Per stroke and Whole kana judge it against KanjiVG].
@@ -769,6 +779,12 @@
     const layer = (name) => pad.querySelector(`.${name}`);
     // No kana takes input yet or any more [before strokes.json arrives, behind a miss's Continue, in the 400 ms after a right kana or any Learn kana].
     const busy = () => !k || waiting || pause;
+    // Which kana a romaji asks for when two share it, by the kana it voices or its length [ぢ: ji, from ち; ヲ: wo, one kana].
+    const twinHint = (k) => {
+      if (!KANA.some((x) => x.script === k.script && x.romaji === k.romaji && x.kana !== k.kana)) return "";
+      const plain = k.kana[0].normalize("NFD")[0];
+      return plain !== k.kana[0] ? ` · from ${plain}` : ` · ${[...k.kana].length === 1 ? "one kana" : "two kana"}`;
+    };
 
     const ACTS = {
       learn: `<button class="ghost" id="hint">Show again</button>`,
@@ -784,7 +800,7 @@
       acts.querySelector("#undo")?.addEventListener("click", () => { drawn.pop(); inkDrawn(); });
       acts.querySelector("#clear")?.addEventListener("click", () => { drawn = []; inkDrawn(); });
       acts.querySelector("#done")?.addEventListener("click", checkWhole);
-      acts.querySelector("#show")?.addEventListener("click", reveal);
+      acts.querySelector("#show")?.addEventListener("click", single(reveal));
       acts.querySelector("#again")?.addEventListener("click", () => kanaDone(false));
       acts.querySelector("#got")?.addEventListener("click", () => kanaDone(true));
     }
@@ -807,11 +823,12 @@
     function show() {
       // Cleared before Done, as in the reading quiz [a later Enter redrew it].
       waiting = false;
-      if (idx >= queue.length) return finish();
+      // No kana once the run is over, so busy() shuts the keys on Done [a 2 there graded the last kana again].
+      if (idx >= queue.length) { k = null; return finish(); }
       k = queue[idx];
       app.querySelector("#romaji").textContent = k.romaji;
       app.querySelector("#say").innerHTML = speakBtn(k.kana);
-      app.querySelector("#script").textContent = k.script;
+      app.querySelector("#script").textContent = k.script + twinHint(k);
       app.querySelector("#prog").textContent = `${idx + 1} / ${queue.length}`;
       reset();
       shownAt = Date.now();
@@ -1051,9 +1068,9 @@
       actions.insertAdjacentHTML("beforeend", last
         ? `<button id="fin">Finish</button>`
         : `<button class="ghost" id="skip">Skip</button><button id="brk">${minutes}-minute break</button>`);
-      app.querySelector("#fin")?.addEventListener("click", finish);
-      app.querySelector("#skip")?.addEventListener("click", () => { round++; drawRound(); scrollTo(0, 0); });
-      app.querySelector("#brk")?.addEventListener("click", () => takeBreak(minutes));
+      app.querySelector("#fin")?.addEventListener("click", single(finish));
+      app.querySelector("#skip")?.addEventListener("click", single(() => { round++; drawRound(); scrollTo(0, 0); }));
+      app.querySelector("#brk")?.addEventListener("click", single(() => takeBreak(minutes)));
       (app.querySelector("#brk") || app.querySelector("#fin")).focus();
     }
 
@@ -1067,10 +1084,11 @@
           <div class="break-timer" id="left">${minutes}:00</div>
           <div class="row" style="justify-content:center;margin-top:1rem"><button class="ghost" id="go">Skip, start round ${round + 2}</button></div>
         </div>`;
-      const go = () => { document.title = title; round++; drawRound(); };
+      // A skipped break stops its clock, or it later takes over the next break [4:59 left beside Start round 3].
+      const go = () => { stop(); document.title = title; round++; drawRound(); };
       teardown.push(() => { document.title = title; });
-      app.querySelector("#go").addEventListener("click", go);
-      every(250, () => {
+      app.querySelector("#go").addEventListener("click", single(go));
+      const stop = every(250, () => {
         const ms = end - Date.now();
         const el = app.querySelector("#left");
         if (!el) return;
@@ -1343,7 +1361,8 @@
     cleanup();
     // Each part decoded on its own, a broken escape kept as typed [#kanji/%E5 = the Kanji tab with "%E5", not a URIError].
     const [tab, ...rest] = location.hash.slice(1).split("/").map((p) => { try { return decodeURIComponent(p); } catch { return p; } });
-    const view = routes[tab] ? tab : "learn";
+    // Only the routes' own names [#__proto__ found Object.prototype and threw].
+    const view = Object.hasOwn(routes, tab) ? tab : "learn";
     if (view === "reading" && !lastPage.startsWith("#reading")) readingFrom = lastPage.startsWith("#learn") ? lastPage : "";
     lastPage = view === "learn" ? location.hash || "#learn" : location.hash;
     document.body.dataset.section = view in study.routes ? "japanese" : "kana";
@@ -1420,6 +1439,7 @@
     // This device's copy belongs to the account that made it [A's session expires, B signs in = A's answers stay out of B's row].
     if (store.get("sync.user", user.id) !== user.id) applySnapshot(blank());
     store.set("sync.user", user.id);
+    owned = true;
     await Promise.all([sync(pulled), study.start({ app, esc, fmtTime, onKey, onLeave: (fn) => teardown.push(fn), cleanup, backend, user, syncState, openModal }, pulledStudy)]);
     route();
   }

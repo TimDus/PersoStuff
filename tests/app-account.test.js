@@ -117,6 +117,40 @@ test("signing out with answers the server never got asks first, and keeps them o
   await page.close();
 });
 
+// After a sync with a fast-clock device, an answer was stamped before the last push, so sign-out wiped it without asking.
+test("an answer after syncing with a fast-clock device still counts as unsent at sign-out", async () => {
+  const later = Date.now() + 1e9;
+  const page = await open({ ...listed, remote: { progress: {}, "quiz.best": {}, "sheets.done": {}, "reading.done": [], savedAt: later, resetAt: 0 } }, "#quiz/k/1");
+  await page.waitForFunction((t) => +localStorage.getItem("hira.sync.pushedAt") >= t, later);
+  await page.evaluate(() => localStorage.setItem("__offline", "1"));
+  await answerOne(page);
+  const asked = [];
+  page.once("dialog", (d) => { asked.push(d.message()); d.dismiss(); });
+  await page.click("#signout");
+  await page.waitForTimeout(300);
+  assert.match(asked[0] || "", /haven't reached the server/);
+  await page.close();
+});
+
+// Boot stopped at "Can't reach the server" with the new account set, and the next online event pushed the last account's answers into its row.
+test("coming online on the blocked screen pushes nothing of the last account's", async () => {
+  const page = await open(listed, "#learn");
+  await page.evaluate(() => {
+    localStorage.setItem("hira.progress", JSON.stringify({ か: { box: 5, right: 20, wrong: 0 } }));
+    localStorage.setItem("hira.sync.savedAt", String(Date.now() + 1e6));
+    localStorage.setItem("hira.sync.user", JSON.stringify("someone-else"));
+    localStorage.removeItem("hira.sync.allowed");
+    localStorage.setItem("__offline", "1");
+  });
+  await page.reload();
+  await page.waitForSelector("text=Can't reach the server");
+  await page.evaluate(() => { localStorage.removeItem("__offline"); dispatchEvent(new Event("online")); });
+  await page.waitForTimeout(500);
+  const remote = await page.evaluate(() => JSON.parse(localStorage.getItem("__remote")));
+  assert.equal(remote?.progress?.か, undefined);
+  await page.close();
+});
+
 test("another account signing in on this browser doesn't inherit the last one's progress", async () => {
   const page = await open({
     user: me, allowed: true,

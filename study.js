@@ -336,6 +336,7 @@
   const drill = (name) => ({
     best: (key) => deck[name]?.best?.[key],
     setBest(key, best) {
+      deck = local();
       (deck[name] ||= { kana: {}, best: {}, resetAt: 0 }).best[key] = best;
       save();
     },
@@ -362,12 +363,14 @@
       ...drill("write"),
       of: (kana) => deck.write?.kana?.[kana],
       record(kana, ok) {
+        deck = local();
         const w = (deck.write ||= { kana: {}, best: {}, resetAt: 0 });
         bump(w.kana[kana] ||= { box: 0, right: 0, wrong: 0 }, ok);
         save();
       },
       // Newer than any writing reset this device has seen, whatever its clock says [last reset 1000, clock reads 900 = 1001].
       reset() {
+        deck = local();
         deck.write = { kana: {}, best: {}, resetAt: Math.max(Date.now(), (deck.write?.resetAt || 0) + 1) };
         save();
         return sync();

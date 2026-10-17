@@ -47,15 +47,25 @@
   // The form a word is asked in, with the する a bare noun leaves off [電話 → 電話する; 勉強する stays].
   const base = (word) => (/^vs/.test(classOf(word) || "") && !word.r.endsWith("する") ? { w: word.w + "する", r: word.r + "する" } : { w: word.w, r: word.r });
 
+  // Forms a word has by rule but nobody says, per word [できる: できられる; 分かる's potential is 分かれる, to split; すっと isn't a verb].
+  const ALL = ["potential", "passive", "causative", "imperative", "volitional"];
+  const UNSAID = {
+    "できる|できる": ALL, "見える|みえる": ALL, "聞こえる|きこえる": ALL, "暮れる|くれる": ALL, "要る|いる": ALL, "おる|おる": ALL,
+    "分かる|わかる": ["potential", "passive", "imperative", "volitional"], "くれる|くれる": ["potential", "passive", "causative", "volitional"],
+    "すっと|すっと": FORMS.map((f) => f.id), "しばらく|しばらく": FORMS.map((f) => f.id),
+  };
+
   // One form in kana and in the word's own spelling, or null where the word has none [高い has no ます form; ある no potential].
   function conjugate(word, form) {
     const cls = classOf(word);
-    if (!cls || !FORMS.some((f) => f.id === form)) return null;
+    if (!cls || !FORMS.some((f) => f.id === form) || UNSAID[word.k]?.includes(form)) return null;
     // A word part or a spelling without its kana ending has nothing to type or to change [～だす; the list's old 堅 read かたい gave 堅くない].
     if (/^[～〜]/.test(word.w) || (/^(v1|v5|adj-i)/.test(cls) && word.w.slice(-1) !== word.r.slice(-1))) return null;
     const { w, r } = base(word);
     const swap = (cut, add) => ({ w: w.slice(0, w.length - cut) + add, r: r.slice(0, r.length - cut) + add });
     if (cls === "v1") return swap(1, ICHIDAN[form]);
+    // くれる is ichidan but for its imperative [くれ, not くれろ].
+    if (cls === "v1-s") return swap(1, form === "imperative" ? "" : ICHIDAN[form]);
     if (cls === "vk") return { w: w.slice(0, 1) + KURU[form].slice(1), r: KURU[form] };
     if (cls === "vs-i" || cls === "vs") return swap(2, SURU[form]);
     if (cls === "v5r-i") {
@@ -122,12 +132,17 @@
 
   // Katakana as hiragana, for answers romaji can only give in hiragana [テストします = てすとします].
   const hira = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
+  // Either spelling of a contraction [ではない = じゃない, 食べてはいけない = 食べちゃいけない].
+  const short = (s) => s.replace(/ては|てわ/g, "ちゃ").replace(/では|でわ/g, "じゃ");
+  // Kana as romaji says them: づ ぢ as zu ji, a particle は as wa, を as o [つづきます = tsuzukimasu, たべてはいけない = tabetewaikenai].
+  const said = (s) => s.replace(/づ/g, "ず").replace(/ぢ/g, "じ").replace(/(?<=[てでにと])は/g, "わ").replace(/を/g, "お");
   // A typed answer against a form, in kana, romaji or the kanji spelling [書きます, かきます and kakimasu all count].
   const accepts = (want, typed) => {
     const t = typed.trim();
     if (!t) return false;
     const kana = toKana(t, true);
-    return [want.r, want.w, hira(want.r), hira(want.w)].includes(kana);
+    if ([want.r, want.w, hira(want.r), hira(want.w)].map(short).includes(short(kana))) return true;
+    return /[a-z]/i.test(t) && short(said(kana)) === short(said(hira(want.r)));
   };
 
   const api = { FORMS, base, conjugate, classOf, toKana, accepts };

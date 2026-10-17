@@ -3,7 +3,7 @@
 // and "Reset my progress" would come straight back from whichever device synced next.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { merge, clipPath, same, wholeCategories } = require("../sync.js");
+const { merge, mergeWrite, clipPath, same, wholeCategories } = require("../sync.js");
 
 const side = (over) => ({ progress: {}, "quiz.best": {}, "sheets.done": {}, "reading.done": [], savedAt: 100, resetAt: 0, ...over });
 
@@ -75,4 +75,17 @@ test("a row read back with its keys reordered still counts as the same", () => {
 test("clip names are the kana's code points in hex", () => {
   assert.equal(clipPath("あ"), "audio/3042.mp3");
   assert.equal(clipPath("かっこ"), "audio/304b-3063-3053.mp3");
+});
+
+// Two devices with a tie each kept their own copy, so the row was rewritten on every sync [か 2 right 2 wrong beside 3 right 1 wrong, both box 2].
+test("a tie in answers and box settles on the same copy whichever side merges first", () => {
+  const phone = side({ progress: { か: { box: 2, right: 3, wrong: 1 } } }), pc = side({ progress: { か: { box: 2, right: 2, wrong: 2 } } });
+  assert.deepEqual(merge(phone, pc).progress.か, { box: 2, right: 3, wrong: 1 });
+  assert.deepEqual(merge(pc, phone).progress.か, { box: 2, right: 3, wrong: 1 });
+});
+
+// The writing merge rebuilt the drill from kana, best and resetAt, so a key a later version adds would vanish on an older tab's save.
+test("the writing merge carries keys it doesn't know", () => {
+  const m = mergeWrite({ kana: {}, best: {}, resetAt: 0, picked: ["a"] }, { kana: {}, best: {}, resetAt: 0 });
+  assert.deepEqual(m.picked, ["a"]);
 });

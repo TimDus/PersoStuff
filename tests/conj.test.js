@@ -134,3 +134,35 @@ test("a lone n before kana is ん once the answer is sent", () => {
   assert.equal(toKana("うんてnします"), "うんてnします");
   assert.equal(accepts(conjugate(listed("運転する"), "masu"), "うんてnします"), true);
 });
+
+// The site teaches づ as zu and ぢ as ji, but only du and di typed them, so 続きます in romaji was always wrong [45 questions].
+test("づ and ぢ count as zu and ji, the particle は as wa, and を as o, in romaji only", () => {
+  const cont = conjugate(listed("続く"), "masu");
+  assert.equal(accepts(cont, "tsuzukimasu"), true);
+  assert.equal(accepts(cont, "tsudukimasu"), true);
+  assert.equal(accepts(cont, "つずきます"), false, "a kana answer is spelled as written");
+  const may = { w: "食べてはいけない", r: "たべてはいけない" };
+  assert.equal(accepts(may, "tabetewaikenai"), true);
+  assert.equal(accepts(may, "tabetehaikenai"), true);
+  assert.equal(accepts({ w: "本を読む", r: "ほんをよむ" }, "hon'oyomu"), true);
+  assert.equal(accepts({ w: "日本には", r: "にほんには" }, "nihonniwa"), true);
+  assert.equal(accepts(conjugate(listed("話す"), "masu"), "wanashimasu"), false, "only a particle は reads wa");
+});
+
+// A contraction's two spellings are one answer [the grammar page teaches ちゃいけない; ではない was refused for 静かじゃない].
+test("either spelling of a contraction counts [ではない = じゃない, てはいけない = ちゃいけない]", () => {
+  assert.equal(accepts(conjugate(listed("静か"), "nai"), "shizukadewanai"), true);
+  assert.equal(accepts(conjugate(listed("静か"), "nai"), "しずかではない"), true);
+  assert.equal(accepts({ w: "食べてはいけない", r: "たべてはいけない" }, "tabechaikenai"), true);
+  assert.equal(accepts({ w: "飲んではいけない", r: "のんではいけない" }, "飲んじゃいけない"), true);
+});
+
+// Forms the rules make but nobody says were drilled with a green tick [できられる; 分かれる is to split, not can understand].
+test("a real word's forms nobody says give no question, and くれる's imperative is くれ", () => {
+  assert.deepEqual(forms(listed("できる"), ["potential", "causative", "imperative", "masu"]), [undefined, undefined, undefined, "できます"]);
+  assert.deepEqual(forms(listed("分かる"), ["potential", "imperative", "causative"]), [undefined, undefined, "わからせる"]);
+  assert.deepEqual(forms(listed("見える"), ["potential", "te"]), [undefined, "みえて"]);
+  assert.deepEqual(forms(listed("要る"), ["potential", "nai"]), [undefined, "いらない"]);
+  assert.deepEqual(forms(listed("くれる"), ["masu", "te", "imperative", "potential"]), ["くれます", "くれて", "くれ", undefined]);
+  assert.equal(conjugate(listed("すっと"), "masu"), null, "an adverb isn't drilled as a する verb");
+});

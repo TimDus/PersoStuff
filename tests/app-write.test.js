@@ -44,6 +44,72 @@ test("Enter on the writing quiz's Done page after a last-kana miss doesn't draw 
   await page.close();
 });
 
+// Self's 1 and 2 still graded the last kana on Done, since busy() saw it there [2, 2, 1 left う at 3 right, 1 wrong, and threw].
+test("keys on the writing quiz's Done page record nothing", async () => {
+  const page = await open(drill, "#write/a/1");
+  await page.locator("#pad rect").first().waitFor();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  while (!(await page.locator("h1:has-text('Done!')").count())) {
+    await page.keyboard.press("Space");
+    await page.keyboard.press("2");
+  }
+  const before = await deckWrite(page);
+  for (const key of ["2", "2", "1", "Enter"]) await page.keyboard.press(key);
+  assert.deepEqual(await deckWrite(page), before);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+// ji asked for じ or ぢ with nothing to tell them apart, and the checker marked the other one wrong [ぢ's 4 strokes against じ's 3].
+test("a romaji two kana share says which one it asks for", async () => {
+  const lines = {};
+  for (const hash of ["#write/z,d/1", "#write/k-w,k-x-w/1"]) {
+    const page = await open(drill, hash);
+    await page.locator("#pad rect").first().waitFor();
+    while (!(await page.locator("h1:has-text('Done!')").count())) {
+      lines[await padKana(page)] = await page.textContent("#script");
+      await page.keyboard.press("Space");
+      await page.keyboard.press("2");
+    }
+    await page.close();
+  }
+  assert.deepEqual([lines.じ, lines.ぢ, lines.ず, lines.づ, lines.ざ], ["hiragana · from し", "hiragana · from ち", "hiragana · from す", "hiragana · from つ", "hiragana"]);
+  assert.deepEqual([lines.ヲ, lines.ウォ, lines.ワ], ["katakana · one kana", "katakana · two kana", "katakana"]);
+});
+
+// A double-clicked Got it put its second click on the next kana's Show, so that answer was out before anything was drawn.
+test("a double-clicked Got it in Self leaves the next kana unshown", async () => {
+  const page = await open(drill, "#write/a/1");
+  await page.locator("#pad rect").first().waitFor();
+  await page.keyboard.press("Space");
+  await page.dblclick("#got");
+  await page.waitForFunction(() => document.querySelector("#prog").textContent === "2 / 5");
+  assert.equal(await page.locator("#acts #show").count(), 1);
+  assert.equal(await page.locator("#pad .hint path").count(), 0);
+  await page.close();
+});
+
+// A tab on the writing quiz saved its old copy of the deck over another tab's, and the other tab's unsent answers went with it.
+test("a writing answer or a drill best keeps the cards another tab saved meanwhile", async () => {
+  const page = await open(drill, "#write/a/1");
+  await page.locator("#pad rect").first().waitFor();
+  const otherTab = (key) => page.evaluate((key) => {
+    const d = JSON.parse(localStorage.getItem("hira.study") || "{\"cards\":{}}");
+    d.cards = { ...d.cards, [key]: { st: "review", ivl: 1, ease: 2.5, due: 1, n: 1, lapses: 0 } };
+    localStorage.setItem("hira.study", JSON.stringify(d));
+  }, key);
+  await otherTab("秋|あき");
+  await page.keyboard.press("Space");
+  await page.keyboard.press("2");
+  await otherTab("足|あし");
+  await page.evaluate(() => HiraStudy.verbs.setBest("te|verb|10", { ms: 9000, acc: 100 }));
+  const cards = await page.evaluate(() => JSON.parse(localStorage.getItem("hira.study")).cards);
+  assert.ok(cards["秋|あき"], "kept through a writing answer");
+  assert.ok(cards["足|あし"], "kept through a drill best");
+  await page.close();
+});
+
 test("the Write switch on the quiz page starts a writing run of the picked kana", async () => {
   const page = await open(drill, "#quiz");
   await page.click("[data-mode='write']");

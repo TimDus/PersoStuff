@@ -51,6 +51,17 @@ test("a new word opens with its answer and Got it and is asked for real a few ca
   await met.close();
 });
 
+// A clicked speaker kept the focus, so Space on a new word's introduction played the word again instead of moving on.
+test("Space after clicking a new word's speaker moves the introduction on", async () => {
+  const page = await open(started(), "#words/review");
+  await page.locator("#got").waitFor();
+  await page.click("#card [data-say]");
+  await page.keyboard.press(" ");
+  assert.doesNotMatch(await page.textContent(".face.front"), /秋/);
+  assert.equal((await page.evaluate(() => window.__played)).length <= 1, true, "the sound played for the click only");
+  await page.close();
+});
+
 test("Good on a new word brings it back tomorrow and syncs the deck apart from the kana", async () => {
   const page = await open(started(), "#words/review");
   await page.locator(".face.front").waitFor();
