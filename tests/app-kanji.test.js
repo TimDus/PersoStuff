@@ -299,30 +299,30 @@ async function drag(page, sel, pts) {
   await page.mouse.up();
 }
 
-// Heisig's first frames, so the hub's order is his and not the stroke-count stand-in [一 1, 二 2, 三 3, 口 11, 日 12].
-const frames = Object.fromEntries([["一", "one", 1], ["二", "two", 2], ["三", "three", 3], ["口", "mouth", 11], ["日", "day", 12]]
+// Heisig's frames for the first kanji, which only break ties now the word list leads [火 173, 秋 966, 口 11, 足 1372, 後 1479].
+const frames = Object.fromEntries([["火", "fire", 173], ["秋", "autumn", 966], ["口", "mouth", 11], ["足", "leg", 1372], ["後", "behind", 1479]]
   .map(([c, kw, frame]) => [c, { kw, frame, mine: null, stories: [] }]));
-// Kanji came from met words, so a fresh account had none and 意 could come before 音 and 心; now they go in Heisig's order, parts first.
-test("the Kanji hub offers the next kanji in Heisig's order, and a review introduces, grades and syncs them", async () => {
+// Heisig's order alone kept 今日 and 来年 waiting 74 and 85 days; the kanji now come as the word list needs them, parts first.
+test("the Kanji hub offers the next kanji as the word list needs them, and a review introduces, grades and syncs them", async () => {
   const page = await open({ ...listed, koohii: { ...koohii, ...frames }, local: { "study.user": "u1", study: withKanji({}, { newPerDay: 5, at: 0 }) } }, "#kanji");
   await page.locator("#k-new").waitFor();
   assert.deepEqual([await page.textContent("#k-new"), await page.textContent("#k-due")], ["5", "0"]);
   assert.match(await page.textContent("#k-sum"), /0 of 902 started · 0 learned/);
   assert.equal(await page.locator(".kgrid a").count(), 902);
-  assert.deepEqual((await page.locator(".kgrid a.next").allTextContents()).sort(), [..."一二三口日"].sort());
+  assert.deepEqual((await page.locator(".kgrid a.next").allTextContents()).sort(), [..."火秋口足後"].sort());
   await page.click("#go");
   await page.locator("#got").waitFor();
-  assert.equal(await page.textContent(".face.front .kanji-prompt"), "one");
-  assert.equal(await page.textContent(".face.back .kanji-big"), "一");
+  assert.equal(await page.textContent(".face.front .kanji-prompt"), "fire");
+  assert.equal(await page.textContent(".face.back .kanji-big"), "火");
   assert.match(await page.textContent(".hint"), /New kanji/);
   await pastIntros(page);
-  assert.equal((await deckOf(page)).kanji.cards["一"], undefined, "an introduction stores nothing");
+  assert.equal((await deckOf(page)).kanji.cards["火"], undefined, "an introduction stores nothing");
   await page.click("#card");
   await page.click("[data-g='3']");
-  assert.deepEqual((await deckOf(page)).kanji.cards["一"], { st: "review", ivl: 1, ease: 2.5, due: day + 1, n: 1, lapses: 0, first: day, last: day });
+  assert.deepEqual((await deckOf(page)).kanji.cards["火"], { st: "review", ivl: 1, ease: 2.5, due: day + 1, n: 1, lapses: 0, first: day, last: day });
   for (let i = 0; i < 4; i++) await answer(page, 3);
   await page.locator("h1", { hasText: "Done" }).waitFor();
-  assert.deepEqual(Object.keys((await studySaves(page)).at(-1).kanji.cards).sort(), [..."一二三口日"].sort());
+  assert.deepEqual(Object.keys((await studySaves(page)).at(-1).kanji.cards).sort(), [..."火秋口足後"].sort());
   await page.close();
 });
 
@@ -490,8 +490,8 @@ test("a radical form names its full kanji, the full kanji names its forms, and a
   // 水 is 氵 on the left and 氺 at the bottom [海; 様].
   await page.locator(".kanji-page[data-c='水'] .kanji-forms").first().waitFor({ timeout: 3000 });
   const forms = await page.locator(".kanji-forms").allTextContents();
-  // The first 8 of 37 in study order, here the stroke-count stand-in as no Koohii file is served [6 to 8 strokes, then code point], not kanji.json's 泳 汚 温 海.
-  assert.equal(forms[0], "As a radical it's written 氵: 汚 池 決 汽 沢 沸 油 治 …");
+  // The first 8 of 37 in study order, as the word list reaches them [海 in 海, 池 in 池], not kanji.json's 泳 汚 温 海.
+  assert.equal(forms[0], "As a radical it's written 氵: 海 池 漢 浴 洗 濯 洋 渡 …");
   assert.deepEqual(forms.slice(1), ["As a radical it's written 氺: 様"]);
   await page.goto("#kanji/近");
   await page.locator(".kanji-page[data-c='近'] .kanji-comps").waitFor({ timeout: 3000 });
@@ -660,13 +660,13 @@ test("a kanji's page, the hub and the review still open on a cached kanji.json w
   await page.close();
 });
 
-// The hub waits for Koohii's file, which holds Heisig's order; a sign that never answers must not leave it on "Loading kanji…".
-test("with Koohii's sign hanging the hub still opens after its wait, in stroke-count order", async () => {
+// The hub waits for Koohii's file, which holds Heisig's tie-breaks; a sign that never answers must not leave it on "Loading kanji…".
+test("with Koohii's sign hanging the hub still opens after its wait, in the word list's order", async () => {
   const page = await open({ ...listed, koohii, koohiiHang: true, local: { "study.user": "u1", study: kanjiDeck() } }, "#kanji");
   await page.locator("#k-new").waitFor({ timeout: 6000 });
-  // The grid goes by level, so 乙, a part no word uses, sits under Only as parts.
+  // Stroke count only breaks ties, so the first ten still follow the word list [火 秋 口 足…] and 乙, one stroke, isn't among them.
   const next = await page.locator(".kgrid a.next").allTextContents();
-  assert.deepEqual([next.length, next.includes("一"), next.includes("乙")], [10, true, true]);
+  assert.deepEqual([next.length, next.includes("秋"), next.includes("乙")], [10, true, false]);
   await page.close();
 });
 

@@ -381,6 +381,7 @@
     ruby,
     needWords,
     words: () => (words ? Promise.resolve(words) : loadWords()),
+    wordList: () => words || [],
     met: (k) => !!deck.cards[k + "#r"],
     cards: () => deck.cards,
     kanjiInfo: () => kanjiInfo,

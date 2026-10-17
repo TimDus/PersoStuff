@@ -17,9 +17,9 @@
 
   // A kanji's parts that are deck kanji, a radical form as its full kanji [海 = 水 毎; 学's ⺍ and 冖 aren't kanji, so 子].
   const partsOf = (c, info) => [...new Set((info[c]?.c || []).map((p) => info[c].v?.[p] || p))].filter((p) => p !== c && info[p]);
-  // The deck in study order: Heisig's frames, stroke count where a kanji has none, each kanji's parts pulled in front of it
-  // [会 814 holds 人 1023, so 人 goes first; without Koohii's file 一 and 乙 lead on 1 stroke].
-  function order(info, frames) {
+  // The deck in study order: each word's kanji as the word list reaches them, parts pulled in front all the way down, Heisig's frames
+  // then stroke count breaking ties and ordering the rest [秋 first brings 火 秋; 会 814 holds 人 1023, so 人 goes first].
+  function order(info, frames, words = []) {
     const rank = (c) => [frames[c] ?? Infinity, info[c].sc || 99, c.codePointAt(0)];
     const by = (a, b) => { const [x, y] = [rank(a), rank(b)]; return x[0] - y[0] || x[1] - y[1] || x[2] - y[2]; };
     const out = [], placed = new Set();
@@ -29,6 +29,7 @@
       partsOf(c, info).sort(by).forEach(place);
       out.push(c);
     };
+    for (const w of words) kanjiOf(w).filter((c) => info[c]).sort(by).forEach(place);
     Object.keys(info).sort(by).forEach(place);
     return out;
   }

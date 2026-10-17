@@ -124,7 +124,7 @@ test("a kanji's word list puts met words first, newest first, then the rest in l
   assert.equal(wordsWith("学", vocab, cards).length, 13);
 });
 
-// The Kanji tab's deck: every kanji in Heisig's order with its parts in front, and the day's new kanji the next ones in it.
+// The Kanji tab's deck: every kanji in the word list's order with its parts in front, and the day's new kanji the next ones in it.
 const { order, partsOf, forms, kanjiQueue, ready, learned } = require("../kanji.js");
 // RTK frames as Koohii gives them, kept here as Koohii's file is private [人 1023 comes after 会 814, which holds it].
 const FRAMES = { 一: 1, 二: 2, 口: 11, 日: 12, 水: 137, 味: 233, 立: 462, 海: 500, 音: 518, 心: 639, 意: 654, 会: 814, 人: 1023 };
@@ -136,7 +136,22 @@ test("a kanji's parts are the deck's kanji in it, a radical form as its full kan
   assert.deepEqual([partsOf("学", kanji), partsOf("一", kanji)], [["子"], []]);
 });
 
-test("kanji come in Heisig's frame order, each one's parts pulled in front of it, all the way down", () => {
+// Heisig's order alone made 今 the deck's 731st kanji and 来 its 841st, so 今日 and 来年 opened on day 74 and 85 at 10 kanji a day.
+test("kanji come as the word list needs them, parts first, so a word's kanji never wait behind a later word's", () => {
+  const list = order(kanji, FRAMES, vocab);
+  assert.deepEqual(list.slice(0, 2), ["火", "秋"]);
+  assert.ok(list.indexOf("今") < 100, `今 at ${list.indexOf("今")}`);
+  assert.equal(list.length, Object.keys(kanji).length);
+  assert.deepEqual(Object.keys(kanji).filter((c) => before(list, c).length), []);
+  // The first word needing each kanji, itself or as a part of a part, never goes down along the deck.
+  const need = new Map();
+  const reach = (c, i) => { if (need.has(c)) return; need.set(c, i); partsOf(c, kanji).forEach((p) => reach(p, i)); };
+  vocab.forEach((w, i) => [...w.w].filter((c) => kanji[c]).forEach((c) => reach(c, i)));
+  const firsts = list.map((c) => need.get(c) ?? Infinity);
+  assert.deepEqual(firsts.filter((n, i) => i && n < firsts[i - 1]), []);
+});
+
+test("without words kanji come in Heisig's frame order, each one's parts pulled in front of it, all the way down", () => {
   const list = order(kanji, FRAMES);
   assert.deepEqual(list.slice(0, 4), ["一", "二", "口", "日"]);
   assert.equal(new Set(list).size, Object.keys(kanji).length);

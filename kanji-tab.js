@@ -27,10 +27,10 @@
       return info[p] ? `<span>${link(p, page, label)}${nick(p)}</span>` : `<span>${label}${nick(p)}</span>`;
     }).join("")}</div>` : "";
   }
-  // The parts, the kanji's history note, and its radical forms with the first 8 kanji using them in study order [水: 氵 in 泳 活 消 泊…, 海 further on].
+  // The parts, the kanji's history note, and its radical forms with the first 8 kanji using them in study order [水: 氵 in 海 池 漢 浴…].
   function parts(c, page) {
     const info = study.kanjiInfo() || {}, fs = forms(c, info), why = study.history(c)?.note;
-    const at = fs.length ? new Map(order(info, study.frames()).map((d, i) => [d, i])) : null;
+    const at = fs.length ? new Map(order(info, study.frames(), study.wordList()).map((d, i) => [d, i])) : null;
     return `${comps(c, page)}${why ? `<div class="kanji-why small">${esc(why)}</div>` : ""}${fs.map(({ f, cs }) => {
       const first = [...cs].sort((a, b) => at.get(a) - at.get(b));
       return `<div class="kanji-forms small">As a radical it's written <span class="jp">${esc(f)}</span>: ${listed(first.slice(0, 8), page)}${cs.length > 8 ? " …" : ""}</div>`;
@@ -153,7 +153,7 @@
   // Every deck kanji in study order, the word list's alone in list order without kanji.json [秋 足 後 言… when it failed].
   const sequence = (words) => {
     const info = study.kanjiInfo() || {};
-    return Object.keys(info).length ? order(info, study.frames()) : [...new Set(words.flatMap(kanjiOf))];
+    return Object.keys(info).length ? order(info, study.frames(), words) : [...new Set(words.flatMap(kanjiOf))];
   };
 
   function hub(words) {
