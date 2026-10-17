@@ -21,6 +21,10 @@
     匹: "small-animal counter", 発: "start off, emit", 対: "versus, opposite", 楽: "enjoy, music", 変: "weird, alter",
     供: "offer, attend", 承: "consent", 弾: "pluck, bullet", 驚: "surprise", 魔: "demon", 鬼: "ogre",
     辺: "area, vicinity", 覧: "view",
+    拶: "greeting", 踊: "dancing", 至: "reach, as far as", 我: "my, our", 身: "physical self, standing", 伯: "elder uncle, count",
+    乾: "dry out, toast (乾杯)", 薄: "thin, diluted", 故: "accident, bygone", 平: "flat, level", 安: "peaceful, cheap",
+    貼: "stick, paste", 典: "canon, rule book", 凄: "tremendous", 碗: "bowl", 斉: "uniform, alike",
+    原: "origin, meadow", 鳴: "ring, chirp", 為: "for the sake of, do", 又: "also, once more", 爪: "nail, claw",
   };
   // The keyword a kanji shows: the plain one, else Heisig's, else KANJIDIC's meaning [旦 dawn; 学 study; 学 before Koohii's file, study, learning].
   const keywordOf = (c, koohii, info) => PLAIN[c] || koohii?.[c]?.kw || info?.[c]?.m || "";

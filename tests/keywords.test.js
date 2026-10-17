@@ -15,10 +15,10 @@ test("every plain keyword is for a deck kanji and differs from Heisig's", () => 
   assert.deepEqual(Object.keys(PLAIN).filter((c) => !kanji[c] || !koohii[c] || PLAIN[c] === koohii[c].kw), []);
 });
 
-// Checking first senses let 変 "odd, change" through beside 化 "change", and exact strings let 申 "say (humble)" beside 言 "say".
+// Checking first senses let 変 "odd, change" through beside 化 "change", exact strings let 申 "say (humble)" beside 言 "say", and a trailing word let 至 "arrive at" beside 着 "arrive".
 // Heisig's own near pairs are his to answer for [飴 sweets, 甘 sweet], so only a sense of a plain keyword is checked.
 test("no plain keyword shares a sense with another kanji's keyword, brackets, articles and plurals aside [中 middle, inside beside 内 within]", () => {
-  const sense = (s) => s.replace(/\(.*?\)/g, "").trim().replace(/^(a|an|the|to) /, "").replace(/s$/, "");
+  const sense = (s) => s.replace(/\(.*?\)/g, "").trim().replace(/^(a|an|the|to|one's) /, "").replace(/ (at|to|on|up|of|for|in)$/, "").replace(/s$/, "");
   const senses = (c) => new Set(keyword(c).toLowerCase().split(/[,;]/).map(sense));
   const all = Object.keys(kanji).map((c) => [c, senses(c)]);
   const hits = Object.keys(PLAIN).flatMap((c) => [...senses(c)].flatMap((s) => all.filter(([d, ss]) => d !== c && ss.has(s)).map(([d]) => `${s}: ${c}${d}`)));
