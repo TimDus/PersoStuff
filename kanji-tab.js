@@ -63,11 +63,16 @@
   const ws = (x) => `<span class="kr-words">${x.words.map(({ w, met }) => `<span${met ? "" : ` class="unmet"`}>${esc(w.w)}</span>`).join(" · ")}</span>`;
   // A reading no met word uses is muted like its words [学 with only 大学 met: まな.ぶ grey].
   const off = (x) => (x.words.some((w) => w.met) ? "" : " unmet");
-  // The main reading large over the kanji, the others in rows under it, all off on a kanji.json cached without them [四: シ 四 over 四, then よっ.つ, よん, よ].
+  // The main reading large over the kanji, the others under it, no words, all off on a kanji.json cached without them [四: シ over 四, then よっ.つ, よん, よ].
   const big = (c, { top, rest }) => {
-    const main = top ? `<div class="kanji-top jp${off(top)}"><div class="kr-main">${esc(top.r)}</div>${ws(top)}</div>` : "";
-    const rows = rest.map((x) => `<div class="kr-row${off(x)}"><span class="kr">${esc(x.r)}</span>${ws(x)}</div>`).join("");
+    const main = top ? `<div class="kanji-top jp${off(top)}"><div class="kr-main">${esc(top.r)}</div></div>` : "";
+    const rows = rest.map((x) => `<div class="kr-row${off(x)}"><span class="kr">${esc(x.r)}</span></div>`).join("");
     return `${main}<div class="kanji-big jp">${esc(c)}</div>${rows ? `<div class="kanji-reading jp">${rows}</div>` : ""}`;
+  };
+  // Each reading with the list words using it, a reading no word uses left out [学: ガク 学校 · 大学生 · 学生, no まな.ぶ line].
+  const used = ({ top, rest }) => {
+    const rs = [top, ...rest].filter((x) => x?.words.length);
+    return rs.length ? `<div class="kr-used jp">${rs.map((x) => `<div class="ku-row${off(x)}"><span class="ku">${esc(x.r)}</span>${ws(x)}</div>`).join("")}</div>` : "";
   };
   const readings = (c, words) => byReading(c, words, study.cards(), study.kanjiInfo() || {});
   const rows = (c, words, n = Infinity) => wordsWith(c, words, study.cards()).slice(0, n).map((w) => `
@@ -77,10 +82,11 @@
     const h = study.history(c)?.history;
     return h ? `<p class="kanji-story small">${esc(h)}</p>` : "";
   };
-  const body = (c, words, page) => `
-    ${big(c, readings(c, words))}
+  const body = (c, words, page, rs = readings(c, words)) => `
+    ${big(c, rs)}
     <div class="kanji-head">${head(c, page)}</div>
     <div class="kanji-hist">${story(c)}</div>
+    ${used(rs)}
     ${fam(c, page)}
     ${window.HiraStrokes.button(c)}
     <div class="stories">${stories(c)}</div>
@@ -204,7 +210,8 @@
     const front = `<div class="kanji-prompt">${esc(prompt(c, words))}</div>${draw
       ? `<div class="kpad" data-noflip><svg viewBox="0 0 109 109" aria-label="Drawing pad"></svg><button class="ghost small" type="button" data-clear>Clear</button></div>`
       : `<div class="muted small">Write it on paper, then turn the card</div>`}`;
-    const back = `${big(c, readings(c, words))}${parts(c, false)}${draw ? window.HiraStrokes.shown(c) : window.HiraStrokes.button(c)}
+    const rs = readings(c, words);
+    const back = `${big(c, rs)}${parts(c, false)}${used(rs)}${draw ? window.HiraStrokes.shown(c) : window.HiraStrokes.button(c)}
       <div class="stories">${stories(c)}</div><div class="kanji-words">${rows(c, words.filter((w) => study.met(w.k)), 5)}</div>`;
     return { front, back };
   }

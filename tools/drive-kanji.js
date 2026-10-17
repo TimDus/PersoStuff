@@ -54,7 +54,7 @@ const deck = { cards: { "大学生|だいがくせい#r": card(day - 5, day), "�
       };
     }, deck);
     const width = () => page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
-    const readings = (s) => page.evaluate((s) => [...document.querySelectorAll(`${s} .kanji-top, ${s} .kanji-reading > div`)].map((d) => d.textContent + (d.classList.contains("unmet") ? "~" : "")).join(" | "), s);
+    const readings = (s) => page.evaluate((s) => [...document.querySelectorAll(`${s} .kanji-top, ${s} .kanji-reading > div, ${s} .ku-row`)].map((d) => d.textContent + (d.classList.contains("unmet") ? "~" : "")).join(" | "), s);
     await page.goto(base + "#words/review");
     await page.locator(".face.front").waitFor();
     await page.click("#card");
