@@ -30,3 +30,16 @@ test("a card offers four different particles, exactly one right and none that fi
   const bus = SENTENCES.find((c) => c.en === "I go by bus.");
   for (let n = 0; n < 200; n++) assert.ok(!options(bus).includes("が"));
 });
+
+// near held particles no English allows, so the classic slip was never offered [図書館に勉強します], while へ, fine for 友だち＿あげました, could be drawn as wrong.
+test("the classic wrong particle can be offered, and one the English also allows never is", () => {
+  const by = (en) => SENTENCES.find((c) => c.en === en);
+  const wrong = (c) => CHOICES.filter((p) => !c.ok.includes(p) && !c.near.includes(p));
+  assert.ok(wrong(by("I study at the library.")).includes("に"));
+  assert.ok(wrong(by("I had dinner at a restaurant.")).includes("に"));
+  assert.ok(wrong(by("I get on the train.")).includes("で"));
+  assert.ok(wrong(by("I go into the room.")).includes("で"));
+  for (const en of ["I gave a present to a friend.", "I phoned my mother."]) assert.ok(!wrong(by(en)).includes("へ"), en);
+  assert.ok(!wrong(by("Japanese cars are good.")).includes("と"));
+  assert.ok(!wrong(by("I walk as far as the station.")).includes("を"));
+});

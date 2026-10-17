@@ -13,6 +13,11 @@ const xml = fs.readFileSync(path.join(dataDir, "kanjidic", "kanjidic2.xml"), "ut
 const svgFile = (c) => path.join(dataDir, "kanjivg", "main", "kanji", `${c.codePointAt(0).toString(16).padStart(5, "0")}.svg`);
 // The radical-form pairs a KanjiVG original is kept for, as a form and not a meaning; any other original is dropped
 // [灬 is the 火 radical in 魚 too, where it draws a tail; 儿 is a radical of its own, so 兄's "儿 = 八" goes].
+// Parts KanjiVG names by a historical element that isn't the shape on screen, written out by hand [里 = 田 土, not 日; 官's lower part is 𠂤, not 口].
+const PARTS = {
+  才: [], 存: ["才", "子"], 電: ["雨", "电"], 旅: ["方", "𠂉", "从"], 官: ["宀", "𠂤"], 卸: ["午", "止", "卩"], 号: ["口", "丂"],
+  汚: ["氵", "亏"], 里: ["田", "土"], 章: ["立", "早"], 至: ["一", "厶", "土"], 低: ["亻", "氐"],
+};
 const RADICAL_FORMS = new Set(["氵水", "亻人", "扌手", "⻖阜", "灬火", "刂刀", "礻示", "⺤爪", "飠食", "⻞食", "忄心", "⺌小", "耂老", "⺨犬", "衤衣", "𦥑臼", "⺷羊", "氺水"]);
 // The outermost named groups under the kanji's own, through unnamed ones and KanjiVG's private codes, with its full kanji for a
 // radical form, marked partial or not [学: ⺍ and 冖 inside an unnamed top, then 子; 原: 厂, then 白 and 小 inside CDP-8BC4; 飯: 飠 = 食].
@@ -46,18 +51,20 @@ const deck = [...want];
 
 // Today's N level from KANJIDIC2's pre-2010 JLPT level, 0 for none, as build-vocab.js reads it [old 4 = N5].
 const OLD_TO_N = { 4: 5, 3: 4, 2: 2, 1: 1 };
-// A kun reading a listed word spells with the kanji alone [生きる = [生, い] then きる, so い.きる].
-const used = (c, kun) => {
+// A kun reading a listed word spells with the kanji alone, by its whole okurigana or, for a derived form, its first kana [生きる = い.きる; 休み = やす.む].
+const used = (c, kun, whole) => {
   const [stem, oku = ""] = kun.split(".");
-  return words.some((w) => w.fu.some(([text, rt], i) => text === c && rt === stem && (w.fu[i + 1]?.[0] || "").startsWith(oku[0] || "")));
+  return words.some((w) => w.fu.some(([text, rt], i) => text === c && rt === stem && (w.fu[i + 1]?.[0] || "").startsWith(whole ? oku : oku[0] || "")));
 };
-// Up to 3 kun, the word list's first, one per stem and spelling [生: い.きる, う.まれる, お.う, not い.かす or うま.れる].
+// Up to 3 kun, the word list's first, one per stem and spelling, a whole match taking its stem's place [生: い.きる, う.まれる, お.う, not い.かす; 分: わ.かる, not わ.かれる].
 function kunOf(c, all) {
-  const seen = new Set(), out = [];
+  const seen = new Map(), out = [];
   for (const r of [...all.filter((r) => used(c, r)), ...all.filter((r) => !used(c, r))]) {
     const keys = [r.split(".")[0], r.replace(".", "")];
-    if (!keys.some((k) => seen.has(k))) out.push(r);
-    keys.forEach((k) => seen.add(k));
+    const held = keys.map((k) => seen.get(k)).find(Boolean);
+    if (!held) out.push(r);
+    else if (out.includes(held) && used(c, r, true) && !used(c, held, true)) out[out.indexOf(held)] = r;
+    keys.forEach((k) => { if (!seen.has(k)) seen.set(k, r); });
   }
   return out.slice(0, 3);
 }
@@ -90,9 +97,9 @@ for (const c of deck) {
   if (!d.length || d.length !== n.length) throw new Error(`${c}: ${d.length} strokes, ${n.length} numbers`);
   strokes[c] = { d, n };
   const parts = partsIn(svg, c);
-  kanji[c].c = parts.map((p) => p.el);
+  kanji[c].c = PARTS[c] || parts.map((p) => p.el);
   // A radical form's full kanji, where the deck has it and not the part itself, never the kanji it's in [海: 氵 = 水; 老's 耂 is 老's own top].
-  const v = Object.fromEntries(parts.filter((p) => p.full && p.full !== p.el && p.full !== c && want.has(p.full) && !want.has(p.el)).map((p) => [p.el, p.full]));
+  const v = Object.fromEntries(parts.filter((p) => kanji[c].c.includes(p.el) && p.full && p.full !== p.el && p.full !== c && want.has(p.full) && !want.has(p.el)).map((p) => [p.el, p.full]));
   if (Object.keys(v).length) kanji[c].v = v;
   // The parts KanjiVG marks as giving the sound, its own marks off and never the kanji itself, left out when none [金's 今1 and 今2 = 今; 新 and 親 share 辛+木; 大 has no p].
   const p = [...new Set([...svg.matchAll(/kvg:phon="([^"]+)"/g)].flatMap((m) => m[1].split("/")).map((x) => x.replace(/(?:right|[0-9VT])+$/, "")))]

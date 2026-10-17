@@ -37,7 +37,7 @@ test("a radical form names its full kanji, partial or not, and never the kanji i
 test("a part names its full kanji only where it is that kanji's radical form, whatever it means in the kanji", () => {
   assert.deepEqual(["兄", "冬", "次", "貫"].map((c) => kanji[c].v), Array(4).fill(undefined));
   assert.deepEqual(require("../kanji.js").forms("八", kanji), []);
-  assert.deepEqual(["魚", "才", "帰", "光", "興", "者"].map((c) => kanji[c].v), [{ 灬: "火" }, { 扌: "手" }, { 刂: "刀" }, { "⺌": "小" }, { "𦥑": "臼" }, { 耂: "老" }]);
+  assert.deepEqual(["魚", "持", "帰", "光", "興", "者"].map((c) => kanji[c].v), [{ 灬: "火" }, { 扌: "手" }, { 刂: "刀" }, { "⺌": "小" }, { "𦥑": "臼" }, { 耂: "老" }]);
 });
 
 // KanjiVG names a few parts by a private code that would show as text, and the parts inside one still count [原: 厂, then 白 and 小 inside CDP-8BC4].
@@ -286,4 +286,16 @@ test("a sound family is the list's kanji sharing a sound part and an on'yomi, ne
   assert.deepEqual([family("新", kanji), family("無", kanji)], [[{ r: ["シン"], cs: ["親"] }], [{ r: ["ブ"], cs: ["舞"] }]]);
   const old = Object.fromEntries(Object.entries(kanji).map(([c, { p, ...rest }]) => [c, rest]));
   assert.deepEqual(family("晴", old), []);
+});
+
+// KanjiVG names some parts by an old element, not the shape on screen [里 showed only 日, 才 showed 扌 hand, 章 counted 日 twice].
+test("a part KanjiVG names by an old element is written out by hand as the shape on screen", () => {
+  assert.deepEqual(["里", "才", "章", "官", "電"].map((c) => kanji[c].c), [["田", "土"], [], ["立", "早"], ["宀", "𠂤"], ["雨", "电"]]);
+  assert.equal(kanji["才"].v, undefined);
+});
+
+// Only the first kana of the okurigana was compared, so 分かる counted as わ.かれる and 分's page filed 分かる under it.
+test("a kun matched by its whole okurigana takes its stem's place over a first-kana match [分: わ.かる, not わ.かれる]", () => {
+  assert.deepEqual(kanji["分"].kun, ["わ.かる"]);
+  assert.deepEqual(kanji["下"].kun, ["した", "さ.げる", "くだ.さる"], "a derived form like 下さい still counts");
 });

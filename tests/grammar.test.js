@@ -73,16 +73,45 @@ test("an accepted answer keeps the gap's tense and polarity [拾ったの takes 
   assert.ok(checked > 20, `only ${checked} answers checked`);
 });
 
-test("a plain answer stands in for a polite one only at the end of a sentence [がいますか never takes がいる]", () => {
+test("a plain answer stands in for a polite one only at the end of a sentence or before ね and よ [がいますか never takes がいる; エアコン＿よ takes がある]", () => {
   const PLAIN = { desu: /^だ$/, "ga-arimasu": /が(ある|ない|あった)$/, "ga-imasu": /が(いる|いない|いた)$/, teiru: /(いる|いた)$/ };
   let checked = 0;
   for (const s of sentences.filter((x) => PLAIN[x.p])) {
     const after = s.fu.slice(s.fu.indexOf(null) + 1).map(([t]) => t).join("");
-    if (/^[。！？!?」]*$/.test(after)) continue;
+    if (/^(よね|ね|よ)?[。！？!?」]*$/.test(after)) continue;
     assert.ok(!s.ok.some((o) => PLAIN[s.p].test(o.r)), `${s.gap.w} + ${after} takes ${s.ok.map((o) => o.w)}`);
     checked++;
   }
   assert.ok(checked >= 5, `only ${checked} sentences checked`);
+  const takes = (src) => sentences.find((s) => s.src === src).ok.map((o) => o.w);
+  assert.ok(takes(220032).includes("がある"), "この部屋にはエアコン＿よ");
+  assert.ok(takes(177571).includes("洗っていない"), "君はまだ手を＿ね");
+});
+
+// うまい is an い-adjective, yet the のが上手 cards took 歌うのがうまいだ and 話すのがうまいではありません.
+test("an い-adjective answer never comes before だ, である or では", () => {
+  const before = sentences.filter((s) => /^(だ|である|では|じゃ)/.test(s.fu.slice(s.fu.indexOf(null) + 1).map(([t]) => t).join("")));
+  assert.ok(before.length >= 8);
+  for (const s of before) assert.ok(!s.ok.some((o) => /(うまい|上手い)$/.test(o.w)), `#${s.id} takes ${s.ok.map((o) => o.w)}`);
+  const desu = sentences.find((s) => s.p === "noga-jouzu" && s.fu[s.fu.indexOf(null) + 1]?.[0].startsWith("です"));
+  assert.ok(desu.ok.some((o) => /うまい$/.test(o.w)), "still taken before です");
+});
+
+// より and よりも say the same, but every より card refused よりも [あちらよりも値段が高い].
+test("よりも counts wherever より does, unless も already follows the gap", () => {
+  for (const s of sentences.filter((x) => x.p === "nohouga-yori")) {
+    const also = s.fu[s.fu.indexOf(null) + 1]?.[0].startsWith("も");
+    assert.equal(s.ok.some((o) => o.w === "よりも"), !also, `#${s.id} ${text(s.fu.filter(Boolean))}`);
+  }
+});
+
+// The page teaches the casual ちゃいけない and じゃいけない, and the cards refused them.
+test("a てはいけません card takes the casual ちゃ and じゃ", () => {
+  const { accepts } = require("../conj.js");
+  const cards = sentences.filter((s) => s.p === "tewaikemasen");
+  const casual = (s) => [s.gap, ...s.ok].some((a) => accepts(a, a.r.replace(/ては/, "ちゃ").replace(/では/, "じゃ")));
+  assert.ok(cards.length >= 10);
+  for (const s of cards) assert.ok(casual(s), `#${s.id} ${s.gap.w}`);
 });
 
 test("a listed answer carries its readings, so it fills the gap like the sentence's own [行きましょうか over いきましょうか]", () => {

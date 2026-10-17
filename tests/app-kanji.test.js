@@ -411,6 +411,20 @@ test("a story's keyword counts through its tags and only at the start of a word"
   await page.close();
 });
 
+// 村's parts line said 寸 inch while every story built it from glue, so the card and its stories named the part two ways.
+test("a part's Heisig name shows beside its label when this kanji's stories use it", async () => {
+  const his = { 村: { kw: "village", frame: 207, mine: null, stories: [{ by: "first", text: "A <em>tree</em> with <em>glue</em> on it.", stars: 9 }] },
+    寸: { kw: "measurement", frame: 45, mine: null, stories: [] },
+    封: { kw: "seal", frame: 168, mine: null, stories: [{ by: "first", text: "Take <em>measure</em>ments to <strong>seal</strong> it.", stars: 9 }] } };
+  const page = await open({ ...listed, koohii: { ...koohii, ...his }, local: { "study.user": "u1", study: deckWith({}) } }, "#kanji/村");
+  await page.locator(".kanji-page .story").waitFor({ timeout: 3000 });
+  assert.match(await page.textContent(".kanji-page .kanji-comps"), /寸 inch \(glue in the stories\)/);
+  await page.evaluate(() => { location.hash = "#kanji/封"; });
+  await page.locator(".kanji-page[data-c='封'] .kanji-comps").waitFor();
+  assert.doesNotMatch(await page.textContent(".kanji-page .kanji-comps"), /in the stories/, "封's stories never say glue");
+  await page.close();
+});
+
 // 駅 has one reading and one word, so with 駅 met the fold would only repeat the card.
 test("a kanji card's back with every reading and word shown has no fold", async () => {
   const page = await open({ ...listed, koohii, local: { "study.user": "u1", study: metOnly(["駅|えき"], { 駅: reviewed({ first: day - 5, last: day - 1, due: day }) }) } }, "#kanji/review");

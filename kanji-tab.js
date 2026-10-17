@@ -2,7 +2,7 @@
 (function () {
   const study = window.HiraStudy;
   const { wordsWith, kanjiOf, order, forms, kanjiQueue, mature, partsOf, byReading, metReadings, family } = window.HiraKanji;
-  const { NAMES } = window.HiraRadicals;
+  const { NAMES, HEISIG } = window.HiraRadicals;
   const esc = (s) => study.shell().esc(s);
   // Stories are other members' HTML, so every < that doesn't open an em or strong is shown as text [a broken <img onerror= stays text].
   const safe = (html) => html.replace(/<(?!\/?(?:em|strong)>)/g, "&lt;");
@@ -13,12 +13,18 @@
   // A kanji's parts by name: a deck kanji by its keyword, a radical form by its full kanji, a shape by its name [学: ⺍ three strokes, 冖 crown, cover, 子 child; 海: 氵 the 水 radical, water].
   function comps(c, page) {
     const info = study.kanjiInfo() || {}, list = info[c]?.c || [];
+    const said = storyText(c);
+    // Heisig's name for the part where this kanji's stories use it [村: 寸 inch (glue in the stories)].
+    const nick = (p) => {
+      const hits = (HEISIG[p] || []).filter((n) => says(said, n));
+      return hits.length ? ` <span class="muted">(${esc(hits.join(", "))} in the stories)</span>` : "";
+    };
     return list.length ? `<div class="kanji-comps small">${list.map((p) => {
       const full = info[c].v?.[p];
-      if (full && info[full]) return `<span><span class="jp">${esc(p)}</span> the ${link(full, page, `<span class="jp">${esc(full)}</span>`)} radical, ${esc(study.keyword(full))}</span>`;
+      if (full && info[full]) return `<span><span class="jp">${esc(p)}</span> the ${link(full, page, `<span class="jp">${esc(full)}</span>`)} radical, ${esc(study.keyword(full))}${nick(p)}</span>`;
       const name = info[p] ? study.keyword(p) : NAMES[p];
       const label = `<span class="jp">${esc(p)}</span>${name ? ` ${esc(name)}` : ""}`;
-      return info[p] ? link(p, page, label) : `<span>${label}</span>`;
+      return info[p] ? `<span>${link(p, page, label)}${nick(p)}</span>` : `<span>${label}${nick(p)}</span>`;
     }).join("")}</div>` : "";
   }
   // The parts, the kanji's history note, and its radical forms with the first 8 kanji using them in study order [水: 氵 in 泳 活 消 泊…, 海 further on].
@@ -41,13 +47,15 @@
       ${k && study.keyword(c) === k.kw ? `<div class="muted small">Keyword from Remembering the Kanji © James W. Heisig</div>` : ""}
       ${parts(c, page)}`;
   }
+  // A kanji's stories as plain lowercase text, and whether they say a word at a word's start through tags [封's <em>measure</em>ments = measure; 重's primidi.com isn't ri].
+  const storyText = (c) => { const k = study.koohii(c); return k ? [k.mine || "", ...k.stories.map((x) => x.text)].join(" ").replace(/<[^>]*>/g, "").toLowerCase() : ""; };
+  const says = (said, w) => { for (let i = said.indexOf(w); i >= 0; i = said.indexOf(w, i + 1)) if (!/[a-z]/.test(said[i - 1] || "")) return true; return false; };
   function stories(c) {
     const k = study.koohii(c);
     const list = k ? [...(k.mine ? [{ by: "From the site's Koohii account", text: k.mine }] : []), ...k.stories] : [];
-    // Heisig's keywords the stories use where the page shows a plain one, the kanji's or a part's, matched at a word's start through tags [封's <em>measure</em>ments = 寸; 重's primidi.com isn't 里 ri].
-    const said = list.map((x) => x.text).join(" ").replace(/<[^>]*>/g, "").toLowerCase();
-    const uses = (kw) => { for (let i = said.indexOf(kw); i >= 0; i = said.indexOf(kw, i + 1)) if (!/[a-z]/.test(said[i - 1] || "")) return true; return false; };
-    const swapped = [c, ...partsOf(c, study.kanjiInfo() || {})].filter((d) => { const kw = study.koohii(d)?.kw; return kw && study.keyword(d) !== kw && uses(kw.toLowerCase()); });
+    // Heisig's keywords the stories use where the page shows a plain one, the kanji's or a part's [封's measure = 寸].
+    const said = storyText(c);
+    const swapped = [c, ...partsOf(c, study.kanjiInfo() || {})].filter((d) => { const kw = study.koohii(d)?.kw; return kw && study.keyword(d) !== kw && says(said, kw.toLowerCase()); });
     const his = swapped.length ? `<div class="muted small">Heisig's keyword${swapped.length > 1 ? "s" : ""} in these stories: ${swapped.map((d) => `${esc(d)} ${esc(study.koohii(d).kw)}`).join(", ")} · Remembering the Kanji © James W. Heisig</div>` : "";
     return his + list.map((s) => `
       <div class="story"><div class="story-by muted small">${esc(s.by)}</div><div class="story-text">${safe(s.text)}</div></div>`).join("");

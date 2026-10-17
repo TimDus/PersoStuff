@@ -117,7 +117,18 @@ for (const word of words) {
   word.pos = word.suru ? ["vs", ...e.senses[0].pos.filter((p) => p !== "vs")] : e.senses[0].pos;
   // JMdict's "usually written in kana" on the word's first sense [沢山 is mostly たくさん].
   word.uk = !isKana(w) && e.senses[0].uk;
+  // The sense the card's English names, the first on a tie, so its example uses the word that way [一番 "best (most)" = sense 2].
+  const card = new Set(words_(MEANING[word.k] || word.m));
+  const hits = e.senses.map((s) => words_(s.gloss).filter((x) => card.has(x)).length);
+  word.sense = hits.indexOf(Math.max(...hits)) + 1;
 }
+// Types JMdict's first sense gets wrong for the list's word, or has none for [大変 is mostly な, 半分 a noun, ゆっくりと unmatched].
+const POS = {
+  "大変|たいへん": ["adj-na", "adv"], "半分|はんぶん": ["n", "adv"], "不便|ふべん": ["adj-na", "n"], "余り|あまり": ["adv", "n"],
+  "～くらい|～くらい": ["prt"], "～杯|～はい": ["ctr"], "キロ|キロ": ["n"], "ラジオカセ|ラジオカセ": ["n"], "ゆっくりと|ゆっくりと": ["adv"],
+  "いくら～ても|いくら～ても": ["exp"], "～(て) しまう|～(て) しまう": ["exp"],
+};
+for (const word of words) if (POS[word.k]) word.pos = POS[word.k];
 
 // Word types a learner names, from JMdict's part-of-speech codes [v5u = godan verb].
 const TYPE = [[/^v5/, "godan verb"], [/^v1/, "ichidan verb"], [/^(vs-i|vk|vz)$/, "irregular verb"], [/^vs$/, "suru verb"],
@@ -159,13 +170,13 @@ for (const line of read("tatoeba", "jpn_indices.csv").split(/\r?\n/)) {
   const [jid, eid, idx] = line.split("\t");
   if (!idx || eid === "-1") continue;
   for (const tok of idx.split(" ")) {
-    const m = tok.match(/^([^([{~]+)(?:\(([^)]+)\))?(?:\[\d+\])?(?:\{[^}]+\})?(~)?$/);
+    const m = tok.match(/^([^([{~]+)(?:\(([^)]+)\))?(?:\[(\d+)\])?(?:\{[^}]+\})?(~)?$/);
     if (!m) continue;
     // A spelling with two readings takes only sentences tagged with one, else the list's last word of it [七(しち) to しち, an untagged 七 to neither].
     const cands = (want.get(m[1]) || []).filter((x) => !m[2] || x.baseR === m[2]);
     const word = new Set(cands.map((x) => x.baseR)).size === 1 && cands.at(-1);
     if (!word || (!m[2] && m[1] !== word.baseR && isKana(m[1]))) continue;
-    (found.get(word.k) || found.set(word.k, []).get(word.k)).push({ jid, eid, checked: !!m[3] });
+    (found.get(word.k) || found.set(word.k, []).get(word.k)).push({ jid, eid, checked: !!m[4], sense: m[3] ? +m[3] : 0 });
   }
 }
 const need = new Set([...found.values()].flat().flatMap((x) => [x.jid, x.eid]));
@@ -178,16 +189,40 @@ for (const file of ["jpn_sentences.tsv", "eng_sentences.tsv"]) {
   }
 }
 
+// Examples picked by hand where no sense tag tells the right one, null for a word with none in its sense [起こす: not その木を起こした; 味噌's only one is slang].
+const PICK = {
+  "起こす|おこす": "６時に起こして下さい。", "見る|みる": "壁の絵を見て。", "生きる|いきる": "彼は七十歳まで生きた。", "下がる|さがる": "熱が下がった。",
+  "見せる|みせる": "別のを見せて下さい。", "弱い|よわい": "月の光が弱い。", "砂|すな": "目に砂が入りました。", "時代|じだい": "彼女は高校時代内気でした。",
+  "今週|こんしゅう": "今週は非常に忙しい。", "誰か|だれか": "誰か家にいますか。", "冷房|れいぼう": "その部屋は冷房がついていますか。", "色々|いろいろ": "色々ありがとう。",
+  "味噌|みそ": null, "差す|さす": null,
+  // Where the card's own sense brought in an idiom, a proverb or slang [押す: 太鼓判を押す; 人: 人に一癖].
+  "押す|おす": "シャッターを押してくれますか。", "消す|けす": "寝る前に電気を消してください。", "浴びる|あびる": "姉は毎朝シャワーを浴びます。",
+  "安い|やすい": "今日は魚が安い。", "頭|あたま": "アリスは頭に花をさしています。", "話|はなし": "彼は話をやめた。", "そう|そう": "そう思わない？",
+  "下|した": "下に署名してください。", "引く|ひく": "カーテンがゆっくり引かれた。", "人|ひと": "この人は画家だ！", "倒れる|たおれる": "家は地震で倒れた。",
+  "見える|みえる": "夜には星が見える。", "申す|もうす": "こちらはスミスと申します。ジョンソンさんはおいででしょうか。",
+  "頂く|いただく": "「もっとコーヒーはいかがですか」「もう結構です。十分頂きました」", "差し上げる|さしあげる": "飲み物を差し上げましょうか。",
+  "折る|おる": "落馬の結果足を折った。", "食事する|しょくじする": "彼女は食事をした。", "では|では": "では今晩またね、さようなら。",
+  "～中|～ちゅう": "今勤務中です。", "一つ|ひとつ": "卵を一つ茹でてよ。", "～くらい|～くらい": "彼は４０歳くらいです。",
+  // A card listing two senses, or a sense JMdict has renumbered since Tatoeba tagged it [鳥 bird, not 鳥 the roast; 焼く bakes in Tatoeba's sense 1].
+  "鳥|とり": "鳥は卵を産む。", "焼く|やく": "私の母は毎朝パンを焼く。", "体|からだ": "私は体を洗った。", "物|もの": "通路に物を置くな。",
+  "お酒|おさけ": "お酒は飲みますか。", "忘れる|わすれる": "電車に傘を忘れた。", "捨てる|すてる": "古い上着を捨てよう。", "だから|だから": "だから言っただろう。",
+  "乗り物|のりもの": "車やバスやトラックはすべて乗り物である。", "止める|やめる": "喋るのをやめろ。", "運転する|うんてんする": "トムは車を運転した。",
+  "結婚する|けっこんする": "二人は結婚した。", "凄い|すごい": "すごいですね。", "手袋|てぶくろ": "彼は手袋をはめている。",
+  "お～|お～": null, "～時|～とき": null, "～目|～め": null, "内|うち": null,
+};
 const out = words.map((x) => {
-  // The word's own kanji in the sentence, and only checked (~) ones when Tatoeba has any [遭った is filed under 会う, 円 the circle under ～円].
+  // The word's own kanji in the sentence [遭った is filed under 会う, 円 the circle under ～円].
   const own = (x.base.match(KANJI) || [""])[0];
   // A counter after a number, not the same kanji standing alone [100万円, not 完全な円].
   const used = /^[～〜]/.test(x.w) && own ? new RegExp(`[0-9０-９一二三四五六七八九十百千万何]${own}`) : { test: (t) => t.includes(own) };
-  let ex = (found.get(x.k) || []).filter((s) => text.has(s.jid) && text.has(s.eid) && used.test(text.get(s.jid)));
-  if (ex.some((s) => s.checked)) ex = ex.filter((s) => s.checked);
-  ex = ex.sort((a, b) => text.get(a.jid).length - text.get(b.jid).length)
+  let ex = (found.get(x.k) || []).filter((s) => text.has(s.jid) && text.has(s.eid) && (used.test(text.get(s.jid)) || PICK[x.k] === text.get(s.jid)));
+  // A hand pick first, then Tatoeba's tag for the card's own sense, untagged next, another sense last, each checked (~) first [焼く: not こんがり焼こう, a tan].
+  const fit = (s) => (PICK[x.k] === text.get(s.jid) ? -1 : s.sense === x.sense ? 0 : s.sense ? 2 : 1);
+  ex = ex.sort((a, b) => fit(a) - fit(b) || b.checked - a.checked || text.get(a.jid).length - text.get(b.jid).length)
     .filter((s, i, all) => all.findIndex((t) => text.get(t.jid) === text.get(s.jid)) === i)
     .slice(0, 2).map((s) => [text.get(s.jid), text.get(s.eid)]);
+  if (PICK[x.k] && ex[0]?.[0] !== PICK[x.k]) throw new Error(`${x.k}: the picked example isn't one of its sentences`);
+  if (PICK[x.k] === null) ex = [];
   return { k: x.k, w: x.w, r: x.r, m: MEANING[x.k] || x.m, t: typeOf(x.pos), pos: x.pos, lv: x.lv, f: x.f, fu: furigana(x.w, x.r), ex, ...(x.uk && { uk: 1 }),
     // A WaniKani recording fetched by tools/fetch-wk-audio.js [929 words; none for 後 read あと, whose file is 後 read ご].
     ...(fs.existsSync(path.join(__dirname, "..", wordClip(x.k))) && { au: 1 }) };

@@ -45,8 +45,9 @@ test("each furigana carries its kanji's level, the hardest kanji in a run decidi
   assert.deepEqual(["学生|がくせい", "写真|しゃしん", "時々|ときどき", "沢山|たくさん"].map((k) => by(k).fu[0][2]), [5, 4, 5, 1]);
 });
 
-test("a word's examples use its own kanji, and a counter only after a number [no circle under ～円]", () => {
+test("a word's examples use its own kanji, unless it is usually kana, and a counter only after a number [no circle under ～円; 凄い in すごいですね]", () => {
   const strays = vocab.filter((w) => {
+    if (w.uk) return false;
     const own = (w.w.replace(/する$/, "").match(/[一-鿿々]+/) || [""])[0];
     return w.ex.some(([jp]) => !jp.includes(own));
   });
@@ -94,4 +95,26 @@ test("every word marked with a recording has its file, and every file belongs to
   assert.deepEqual(marked, files);
   assert.equal(marked.length, 929);
   assert.equal(by("後|あと").au, undefined);
+});
+
+// The shortest sentence won, so cards showed idioms: 飛ぶ a fuse blowing, 遊ぶ a machine lying idle, 青い "still green", 月 "a month".
+test("an example uses the word as its card means it, by Tatoeba's sense tags [飛ぶ: a plane, not a fuse]", () => {
+  assert.match(by("飛ぶ|とぶ").ex[0][0], /飛行機/);
+  assert.match(by("遊ぶ|あそぶ").ex[0][0], /子供/);
+  assert.match(by("青い|あおい").ex[0][0], /空/);
+  assert.match(by("月|つき").ex[0][0], /月を回る/);
+});
+
+// A する verb glossed as its noun asked "marriage" on its English side and wanted 結婚する.
+test("a する verb's English line is a verb, and a line names this word rather than a homophone [結婚する to get married; 優しい kind, not easy]", () => {
+  const nouns = vocab.filter((w) => /する$/.test(w.w) && !/^(to |\(hon|\(hum|--)/.test(w.m));
+  assert.deepEqual(nouns.map((w) => `${w.w} ${w.m}`), []);
+  assert.doesNotMatch(by("優しい|やさしい").m, /easy/);
+  assert.doesNotMatch(by("そこ|そこ").m, /bottom/);
+});
+
+// JMdict's first sense typed 大変 an adverb and 半分 an adverb, and gave four words no type at all.
+test("a word JMdict types wrongly or not at all has its type set by hand [大変 な-adjective, ゆっくりと adverb]", () => {
+  assert.deepEqual(["大変|たいへん", "半分|はんぶん", "ゆっくりと|ゆっくりと", "～杯|～はい"].map((k) => by(k).t), ["な-adjective", "noun", "adverb", "counter"]);
+  assert.deepEqual(vocab.filter((w) => !w.t).map((w) => w.k), []);
 });

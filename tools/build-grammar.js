@@ -57,9 +57,12 @@ for (const point of POINTS) {
     // The gap's own form among the point's, by reading and in either spelling [やんでいません = 止んでいません].
     const own = made.find((m) => m.r === gap.r && (m.w === gap.w || m.r === gap.w));
     if (!own) { errors.push(`${point.id}: ${gap.w} (${gap.r}) is not a form of ${word ? word.w : "the point"} [${en}]`); continue; }
-    // A plain answer for a polite one only where nothing follows but punctuation [読んでいます。 takes 読んでいる; いますか doesn't take いるか].
-    const end = /^[。！？!?」]*$/.test(s.slice(s.indexOf("＿") + 1));
-    const same = made.filter((m) => m.g === own.g && (m.pol === own.pol || end));
+    // A plain answer for a polite one only where nothing but ね, よ and punctuation follows [読んでいます。 and 洗っていませんね take plain; いますか doesn't take いるか].
+    const after = s.slice(s.indexOf("＿") + 1);
+    const end = /^(よね|ね|よ)?[。！？!?」]*$/.test(after);
+    // No い-adjective before the copula, and no second も [話すのがうまいだ; あの本よりもも].
+    const fits = (m) => !(m.adjI && /^(だ|である|では|じゃ)/.test(after)) && !(m.r.endsWith("も") && after.startsWith("も"));
+    const same = made.filter((m) => m.g === own.g && (m.pol === own.pol || end) && fits(m));
     const ok = [...same, ...extra.map((x) => spell(runs(x)))]
       .filter((m, i, all) => m.w !== gap.w && all.findIndex((x) => x.w === m.w) === i)
       .map(({ w, r, fu: runs_ }) => ({ w, r, fu: runs_ || furigana(w, r) }));
