@@ -23,10 +23,26 @@ test("a fresh account is offered 20 new kana words, and a word with kanji once i
   assert.equal(await page.textContent("#left"), "20 left");
   assert.doesNotMatch(await page.textContent(".face.front .word"), /[一-鿿]/);
   await page.close();
-  const ready = await open({ ...listed, local: { "study.user": "u1", study: { ...deckWith({}), kanji: { cards: { 秋: reviewed() }, settings: { newPerDay: 10, at: 0 } } } } }, "#words/review");
+  const ready = await open({ ...listed, local: { "study.user": "u1", study: { ...deckWith({}), kanji: { cards: { 秋: reviewed({ first: day - 1, last: day - 1 }) }, settings: { newPerDay: 10, at: 0 } } } } }, "#words/review");
   await ready.locator(".face.front").waitFor();
   assert.equal(await ready.locator(".face.front ruby rt").first().textContent(), "あき");
   await ready.close();
+});
+
+// 秋 the kanji drawn this morning, then 秋 the word asked tonight with the answer still fresh: the second came out Good unearned.
+test("a word that is one kanji alone waits for tomorrow once that kanji was answered today, in the hub's count and the review", async () => {
+  const before = reviewed({ first: day - 5, last: day - 3, due: day });
+  const study = { ...deckWith({ "秋|あき#r": before, "足|あし#r": before }),
+    kanji: { cards: { 秋: reviewed({ first: day - 5 }), 足: reviewed({ first: day - 5, last: day - 1, due: day + 5 }) }, settings: { newPerDay: 10, at: 0 } } };
+  const page = await open({ ...listed, local: { "study.user": "u1", study } }, "#words");
+  await page.locator("#due").waitFor();
+  assert.equal(await page.textContent("#due"), "1");
+  const offered = (await page.textContent("#go")).match(/\d+/)[0];
+  await page.click("#go");
+  await page.locator(".face.front").waitFor();
+  assert.match(await page.textContent(".face.front .word"), /足/);
+  assert.equal(await page.textContent("#left"), `${offered} left`, "the review asks what the hub offered");
+  await page.close();
 });
 
 // A new word was asked cold, before the learner had ever seen it; KanjiMemorize shows it first, and so does this now.

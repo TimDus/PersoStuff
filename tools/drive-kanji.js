@@ -54,7 +54,7 @@ const deck = { cards: { "大学生|だいがくせい#r": card(day - 5, day), "�
       };
     }, deck);
     const width = () => page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
-    const readings = (s) => page.evaluate((s) => [...document.querySelectorAll(`${s} .kanji-top, ${s} .kanji-reading > div, ${s} .ku-row`)].map((d) => d.textContent + (d.classList.contains("unmet") ? "~" : "")).join(" | "), s);
+    const readings = (s) => page.evaluate((s) => [...document.querySelectorAll(`${s} .kanji-reading > div, ${s} .ku-row`)].map((d) => d.textContent + (d.classList.contains("unmet") ? "~" : "")).join(" | "), s);
     await page.goto(base + "#words/review");
     await page.locator(".face.front").waitFor();
     await page.click("#card");
@@ -106,9 +106,9 @@ const deck = { cards: { "大学生|だいがくせい#r": card(day - 5, day), "�
     await page.locator(".kanji-family").waitFor();
     report.push(`${name} 晴 page width ${await width()}, family ${JSON.stringify(await page.textContent(".kanji-family"))}, links ${JSON.stringify(await page.locator(".kanji-family a").evaluateAll((as) => as.map((a) => a.getAttribute("href"))))}, readings ${await readings(".kanji-page")}`);
     await page.screenshot({ path: path.join(out, `${name}-family.png`) });
-    // 四 has four readings and no met word, so its main reading's line and the three rows under the kanji are the tallest block.
+    // 四 has four readings and no met word, so its four rows under the kanji are the tallest block.
     await page.goto(base + "#kanji/四");
-    await page.locator(".kanji-top").waitFor();
+    await page.locator(".kanji-reading").waitFor();
     report.push(`${name} 四 page width ${await width()}, readings ${await readings(".kanji-page")}`);
     await page.screenshot({ path: path.join(out, `${name}-four.png`) });
     // Parts first: a radical form's full kanji, the full kanji's forms, a drift note, and the order the hub offers.

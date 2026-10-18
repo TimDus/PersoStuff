@@ -104,10 +104,11 @@ const studySaves = (page) => page.evaluate(() => window.__log.filter((l) => l.st
 const reviewed = (over) => ({ st: "review", ivl: 1, ease: 2.5, due: day + 1, n: 1, lapses: 0, first: day, last: day, ...over });
 const deckWith = (cards) => ({ cards, settings: { newPerDay: 20, at: 0 }, savedAt: 1 });
 // Every kanji started, so new words come in list order [秋 first] rather than only the kana words a fresh account gets.
+// Two days back, as a page clock at 3:58 am is still yesterday, and a kanji answered that day holds its word back.
 const KANJI = Object.keys(require("../data/kanji.json"));
 const HISTORY = require("../data/history.json");
 const started = (cfg = {}) => ({ ...listed, ...cfg, local: { "study.user": "u1", study: { ...deckWith({}),
-  kanji: { cards: Object.fromEntries(KANJI.map((c) => [c, reviewed({ first: day - 1, last: day - 1, due: day + 30 })])), settings: { newPerDay: 10, at: 0 } } } } });
+  kanji: { cards: Object.fromEntries(KANJI.map((c) => [c, reviewed({ first: day - 2, last: day - 2, due: day + 30 })])), settings: { newPerDay: 10, at: 0 } } } } });
 // New words open as an introduction with a single Got it, and are asked a few cards later [a fresh deck: 4 introductions, then 秋 asked].
 const pastIntros = async (page) => { while (await page.locator("#got").count()) await page.click("#got"); };
 const answer = async (page, g) => { await pastIntros(page); await page.click("#card"); await page.click(`[data-g='${g}']`); };

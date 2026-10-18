@@ -1,7 +1,7 @@
 // The Kanji tab, its deck and a kanji's page, which a word card's note opens as a popup so the review underneath goes on [学 = study, its strokes and the 13 words with it].
 (function () {
   const study = window.HiraStudy;
-  const { wordsWith, kanjiOf, order, forms, kanjiQueue, mature, partsOf, byReading, family } = window.HiraKanji;
+  const { wordsWith, kanjiOf, order, forms, kanjiQueue, kanjiWaits, mature, partsOf, byReading, family } = window.HiraKanji;
   const { NAMES, HEISIG } = window.HiraRadicals;
   const esc = (s) => study.shell().esc(s);
   // Stories are other members' HTML, so every < that doesn't open an em or strong is shown as text [a broken <img onerror= stays text].
@@ -63,11 +63,10 @@
   const ws = (x) => `<span class="kr-words">${x.words.map(({ w, met }) => `<span${met ? "" : ` class="unmet"`}>${esc(w.w)}</span>`).join(" · ")}</span>`;
   // A reading no met word uses is muted like its words [学 with only 大学 met: まな.ぶ grey].
   const off = (x) => (x.words.some((w) => w.met) ? "" : " unmet");
-  // The main reading large over the kanji, the others under it, no words, all off on a kanji.json cached without them [四: シ over 四, then よっ.つ, よん, よ].
+  // The kanji alone, its readings under it as reference, the main one first and no larger, none on a kanji.json cached without them [四, then シ, よっ.つ, よん, よ].
   const big = (c, { top, rest }) => {
-    const main = top ? `<div class="kanji-top jp${off(top)}"><div class="kr-main">${esc(top.r)}</div></div>` : "";
-    const rows = rest.map((x) => `<div class="kr-row${off(x)}"><span class="kr">${esc(x.r)}</span></div>`).join("");
-    return `${main}<div class="kanji-big jp">${esc(c)}</div>${rows ? `<div class="kanji-reading jp">${rows}</div>` : ""}`;
+    const rows = [top, ...rest].filter(Boolean).map((x) => `<div class="kr-row${off(x)}"><span class="kr">${esc(x.r)}</span></div>`).join("");
+    return `<div class="kanji-big jp">${esc(c)}</div>${rows ? `<div class="kanji-reading jp">${rows}</div>` : ""}`;
   };
   // Each reading with the list words using it, a reading no word uses left out [学: ガク 学校 · 大学生 · 学生, no まな.ぶ line].
   const used = ({ top, rest }) => {
@@ -156,11 +155,13 @@
     return Object.keys(info).length ? order(info, study.frames(), words) : [...new Set(words.flatMap(kanjiOf))];
   };
 
+  const waits = (words, k) => (c) => kanjiWaits(c, words, study.cards(), k.cards, study.today());
+
   function hub(words) {
     const { app } = study.shell();
     const k = study.kanjiDeck();
     const all = sequence(words);
-    const q = kanjiQueue({ order: all, cards: k.cards, today: study.today(), newPerDay: k.settings.newPerDay });
+    const q = kanjiQueue({ order: all, cards: k.cards, today: study.today(), newPerDay: k.settings.newPerDay, waits: waits(words, k) });
     const next = new Set(q.filter((c) => !k.cards[c]));
     const info = study.kanjiInfo() || {};
     const used = new Set(words.flatMap(kanjiOf));
@@ -218,7 +219,7 @@
 
   function review(words) {
     const k = study.kanjiDeck();
-    const items = kanjiQueue({ order: sequence(words), cards: k.cards, today: study.today(), newPerDay: k.settings.newPerDay }).map((c) => ({ key: c, c }));
+    const items = kanjiQueue({ order: sequence(words), cards: k.cards, today: study.today(), newPerDay: k.settings.newPerDay, waits: waits(words, k) }).map((c) => ({ key: c, c }));
     if (!items.length) {
       history.replaceState(null, "", "#kanji");
       return hub(words);

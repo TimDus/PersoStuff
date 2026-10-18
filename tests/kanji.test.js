@@ -125,7 +125,7 @@ test("a kanji's word list puts met words first, newest first, then the rest in l
 });
 
 // The Kanji tab's deck: every kanji in the word list's order with its parts in front, and the day's new kanji the next ones in it.
-const { order, partsOf, forms, kanjiQueue, ready, learned } = require("../kanji.js");
+const { order, partsOf, forms, kanjiQueue, wordWaits, kanjiWaits, ready, learned } = require("../kanji.js");
 // RTK frames as Koohii gives them, kept here as Koohii's file is private [人 1023 comes after 会 814, which holds it].
 const FRAMES = { 一: 1, 二: 2, 口: 11, 日: 12, 水: 137, 味: 233, 立: 462, 海: 500, 音: 518, 心: 639, 意: 654, 会: 814, 人: 1023 };
 const before = (list, c) => partsOf(c, kanji).filter((p) => list.indexOf(p) > list.indexOf(c));
@@ -197,6 +197,25 @@ test("kanji due the same day come in a fresh order each session, overdue ones st
   const run = (seed) => kanjiQueue({ order: [], cards: kc, today: 10, newPerDay: 0, rand: seeded(seed) }).join("");
   assert.ok(new Set([1, 2, 3, 4, 5].map(run)).size > 1, "five sessions gave one order");
   for (const s of [1, 2, 3, 4, 5]) assert.deepEqual([...run(s).slice(0, 2)].sort(), ["一", "二"]);
+});
+
+// 秋 the kanji and 秋 the word ask the same thing, so on a day both were due the second was answered with the first still in mind.
+test("a kanji and the word that is it alone don't both come up on one day, the one answered first keeps it", () => {
+  const { queue } = require("../srs.js");
+  const aki = word("秋|あき"), gakusei = word("学生|がくせい"), due = { ...met(5), due: 10 };
+  assert.equal(wordWaits(aki, { "秋|あき#r": due }, { 秋: met(10) }, 10), true);
+  assert.equal(wordWaits(aki, { "秋|あき#r": due }, { 秋: met(9) }, 10), false, "the kanji answered yesterday");
+  assert.equal(wordWaits(gakusei, { "学生|がくせい#r": due }, { 学: met(10) }, 10), false, "a word that only has the kanji in it");
+  assert.equal(kanjiWaits("秋", vocab, { "秋|あき#p": met(10) }, { 秋: due }, 10), true);
+  assert.equal(kanjiWaits("学", vocab, { "学生|がくせい#r": met(10) }, { 学: due }, 10), false);
+  // Both answered today, before this rule or on two devices: neither is held back.
+  assert.equal(wordWaits(aki, { "秋|あき#r": met(10) }, { 秋: met(10) }, 10), false);
+  assert.equal(kanjiWaits("秋", vocab, { "秋|あき#r": met(10) }, { 秋: met(10) }, 10), false);
+  const kc = { 秋: due, 火: due }, wc = { "秋|あき#r": met(10) };
+  assert.deepEqual(kanjiQueue({ order: [], cards: kc, today: 10, newPerDay: 0, waits: (c) => kanjiWaits(c, vocab, wc, kc, 10) }), ["火"]);
+  const cards = { "秋|あき#r": due, "足|あし#r": due }, kcards = { 秋: met(10), 足: met(5) };
+  const words = [aki, word("足|あし")];
+  assert.deepEqual(queue({ words, cards, today: 10, newPerDay: 0, waits: (w) => wordWaits(w, cards, kcards, 10) }).map((x) => x.key), ["足|あし#r"]);
 });
 
 test("a word can be new once each of its kanji has a card, a kana word at once", () => {

@@ -2,7 +2,7 @@
 (function () {
   const { dayOf, grade, preview, queue, mergeStudy, DRILLS } = window.HiraSRS;
   const { same, bump, wordClip } = window.HiraSync;
-  const { note, learned, ready: hasKanji } = window.HiraKanji;
+  const { note, learned, ready: hasKanji, wordWaits } = window.HiraKanji;
   const { keywordOf } = window.HiraKeywords;
   let shell = null;
   let words = null;
@@ -94,6 +94,7 @@
   // The Kanji tab's deck in `study.kanji`, cards keyed by the kanji [学 = { st: "review", ivl: 4, … }].
   const kanjiBlank = () => ({ cards: {}, settings: { newPerDay: 10, at: 0 } });
   const ready = (w) => hasKanji(w, deck.kanji?.cards || {});
+  const waits = (w) => wordWaits(w, deck.cards, deck.kanji?.cards || {}, today());
 
   function needWords(retry) {
     shell.app.innerHTML = `
@@ -131,7 +132,7 @@
   const byKey = () => new Map(words.flatMap((w) => [[`${w.k}#r`, { key: `${w.k}#r`, word: w, dir: "r" }], [`${w.k}#p`, { key: `${w.k}#p`, word: w, dir: "p" }]]));
 
   function hub() {
-    const q = queue({ words, cards: deck.cards, today: today(), newPerDay: deck.settings.newPerDay, ready });
+    const q = queue({ words, cards: deck.cards, today: today(), newPerDay: deck.settings.newPerDay, ready, waits });
     const waiting = words.filter((w) => !deck.cards[`${w.k}#r`] && !ready(w)).length;
     const isNew = (it) => !deck.cards[it.key];
     const fresh = q.filter(isNew).length;
@@ -259,7 +260,7 @@
   }
 
   function runReview() {
-    const items = queue({ words, cards: deck.cards, today: today(), newPerDay: deck.settings.newPerDay, ready });
+    const items = queue({ words, cards: deck.cards, today: today(), newPerDay: deck.settings.newPerDay, ready, waits });
     // The hub drawn at #words, as at #words/review its Study button would link to the page it's on [reload the Done page, raise new words a day].
     if (!items.length) {
       history.replaceState(null, "", "#words");

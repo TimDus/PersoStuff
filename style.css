@@ -331,9 +331,7 @@ footer .credits[open] summary { margin-bottom: .3rem; }
 /* A word's kanji under its answer, each kanji a button to its popup [学 study, learning · also in 大学, 学校]. */
 .kanji-note { margin-top: .8rem; border-top: 1px solid var(--line); padding-top: .6rem; display: grid; gap: .3rem; text-align: left; width: 100%; }
 .kn-k { font-family: var(--jp); font-size: 1.3rem; padding: .1rem .45rem; min-width: 2.4rem; background: transparent; color: var(--accent); border: 1px solid var(--line); border-radius: 8px; }
-/* The main reading large over the kanji, the others smaller under it, a reading not met yet muted [シ over 四, then よん]. */
-.kanji-top { display: grid; justify-items: center; }
-.kr-main { font-size: 2.4rem; line-height: 1.2; }
+/* A kanji's readings under it, a reading not met yet muted [四, then シ, よっ.つ, よん, よ]. */
 .kanji-reading { font-size: 1.3rem; margin-bottom: .4rem; }
 .kanji-reading span, .kr-used span { white-space: nowrap; }
 .kr-row, .ku-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; column-gap: .7rem; }
@@ -341,7 +339,7 @@ footer .credits[open] summary { margin-bottom: .3rem; }
 .kr-used { margin-top: .5rem; display: grid; gap: .15rem; }
 .ku { font-size: 1.15rem; }
 .kr-words { font-size: 1.05rem; }
-.kr-words .unmet, .kr-row.unmet .kr, .ku-row.unmet .ku, .kanji-top.unmet .kr-main { color: var(--muted); }
+.kr-words .unmet, .kr-row.unmet .kr, .ku-row.unmet .ku { color: var(--muted); }
 .kanji-family { margin-top: .3rem; }
 .kanji-family a { margin-right: .25rem; }
 .kanji-big { font-family: var(--jp); font-size: 5rem; line-height: 1.1; }
