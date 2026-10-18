@@ -147,10 +147,10 @@ test("a device with no study data yet doesn't empty the other's deck", () => {
   assert.deepEqual(mergeStudy({}, side({ "a#r": card }, { newPerDay: 20, at: 1 })).cards, { "a#r": card });
 });
 
-// A later section stores its own key under `study`; a tab on this version must carry it through, not strip it [study.listening].
+// A later section stores its own key under `study`; a tab on this version must carry it through, not strip it [study.shadowing].
 test("keys the merge doesn't know survive it, taken from the newer side", () => {
-  const m = mergeStudy({ cards: {}, reading: { a: 1 }, savedAt: 5 }, { cards: {}, reading: { a: 2 }, listening: [1], savedAt: 9 });
-  assert.deepEqual([m.reading, m.listening], [{ a: 2 }, [1]]);
+  const m = mergeStudy({ cards: {}, reading: { a: 1 }, savedAt: 5 }, { cards: {}, reading: { a: 2 }, shadowing: [1], savedAt: 9 });
+  assert.deepEqual([m.reading, m.shadowing], [{ a: 2 }, [1]]);
   assert.deepEqual(mergeStudy({ cards: {}, reading: { a: 1 }, savedAt: 5 }, null).reading, { a: 1 });
 });
 

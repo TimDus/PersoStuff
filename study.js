@@ -95,6 +95,7 @@
   const kanjiBlank = () => ({ cards: {}, settings: { newPerDay: 10, at: 0 } });
   const ready = (w) => hasKanji(w, deck.kanji?.cards || {});
   const waits = (w) => wordWaits(w, deck.cards, deck.kanji?.cards || {}, today());
+  const metWord = (k) => !!deck.cards[k + "#r"];
 
   function needWords(retry) {
     shell.app.innerHTML = `
@@ -106,7 +107,7 @@
     shell.app.querySelector("#retry").addEventListener("click", retry);
   }
 
-  // #words is the hub, #words/review today's session, #words/practice/<set> a round that doesn't count.
+  // #words is the hub, #words/review today's session, #words/practice/<set> a round that doesn't count, #words/listen the Listening round.
   async function viewWords([mode, set]) {
     if (!words) {
       shell.app.innerHTML = `<p class="muted">Loading words…</p>`;
@@ -121,6 +122,7 @@
     loadKoohii();
     if (mode === "review") return runReview();
     if (mode === "practice") return runPractice(set);
+    if (mode === "listen") return window.HiraListen.view(set);
     hub();
   }
 
@@ -133,15 +135,16 @@
 
   function hub() {
     const q = queue({ words, cards: deck.cards, today: today(), newPerDay: deck.settings.newPerDay, ready, waits });
-    const waiting = words.filter((w) => !deck.cards[`${w.k}#r`] && !ready(w)).length;
+    const waiting = words.filter((w) => !metWord(w.k) && !ready(w)).length;
     const isNew = (it) => !deck.cards[it.key];
     const fresh = q.filter(isNew).length;
-    const seen = (lv) => words.filter((w) => w.lv === lv && deck.cards[`${w.k}#r`]).length;
+    const seen = (lv) => words.filter((w) => w.lv === lv && metWord(w.k)).length;
     const levelCards = (lv) => levelKeys(lv).length;
     // A word counts as known once both its sides are on three-week intervals [Anki calls 21 days mature].
     const known = (lv) => words.filter((w) => w.lv === lv && ["r", "p"].every((d) => deck.cards[`${w.k}#${d}`]?.ivl >= 21)).length;
     const total = (lv) => words.filter((w) => w.lv === lv).length;
     const today_ = answeredToday(false).length, missed = answeredToday(true).length;
+    const hear = window.HiraListen.pool(words, metWord).length;
     shell.app.innerHTML = `
       <h1>Words</h1>
       <p class="lead">The JLPT N5 words, then N4, most common first, a word with kanji once you've started its kanji. Each word
@@ -161,12 +164,13 @@
         ${waiting ? `<p class="muted small" id="waiting">${waiting > 1 ? `${waiting} words wait for their kanji` : "1 word waits for its kanji"}; each opens once you've started them in <a href="#kanji">Kanji</a>.</p>` : ""}
       </div>
       <h2>Practice</h2>
-      <p class="muted small">Plain flashcards that don't change when anything is due, so go again as often as you like.</p>
+      <p class="muted small">Plain flashcards and a listening round that don't change when anything is due, so go again as often as you like.</p>
       <div class="row">
         <a class="btn ghost ${today_ ? "" : "disabled"}" href="#words/practice/today">Today's cards (${today_})</a>
         <a class="btn ghost ${missed ? "" : "disabled"}" href="#words/practice/missed">Today's misses (${missed})</a>
         <a class="btn ghost ${levelCards(5) ? "" : "disabled"}" href="#words/practice/n5">N5 cards so far (${levelCards(5)})</a>
         <a class="btn ghost ${levelCards(4) ? "" : "disabled"}" href="#words/practice/n4">N4 cards so far (${levelCards(4)})</a>
+        <a class="btn ghost ${hear ? "" : "disabled"}" href="#words/listen">Listening (${hear})</a>
       </div>
       <h2>Levels</h2>
       <div class="grid">${[5, 4].map((lv) => `
@@ -383,7 +387,7 @@
     needWords,
     words: () => (words ? Promise.resolve(words) : loadWords()),
     wordList: () => words || [],
-    met: (k) => !!deck.cards[k + "#r"],
+    met: metWord,
     cards: () => deck.cards,
     kanjiInfo: () => kanjiInfo,
     koohii: (c) => koohii[c],

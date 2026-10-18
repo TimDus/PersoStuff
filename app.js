@@ -1440,7 +1440,7 @@
     if (store.get("sync.user", user.id) !== user.id) applySnapshot(blank());
     store.set("sync.user", user.id);
     owned = true;
-    await Promise.all([sync(pulled), study.start({ app, esc, fmtTime, onKey, onLeave: (fn) => teardown.push(fn), cleanup, backend, user, syncState, openModal }, pulledStudy)]);
+    await Promise.all([sync(pulled), study.start({ app, esc, fmtTime, onKey, say, onLeave: (fn) => teardown.push(fn), cleanup, backend, user, syncState, openModal }, pulledStudy)]);
     route();
   }
   boot();

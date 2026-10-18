@@ -676,3 +676,101 @@ test("Enter on a link while a miss shows follows the link instead of moving on",
   await page.locator("#go").waitFor();
   await page.close();
 });
+
+// ---------- Listening ----------
+// Hearing a word and picking its meaning was the one direction no page asked; each case is a way the round could cheat or go deaf.
+const heard = (page) => page.evaluate(async () => {
+  const k = document.querySelector(".listen-q").dataset.k;
+  const w = (await (await fetch("data/vocab.json")).json()).find((x) => x.k === k);
+  return { k, m: w.m, w: w.w, clip: HiraSync.wordClip(k) };
+});
+const pickMeaning = async (page, right) => {
+  const h = await heard(page), prog = await page.textContent("#prog");
+  const opts = await page.locator(".gap-opt").evaluateAll((bs) => bs.map((b) => b.dataset.p));
+  await page.keyboard.press(String(opts.findIndex((m) => (m === h.m) === right) + 1));
+  return { ...h, prog };
+};
+const listening = { ...drill, local: { "study.user": "u1", study: deckWith({ "花|はな#r": reviewed(), "食べる|たべる#r": reviewed(), "後|あと#r": reviewed() }) } };
+
+test("the Words hub offers Listening for met words with a recording, and a round plays each, takes its meaning by ear and keeps the best", async () => {
+  const page = await open(listening, "#words");
+  assert.match(await page.textContent('a[href="#words/listen"]'), /\(2\)/);
+  await page.click('a[href="#words/listen"]');
+  await page.click("#go");
+  await page.locator(".listen-q").waitFor();
+  assert.equal(await page.textContent("#prog"), "1 / 2");
+  const first = await heard(page);
+  assert.ok((await page.evaluate(() => window.__played)).at(-1).endsWith(first.clip));
+  assert.equal(await page.locator("#word").isVisible(), false);
+  assert.equal(await page.locator(".gap-opt").count(), 4);
+  assert.equal(await page.locator(".gap-opt.jp").count(), 0);
+  const before = (await page.evaluate(() => window.__played)).length;
+  await page.keyboard.press(" ");
+  assert.equal((await page.evaluate(() => window.__played)).length, before + 1);
+  const miss = await pickMeaning(page, false);
+  assert.equal(await page.textContent("#bad"), "1");
+  assert.ok((await page.textContent(".gap-opt.right")).startsWith(miss.m));
+  assert.ok((await page.textContent("#word")).includes(miss.w[0]));
+  assert.equal(await page.locator("#word").isVisible(), true);
+  await page.keyboard.press("Enter");
+  assert.equal(await page.textContent("#prog"), "2 / 3");
+  let seenAgain = false;
+  while (!(await page.locator("h1", { hasText: "Done!" }).count())) {
+    assert.equal(await page.locator("#word").isVisible(), false, "the next word is hidden again");
+    const h = await pickMeaning(page, true);
+    if (h.k === miss.k) seenAgain = true;
+    assert.equal(await page.locator("#word").isVisible(), true);
+    await next(page, h.prog);
+  }
+  assert.ok(seenAgain, "the missed word came back");
+  assert.equal((await deckOf(page)).listening.best["2"].acc, 67);
+  await page.close();
+});
+
+test("with no met word that has a recording, Listening is greyed out and its round opens the picker [後 read あと has none]", async () => {
+  const page = await open({ ...drill, local: { "study.user": "u1", study: deckWith({ "後|あと#r": reviewed() }) } }, "#words");
+  assert.match(await page.getAttribute('a[href="#words/listen"]', "class"), /\bdisabled\b/);
+  await page.goto("#words/listen/run");
+  await page.locator("#go").waitFor();
+  assert.equal(await page.evaluate(() => location.hash), "#words/listen");
+  assert.match(await page.getAttribute("#go", "class"), /\bdisabled\b/);
+  assert.equal(await page.locator(".listen-q").count(), 0);
+  await page.close();
+});
+
+test("a held Space plays the word once, Space on a miss moves on with one play, and the missed ones drill alone with no best", async () => {
+  const page = await open(listening, "#words/listen/run");
+  await page.locator(".listen-q").waitFor();
+  const played = () => page.evaluate(() => window.__played.length);
+  let n = await played();
+  for (let i = 0; i < 5; i++) await page.keyboard.down(" ");
+  await page.keyboard.up(" ");
+  assert.equal(await played(), n + 1);
+  // Space on a focused choice presses it, as any button does, and plays nothing.
+  const miss = await heard(page);
+  const opts = await page.locator(".gap-opt").evaluateAll((bs) => bs.map((b) => b.dataset.p));
+  await page.locator(".gap-opt").nth(opts.findIndex((m) => m !== miss.m)).focus();
+  await page.keyboard.press(" ");
+  assert.equal(await page.textContent("#bad"), "1");
+  assert.equal(await played(), n + 1);
+  // Off the button, Space on the miss is the drill's Continue: the next word plays, once.
+  await page.evaluate(() => document.activeElement.blur());
+  n = await played();
+  await page.keyboard.press(" ");
+  assert.equal(await page.textContent("#prog"), "2 / 3");
+  assert.equal(await played(), n + 1);
+  while (!(await page.locator("h1", { hasText: "Done!" }).count())) {
+    const h = await pickMeaning(page, true);
+    await next(page, h.prog);
+  }
+  const best = (await deckOf(page)).listening.best;
+  await page.click("#miss");
+  await page.locator(".listen-q").waitFor();
+  assert.equal(await page.textContent("#prog"), "1 / 1");
+  assert.equal((await heard(page)).k, miss.k);
+  const last = await pickMeaning(page, true);
+  await next(page, last.prog);
+  await page.locator("h1", { hasText: "Done!" }).waitFor();
+  assert.deepEqual((await deckOf(page)).listening.best, best);
+  await page.close();
+});

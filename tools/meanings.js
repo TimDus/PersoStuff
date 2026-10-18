@@ -189,4 +189,13 @@ module.exports = {
   "挨拶する|あいさつする": "to greet",
   "けがする|けがする": "to get hurt",
   "チェックする|チェックする": "to check (over)",
+  // Keigo lines that only named another word, which Listening can't offer fairly [参る's "humble expression for 行く and 来る" was true of 伺う too].
+  "方|かた": "person (polite); way of doing",
+  "申す|もうす": "to say (humble), to be called",
+  "致す|いたす": "to do (humble)",
+  "差し上げる|さしあげる": "to give (humble)",
+  "参る|まいる": "to go or come (humble)",
+  "伺う|うかがう": "to visit or ask (humble)",
+  "召し上がる|めしあがる": "to eat or drink (honorific)",
+  "頂く|いただく": "to receive (humble); to eat or drink (humble)",
 };

@@ -1,4 +1,4 @@
-// The drill runner Verbs, Particles and Grammar share: the stage, a miss asked again, typed or 1–4 answers, the Done page and its best [a miss in any of them comes back 6–8 cards on].
+// The drill runner Verbs, Particles, Grammar and Listening share: the stage, a miss asked again, typed or 1–4 answers, the Done page and its best [a miss in any of them comes back 6–8 cards on].
 (function () {
   const { toKana } = window.HiraConj;
   const { better } = window.HiraSync;
@@ -35,7 +35,7 @@
       if (input) { input.value = ""; input.className = "quiz-input jp"; input.focus(); }
       else {
         shown = d.options(item);
-        app.querySelector("#opts").innerHTML = shown.map((p, i) => `<button class="ghost gap-opt jp" data-p="${esc(p)}">${esc(p)} <span class="kbd">${i + 1}</span></button>`).join("");
+        app.querySelector("#opts").innerHTML = shown.map((p, i) => `<button class="ghost gap-opt${d.latin ? "" : " jp"}" data-p="${esc(p)}">${esc(p)} <span class="kbd">${i + 1}</span></button>`).join("");
         app.querySelectorAll(".gap-opt").forEach((b) => b.addEventListener("click", () => answer(b.dataset.p)));
       }
       fb.innerHTML = "";
