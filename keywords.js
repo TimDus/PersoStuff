@@ -1,4 +1,4 @@
-// Plain keywords for the kanji whose Heisig keyword is a coinage or contradicts its words, pure so node can test them [旦 nightbreak = dawn].
+// Plain keywords for the kanji whose Heisig keyword is a coinage or contradicts its words or main reading, pure so node can test them [旦 nightbreak = dawn; 後 behind, read ゴ as in 午後 = after].
 (function (root) {
   // No sense shared with another kanji's keyword, as a review asks it to recall one kanji [中 middle, inside beside 内 within].
   const PLAIN = {
@@ -25,6 +25,8 @@
     乾: "dry out, toast (乾杯)", 薄: "thin, diluted", 故: "accident, bygone", 平: "flat, level", 安: "peaceful, cheap",
     貼: "stick, paste", 典: "canon, rule book", 凄: "tremendous", 碗: "bowl", 斉: "uniform, alike",
     原: "origin, meadow", 鳴: "ring, chirp", 為: "for the sake of, do", 又: "also, once more", 爪: "nail, claw",
+    後: "after", 方: "manner, direction", 長: "chief, long", 円: "yen, circle", 空: "sky, empty",
+    答: "answer", 代: "era, substitute", 文: "text, sentence", 足: "foot, leg",
   };
   // The keyword a kanji shows: the plain one, else Heisig's, else KANJIDIC's meaning [旦 dawn; 学 study; 学 before Koohii's file, study, learning].
   const keywordOf = (c, koohii, info) => PLAIN[c] || koohii?.[c]?.kw || info?.[c]?.m || "";

@@ -108,7 +108,7 @@ for (const c of deck) {
 }
 const off = deck.filter((c) => strokes[c].d.length !== kanji[c].sc);
 
-// The main reading: the one anime subtitles use most, each word weighted 1/rank in Jiten's anime list [今 = いま 30.7 against コン 10.9 per thousand; 上 = ジョウ from 以上].
+// The main reading: the one anime subtitles use most, each word weighted 1/rank in Jiten's anime list [今 = いま 30.7 against コン 10.9 per thousand].
 const { readingIn } = require("../kanji.js");
 // Every KANJIDIC2 reading, so a word with a kanji outside the deck or a reading past the cap still splits [上昇, 上る のぼる].
 const every = Object.fromEntries(chars.map((m) => [m[1], Object.fromEntries(["on", "kun"].map((t) => [t,
@@ -136,6 +136,12 @@ for (const line of fs.readFileSync(path.join(dataDir, "jiten", "anime.csv"), "ut
 for (const [c, ws] of Object.entries(weight)) {
   const best = Object.entries(ws).filter(([r]) => [...kanji[c].on, ...kanji[c].kun].includes(r)).sort((a, b) => b[1] - a[1])[0];
   if (best) kanji[c].top = best[0];
+}
+// A main reading picked by hand where the count's winner doesn't carry the keyword [上 ジョウ from 以上 and 上手, so うえ; 夫 ブ only in 丈夫].
+const TOP = { 上: "うえ", 夫: "おっと" };
+for (const [c, r] of Object.entries(TOP)) {
+  if (![...kanji[c].on, ...kanji[c].kun].includes(r)) throw new Error(`TOP ${c} ${r} isn't a reading the page shows`);
+  kanji[c].top = r;
 }
 
 fs.mkdirSync(outDir, { recursive: true });

@@ -261,8 +261,8 @@ test("the main reading comes apart from the rest, each with up to 3 list words u
 });
 
 // A kanji page listed 四's シ, よっ.つ, よ and よん alike, with nothing to say which one to learn first.
-test("kanji.json marks the reading anime subtitles use most, always one of the kanji's own [今 = いま, 人 = ひと, 上 = ジョウ]", () => {
-  assert.deepEqual(["今", "人", "何", "行", "上", "四", "晴"].map((c) => kanji[c].top), ["いま", "ひと", "なに", "い.く", "ジョウ", "シ", "は.れる"]);
+test("kanji.json marks the reading anime subtitles use most or one picked by hand, always one of the kanji's own [今 = いま, 人 = ひと; 上 = うえ over ジョウ]", () => {
+  assert.deepEqual(["今", "人", "何", "行", "上", "夫", "四", "晴"].map((c) => kanji[c].top), ["いま", "ひと", "なに", "い.く", "うえ", "おっと", "シ", "は.れる"]);
   assert.deepEqual(Object.keys(kanji).filter((c) => kanji[c].top && ![...kanji[c].on, ...kanji[c].kun].includes(kanji[c].top)), []);
   assert.ok(Object.values(kanji).filter((k) => k.top).length > 890);
 });
