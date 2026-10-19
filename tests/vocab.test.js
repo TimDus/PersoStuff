@@ -76,6 +76,12 @@ test("a word the list spells in kana gets sentences filed under its kanji spelli
   }
 });
 
+// 217 cards had no sentence, the ones Tatoeba files elsewhere or uses in another sense [そこ, お～, 味噌].
+test("every word has an example sentence, written in tools/examples.js where Tatoeba has none [お～: お茶をどうぞ]", () => {
+  assert.deepEqual(vocab.filter((w) => !w.ex.length).map((w) => w.k), []);
+  assert.deepEqual(by("お～|お～").ex[0], ["お茶をどうぞ。", "Have some tea."]);
+});
+
 // お～ showed only "honorable ~": no kanji, no recording, and no sentence fits a prefix.
 test("an affix lists list words built with it, and a compound verb the verb it comes from [お～: お茶; ～始める: 始める]", () => {
   assert.deepEqual(by("お～|お～").uses.slice(0, 2), ["お茶|おちゃ", "お金|おかね"]);

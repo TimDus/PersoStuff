@@ -3,6 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const MEANING = require("./meanings.js");
+const HAND = require("./examples.js");
 const { wordClip } = require("../sync.js");
 
 const [dataDir, outFile] = process.argv.slice(2);
@@ -227,6 +228,17 @@ const ONLY = {
   "～おわる|～おわる": ["このペン、私が使いおわったら君に貸してあげるよ。"], "びっくりする|びっくりする": ["彼女はびっくりして叫んだ。"],
   "きっと|きっと": ["彼はきっと来る。"], "まだ|まだ": ["彼はまだ若い。"], "まずい|まずい": ["すき腹にまずいものなし。"],
 };
+// A sentence uses the word: its kanji, or each kana part of its spelling or reading, a verb or い-adjective by its stem [～(て) しまう in なくしてしまった; 温い as ぬるい].
+const says = (x, jp) => {
+  const own = x.base.match(KANJI);
+  if (own && jp.includes(own[0])) return true;
+  const parts = (s) => {
+    const ps = s.replace(/\([^)]*\)/g, "").replace(/\s/g, "").split(/[～〜]/).filter(Boolean);
+    if (/^(v|adj-i|exp)/.test(x.pos[0] || "") && /[うくぐすつぬぶむるい]$/.test(ps.at(-1))) ps[ps.length - 1] = ps.at(-1).slice(0, -1);
+    return ps;
+  };
+  return [x.w, x.r].some((s) => parts(s).every((p) => jp.includes(p)));
+};
 const out = words.map((x) => {
   // The word's own kanji in the sentence [遭った is filed under 会う, 円 the circle under ～円].
   const own = (x.base.match(KANJI) || [""])[0];
@@ -247,6 +259,13 @@ const out = words.map((x) => {
   });
   if (PICK[x.k] && ex[0]?.[0] !== PICK[x.k]) throw new Error(`${x.k}: the picked example isn't one of its sentences`);
   if (PICK[x.k] === null) ex = [];
+  // Sentences written in tools/examples.js, only where Tatoeba gave none, so a rebuild that finds some shows the hand ones are stale.
+  if (HAND[x.k]) {
+    if (ex.length) throw new Error(`${x.k}: Tatoeba has sentences now, so its entry in tools/examples.js is stale`);
+    const missing = HAND[x.k].filter(([jp]) => !says(x, jp));
+    if (missing.length) throw new Error(`${x.k}: ${missing[0][0]} doesn't use the word`);
+    ex = HAND[x.k];
+  }
   return { k: x.k, w: x.w, r: x.r, m: MEANING[x.k] || x.m, t: typeOf(x.pos), pos: x.pos, lv: x.lv, f: x.f, fu: furigana(x.w, x.r), ex, ...(x.uk && { uk: 1 }),
     // A WaniKani recording fetched by tools/fetch-wk-audio.js [929 words; none for 後 read あと, whose file is 後 read ご].
     ...(fs.existsSync(path.join(__dirname, "..", wordClip(x.k))) && { au: 1 }) };
@@ -289,6 +308,8 @@ const USES = {
 };
 const ROOT = { "～始める|～はじめる": "始める|はじめる", "～続ける|～つづける": "続ける|つづける", "～だす|～だす": "出す|だす", "～おわる|～おわる": "終わる|おわる", "～すぎ|～すぎ": "過ぎる|すぎる" };
 const listed = new Set(out.map((x) => x.k));
+const strays = Object.keys(HAND).filter((k) => !listed.has(k));
+if (strays.length) throw new Error(`tools/examples.js: ${strays.join(", ")} isn't on the list`);
 for (const [k, ks] of [...Object.entries(USES), ...Object.entries(ROOT).map(([k, r]) => [k, [r]])]) {
   const missing = [k, ...ks].filter((x) => !listed.has(x));
   if (missing.length) throw new Error(`${k}: ${missing.join(", ")} isn't on the list`);
