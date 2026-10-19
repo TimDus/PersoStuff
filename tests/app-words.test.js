@@ -130,9 +130,8 @@ test("a deck from another device merges in card by card", async () => {
 });
 
 test("a word's English side asks with its meaning and type the day after, and shows the word as the answer", async () => {
-  const page = await open({ ...listed, local: { "study.user": "u1", study: deckWith({ "秋|あき#r": reviewed({ first: day - 1, last: day - 1, due: day }) }) } }, "#words/review");
-  await page.locator(".face.front ruby").waitFor();
-  await answer(page, 3);
+  const page = await open({ ...listed, local: { "study.user": "u1", study: deckWith({ "秋|あき#r": reviewed({ first: day - 1, last: day - 1, due: day + 1 }) }) } }, "#words/review");
+  await page.locator(".face.front").waitFor();
   assert.match(await page.textContent(".face.front"), /fall \(season\).*noun/s);
   assert.equal(await page.locator(".face.front ruby").count(), 0);
   await page.click("#card");
@@ -140,29 +139,62 @@ test("a word's English side asks with its meaning and type the day after, and sh
   await page.close();
 });
 
+// An Again went back 3 cards on whatever sat there, so 秋's Japanese side came 7 cards after its English one and answered it.
+test("a card put back on Again keeps 10 cards from its other side [秋 missed comes back 11 after its English side, not 7]", async () => {
+  const others = require("../data/vocab.json").slice(1, 26).map((w) => [`${w.k}#r`, reviewed({ first: day - 3, last: day - 3, due: day })]);
+  const study = { ...deckWith({ "秋|あき#r": reviewed({ first: day - 3, last: day - 3, due: day }), "秋|あき#p": reviewed({ first: day - 2, last: day - 2, due: day }), ...Object.fromEntries(others) }),
+    settings: { newPerDay: 0, at: 0 } };
+  const page = await open({ ...listed, rand0: true, local: { "study.user": "u1", study } }, "#words/review");
+  await page.locator(".face.front").waitFor();
+  const seen = [];
+  while (await page.locator("#card").count()) {
+    const front = await page.textContent(".face.front");
+    const side = front.includes("秋") ? "r" : /fall \(season\)/.test(front) ? "p" : "-";
+    seen.push(side);
+    await page.click("#card");
+    await page.click(`[data-g='${side === "r" && seen.filter((s) => s === "r").length === 1 ? 1 : 3}']`);
+  }
+  const at = seen.flatMap((s, i) => (s === "-" ? [] : [[s, i]]));
+  assert.deepEqual(at.map(([s]) => s), ["r", "p", "r"]);
+  assert.ok(at.slice(1).every(([, i], j) => i - at[j][1] > 10), JSON.stringify(at));
+  await page.close();
+});
+
+// 九 read く was its own card, and お～ was its meaning alone.
+test("a merged number names its other reading on the back, and an affix the words built with it, met ones first", async () => {
+  const due = reviewed({ first: day - 3, last: day - 3, due: day });
+  for (const [cards, back] of [
+    [{ "九|きゅう#r": due }, /Also read く, as in 九時くじ nine o'clock, 九月くがつ September/],
+    [{ "お～|お～#r": due, "お金|おかね#r": reviewed({ first: day - 3, last: day - 3, due: day + 5 }) }, /Built with it\s*お金かね money\s*お茶ちゃ/],
+    [{ "～始める|～はじめる#r": due }, /From\s*始はじめる to start/],
+  ]) {
+    const page = await open({ ...listed, local: { "study.user": "u1", study: deckWith(cards) } }, "#words/review");
+    await page.locator(".face.front").waitFor();
+    await page.click("#card");
+    assert.match(await page.textContent(".face.back"), back);
+    await page.close();
+  }
+});
+
 // Furigana on the Japanese side gave the reading away before the learner had to recall it [学生 with がくせい over it],
 // yet hiding every one asked for readings of kanji years above the word [写真 at N5, both kanji N4].
 test("a reading at the word's level stays hidden until the card turns, one above it shows from the start", async () => {
-  const due = (d) => reviewed({ first: day - 3, last: day - 3, due: d });
-  const study = deckWith({ "学生|がくせい#r": due(day - 2), "写真|しゃしん#r": due(day - 1), "沢山|たくさん#r": due(day) });
-  const page = await open({ ...listed, local: { "study.user": "u1", study } }, "#words/review");
-  const rt = page.locator(".face.front ruby rt").first();
-  const shown = () => rt.evaluate((r) => getComputedStyle(r).visibility);
-  await rt.waitFor({ state: "attached" });
-  assert.match(await page.textContent(".face.front"), /学生/);
-  assert.equal(await shown(), "hidden");
-  await page.click("#card");
-  assert.equal(await shown(), "visible");
-  assert.doesNotMatch(await page.textContent(".face.back"), /Usually written in kana/);
-  await page.click("[data-g='3']");
-  assert.match(await page.textContent(".face.front"), /写真/);
-  assert.equal(await shown(), "visible");
-  await answer(page, 3);
-  assert.match(await page.textContent(".face.front"), /沢山/);
-  assert.equal(await shown(), "visible");
-  await page.click("#card");
-  assert.match(await page.textContent(".face.back"), /Usually written in kana: たくさん/);
-  await page.close();
+  // One page per word, as a day's reviews come shuffled [学生 hidden, 写真 and 沢山 shown].
+  for (const [key, front, kana] of [["学生|がくせい", "hidden", null], ["写真|しゃしん", "visible", null], ["沢山|たくさん", "visible", "たくさん"]]) {
+    const study = deckWith({ [`${key}#r`]: reviewed({ first: day - 3, last: day - 3, due: day }) });
+    const page = await open({ ...listed, local: { "study.user": "u1", study } }, "#words/review");
+    const rt = page.locator(".face.front ruby rt").first();
+    const shown = () => rt.evaluate((r) => getComputedStyle(r).visibility);
+    await rt.waitFor({ state: "attached" });
+    assert.match(await page.textContent(".face.front"), new RegExp(key.split("|")[0]));
+    assert.equal(await shown(), front, key);
+    await page.click("#card");
+    assert.equal(await shown(), "visible");
+    const back = await page.textContent(".face.back");
+    if (kana) assert.match(back, new RegExp(`Usually written in kana: ${kana}`));
+    else assert.doesNotMatch(back, /Usually written in kana/);
+    await page.close();
+  }
 });
 
 test("signing out takes the vocabulary deck off this device", async () => {
@@ -307,9 +339,10 @@ test("Enter on a focused grade button presses that button", async () => {
   await pastIntros(page);
   await page.click("#card");
   await page.focus("[data-g='4']");
+  const shown = await page.textContent("[data-g='4'] small");
   await page.keyboard.press("Enter");
   assert.equal(await page.textContent("#left"), "19 left");
-  assert.equal((await deckOf(page)).cards["秋|あき#r"].ivl, 4);
+  assert.equal(`${(await deckOf(page)).cards["秋|あき#r"].ivl}d`, shown);
   await page.close();
 });
 

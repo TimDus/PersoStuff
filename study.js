@@ -1,6 +1,6 @@
 // The Japanese section: JLPT vocabulary on Anki-style reviews, both directions, synced to its own column [progress.study, beside the kana in progress.data].
 (function () {
-  const { dayOf, grade, preview, queue, mergeStudy, DRILLS } = window.HiraSRS;
+  const { dayOf, grade, preview, queue, place, spread, GAP, mergeStudy, DRILLS } = window.HiraSRS;
   const { same, bump, wordClip } = window.HiraSync;
   const { note, learned, ready: hasKanji, wordWaits } = window.HiraKanji;
   const { keywordOf } = window.HiraKeywords;
@@ -86,9 +86,9 @@
       also.length ? ` · also in ${also.map((x) => `<span class="jp">${esc(x.w)}</span>`).join(", ")}` : ""}</div>`).join("")}</div>` : "";
   };
   const days = (n) => (n === 0 ? "now" : n < 30 ? `${n}d` : n < 365 ? `${Math.round(n / 30)}mo` : `${Math.round(n / 365)}y`);
-  // The four grades with when each brings the card back [a fresh card: Again now, Hard now, Good 1d, Easy 4d].
-  const gradeButtons = (card) => {
-    const [a, h, g, e] = preview(card, today()).map(days);
+  // The four grades with when each brings the card back, fuzzed by the card's key [a fresh card: Again now, Hard now, Good 1d, Easy 3d to 5d].
+  const gradeButtons = (card, key) => {
+    const [a, h, g, e] = preview(card, today(), key).map(days);
     return [["Again", 1, 1, a], ["Hard", 2, 2, h], ["Good", 3, 3, g], ["Easy", 4, 4, e]];
   };
   // The Kanji tab's deck in `study.kanji`, cards keyed by the kanji [学 = { st: "review", ivl: 4, … }].
@@ -186,6 +186,17 @@
     });
   }
 
+  let byWord = null;
+  const wordOf = (k) => (byWord ||= new Map(words.map((w) => [w.k, w]))).get(k);
+  const wordRow = (w) => `<div><span class="jp">${ruby(w)}</span> ${esc(w.m)}</div>`;
+  const rows = (title, ws) => `<div class="built"><div class="muted small">${title}</div>${ws.map(wordRow).join("")}</div>`;
+  // A merged number's other reading, the words built with an affix, met first, and the verb a compound one comes from [四: also し in 四月; お～: お茶 tea; ～始める: from 始める].
+  const extras = (w) => [
+    ...(w.alt || []).map(([r, said]) => `<div class="muted small alt">Also read <span class="jp">${esc(r)}</span>, as in ${said.map(([jp, rt, en]) =>
+      `<span class="jp"><ruby>${esc(jp)}<rt>${esc(rt)}</rt></ruby></span> ${esc(en)}`).join(", ")}</div>`),
+    ...(w.uses ? [rows("Built with it", w.uses.map(wordOf).filter(Boolean).sort((a, b) => metWord(b.k) - metWord(a.k)))] : []),
+    ...(w.root && wordOf(w.root) ? [rows("From", [wordOf(w.root)])] : []),
+  ].join("");
   // One card's two faces [r: 会う with あ over 会 → meaning; p: "to meet · godan verb" → 会う].
   function faces(it) {
     const w = it.word;
@@ -193,7 +204,7 @@
     const meaning = `<div class="meaning">${esc(w.m)}</div><div class="muted small">${esc(w.t || "word")} · N${w.lv}</div>`;
     const kana = w.uk ? `<div class="muted small">Usually written in kana: <span class="jp">${esc(w.r)}</span></div>` : "";
     const smart = learned(w, deck.kanji?.cards || {}) ? `<div class="smart small">★ Every kanji in it learned</div>` : "";
-    const back = `${speak(w.r, w)} ${it.dir === "r" ? meaning : word}${kana}${smart}${kanjiNote(w)}${examples(w)}`;
+    const back = `${speak(w.r, w)} ${it.dir === "r" ? meaning : word}${kana}${smart}${extras(w)}${kanjiNote(w)}${examples(w)}`;
     return { front: it.dir === "r" ? word : meaning, back: it.dir === "r" ? back : `${back}<div class="muted small">${esc(w.m)}</div>` };
   }
 
@@ -204,6 +215,10 @@
     const run = [...items];
     // Words shown once this run [Got it on 秋 = 秋 asked for real 3 cards on].
     const met = new Set();
+    // The cards answered last, so a card put back keeps away from its kin [会う#p answered, 会う#r on Again: 11 on, not 3].
+    const shown = [];
+    const seen = (it) => shown.splice(0, Math.max(0, shown.push(it) - GAP - 1));
+    const putBack = (it) => run.splice(place(run, it, 3, { shown, reach: GAP }), 0, it);
     let flipped = false, showing = false;
     function draw() {
       if (!run.length) return done();
@@ -231,7 +246,8 @@
     function gotIt() {
       const it = run.shift();
       met.add(it.key);
-      run.splice(Math.min(3, run.length), 0, it);
+      seen(it);
+      putBack(it);
       draw();
     }
     function flip() {
@@ -244,8 +260,9 @@
     }
     function pick(g) {
       const it = run.shift();
-      // Back a few cards later, or last when fewer are left [3 cards on = the 4th card shown].
-      if (answer(it, g)) run.splice(Math.min(3, run.length), 0, it);
+      // Back a few cards later, or last when fewer are left, farther when its kin is close [3 cards on = the 4th card shown].
+      seen(it);
+      if (answer(it, g)) putBack(it);
       draw();
     }
     shell.onKey((e) => {
@@ -275,12 +292,12 @@
       items, title: "Review",
       // A word's first sight shows its answer; the English side comes a day after it was met [秋#r new = shown, 秋#p never].
       intro: (it) => it.dir === "r" && !deck.cards[it.key],
-      buttons: (it) => gradeButtons(deck.cards[it.key]),
+      buttons: (it) => gradeButtons(deck.cards[it.key], it.key),
       answer(it, g) {
         // The day of the answer, not of the session [started 03:58, answered 04:03 = the new day].
         const day = today();
         deck = local();
-        const r = grade(deck.cards[it.key], g, day);
+        const r = grade(deck.cards[it.key], g, day, it.key);
         deck.cards[it.key] = g === 1 ? { ...r.card, miss: day } : r.card;
         save();
         if (g === 1) again.add(it.key);
@@ -313,7 +330,7 @@
     const all = byKey();
     const keys = set === "today" ? answeredToday(false) : set === "missed" ? answeredToday(true)
       : levelKeys(set === "n4" ? 4 : 5);
-    const items = keys.map((k) => all.get(k)).filter(Boolean).sort(() => Math.random() - 0.5);
+    const items = spread(keys.map((k) => all.get(k)).filter(Boolean).sort(() => Math.random() - 0.5));
     if (!items.length) return hub();
     const title = { today: "Practice: today's cards", missed: "Practice: today's misses", n5: "Practice: N5", n4: "Practice: N4" }[set] || "Practice";
     const missed = new Set();
@@ -407,7 +424,7 @@
       const day = today();
       deck = local();
       const k = (deck.kanji = { ...kanjiBlank(), ...deck.kanji });
-      const r = grade(k.cards[c], g, day);
+      const r = grade(k.cards[c], g, day, c);
       k.cards = { ...k.cards, [c]: r.card };
       save();
       return r;

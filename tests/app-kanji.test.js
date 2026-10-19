@@ -35,21 +35,27 @@ const readings = (page, scope) => page.evaluate((s) => {
 // The note under a word's answer: one line per kanji with its meaning and the met words that share it, on the back only.
 const kanjiDeck = () => deckWith({
   "学校|がっこう#r": reviewed({ first: day - 2, last: day - 2, due: day + 9 }), "大学|だいがく#r": reviewed({ first: day - 1, last: day - 1, due: day + 9 }),
-  // 学生's Japanese side a day overdue, so it comes first however a day's reviews are shuffled [both due today: either side first].
-  "学生|がくせい#r": reviewed({ first: day - 3, last: day - 3, due: day - 1 }), "学生|がくせい#p": reviewed({ first: day - 2, last: day - 2, due: day }),
+  // 学生's Japanese side the only review due, so it comes first; its English side waits for tomorrow, as the two never come back to back.
+  "学生|がくせい#r": reviewed({ first: day - 3, last: day - 3, due: day - 1 }), "学生|がくせい#p": reviewed({ first: day - 2, last: day - 2, due: day + 1 }),
 });
+// 学生's English side due instead [its Japanese side tomorrow].
+const englishDeck = () => {
+  const d = kanjiDeck();
+  d.cards["学生|がくせい#r"].due = day + 1;
+  d.cards["学生|がくせい#p"].due = day;
+  return d;
+};
 test("a word's kanji note shows on the back of both sides and never on the front", async () => {
-  const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#words/review");
-  await page.locator(".face.front").waitFor();
-  for (const front of [/学生/, /student/]) {
+  for (const [study, front] of [[kanjiDeck(), /学生/], [englishDeck(), /student/]]) {
+    const page = await open({ ...listed, local: { "study.user": "u1", study } }, "#words/review");
+    await page.locator(".face.front").waitFor();
     assert.match(await page.textContent(".face.front"), front);
     assert.equal(await page.locator(".face.front .kanji-note").count(), 0);
     assert.equal(await page.locator(".kanji-note").isVisible(), false);
     await page.click("#card");
     assert.deepEqual(await page.locator(".kanji-note .kn").allTextContents(), ["学 study, learning · also in 大学, 学校", "生 life, genuine"]);
-    await page.click("[data-g='3']");
+    await page.close();
   }
-  await page.close();
 });
 
 // A tap on a note's kanji must not leave the review, since a route change ends the session.

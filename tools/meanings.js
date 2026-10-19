@@ -1,8 +1,5 @@
 // English lines rewritten so no two words share a line or a first sense, keyed like the cards [学生 "student" and 生徒 "student; pupil" both asked "student"].
 module.exports = {
-  "九|く": "nine (as in nine o'clock, September)",
-  "四|し": "four (as in April, the four seasons)",
-  "七|しち": "seven (as in seven o'clock, July)",
   "青|あお": "blue (the colour)",
   "白|しろ": "white (the colour)",
   "黄色|きいろ": "yellow (the colour)",

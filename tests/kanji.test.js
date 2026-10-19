@@ -263,7 +263,7 @@ test("the main reading comes apart from the rest, each with up to 3 list words u
   const cards = {
     "学生|がくせい#r": met(10), "学校|がっこう#r": met(11), "大学|だいがく#r": met(14), "医学|いがく#r": met(12), "科学|かがく#r": met(13),
   };
-  // A word not met yet is marked ~ [四 with nothing met: シ from 四 read し, then よん from 四 read よん].
+  // A word not met yet is marked ~ [四 with nothing met: シ from 四 merged with its other reading し, よん from 四 itself].
   const rows = (c, cs, info = kanji) => { const b = byReading(c, vocab, cs, info); const ws = (x) => [x.r, x.words.map(({ w, met }) => w.w + (met ? "" : "~"))]; return [b.top && ws(b.top), b.rest.map(ws)]; };
   assert.deepEqual(rows("学", cards), [["ガク", ["大学", "科学", "医学"]], [["まな.ぶ", []]]]);
   assert.deepEqual(rows("四", {}), [["シ", ["四~"]], [["よっ.つ", ["四つ~"]], ["よん", ["四~"]], ["よ", []]]]);

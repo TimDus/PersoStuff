@@ -94,7 +94,9 @@
   }
   // A kanji's main reading and the rest, each with up to 3 list words using it, met ones first and newest first [学: ガク 大学 科学 医学, then まな.ぶ with none].
   function byReading(c, words, cards, info) {
-    const all = wordsWith(c, words, cards).map((w) => [w, readingIn(c, w, info)]);
+    // A merged number counts once per reading [九 under キュウ as きゅう, under ク as く].
+    const all = wordsWith(c, words, cards).flatMap((w) => [w, ...(w.alt || []).map(([r]) => ({ ...w, r, fu: [[w.w, r, w.fu[0][2]]] }))])
+      .map((w) => [w, readingIn(c, w, info)]);
     const rows = [...(info[c]?.on || []), ...(info[c]?.kun || [])].map((r) => ({
       r, words: all.filter(([, x]) => x === r).slice(0, 3).map(([w]) => ({ w, met: !!cards[`${w.k}#r`] })),
     }));

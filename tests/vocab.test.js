@@ -7,8 +7,8 @@ const by = (k) => vocab.find((w) => w.k === k);
 
 test("every N5 and N4 word is there once, all of N5 before any of N4", () => {
   assert.equal(new Set(vocab.map((w) => w.k)).size, vocab.length);
-  assert.deepEqual([vocab.filter((w) => w.lv === 5).length, vocab.filter((w) => w.lv === 4).length], [718, 668]);
-  assert.equal(vocab.findIndex((w) => w.lv === 4), 718);
+  assert.deepEqual([vocab.filter((w) => w.lv === 5).length, vocab.filter((w) => w.lv === 4).length], [715, 668]);
+  assert.equal(vocab.findIndex((w) => w.lv === 4), 715);
 });
 
 test("the list's dated spellings are written as today, and a second spelling of one word is dropped [終る = 終わる, 在る = 有る]", () => {
@@ -55,14 +55,32 @@ test("a word's examples use its own kanji, unless it is usually kana, and a coun
   assert.ok(by("～円|～えん").ex.every(([jp]) => /[0-9０-９一二三四五六七八九十百千万何]円/.test(jp)));
 });
 
-test("a number said alone has its everyday reading, the list's own after it [四 = し, then よん \"four\"]", () => {
-  assert.deepEqual(["四|よん", "七|なな"].map((k) => by(k)?.m), ["four", "seven"]);
-  assert.equal(vocab.findIndex((w) => w.k === "四|よん"), vocab.findIndex((w) => w.k === "四|し") + 1);
+// 九 read く and 九 read きゅう were two cards side by side in the list, both asking 九 → nine on the same day.
+test("a number with two readings for one meaning is one card on its everyday reading, the other on its back [九 = きゅう, also く in 九時]", () => {
+  assert.deepEqual(["九|く", "四|し", "七|しち"].filter(by), []);
+  assert.deepEqual(["九|きゅう", "四|よん", "七|なな"].map((k) => [by(k).m, by(k).alt[0][0]]), [["nine", "く"], ["four", "し"], ["seven", "しち"]]);
+  assert.ok(by("七|なな").ex.some(([jp]) => jp.includes("七時")));
 });
 
-test("a spelling with two readings gets only sentences Tatoeba tags with its own [七時 is しちじ, so none for なな]", () => {
-  assert.deepEqual([...by("七|なな").ex, ...by("十|とお").ex].filter(([jp]) => /[七十]時/.test(jp)), []);
+test("a spelling with two readings gets only sentences Tatoeba tags with its own [十時 is じゅうじ, so none for とお]", () => {
+  assert.deepEqual(by("十|とお").ex.filter(([jp]) => jp.includes("十時")), []);
   assert.ok(by("十|じゅう").ex.some(([jp]) => jp.includes("十時")));
+});
+
+// Tatoeba files a kana word under its kanji spelling, so そこ, ここ and なぜ had no sentence while thousands use them [其処(そこ){そこ}].
+test("a word the list spells in kana gets sentences filed under its kanji spelling, written in kana", () => {
+  for (const k of ["そこ|そこ", "ここ|ここ", "なぜ|なぜ", "いつ|いつ", "できる|できる"]) {
+    const w = by(k), said = w.t.includes("verb") ? w.w.slice(0, -1) : w.w;
+    assert.ok(w.ex.length, k);
+    assert.deepEqual(w.ex.filter(([jp]) => !jp.includes(said)), [], k);
+  }
+});
+
+// お～ showed only "honorable ~": no kanji, no recording, and no sentence fits a prefix.
+test("an affix lists list words built with it, and a compound verb the verb it comes from [お～: お茶; ～始める: 始める]", () => {
+  assert.deepEqual(by("お～|お～").uses.slice(0, 2), ["お茶|おちゃ", "お金|おかね"]);
+  assert.equal(by("～始める|～はじめる").root, "始める|はじめる");
+  assert.deepEqual(vocab.flatMap((w) => [...(w.uses || []), ...(w.root ? [w.root] : [])]).filter((k) => !by(k)), []);
 });
 
 test("the list's own spellings resolve [運動|うんどうする is a suru verb, 回る、回す two words, いい; よい one]", () => {

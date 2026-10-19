@@ -230,7 +230,7 @@
       items, title: "Kanji review", back: { href: "#kanji", label: "← Kanji" }, introHint: "New kanji: read it through, it's asked in a moment",
       intro: (it) => !study.kanjiDeck().cards[it.c],
       faces: (it) => faces(it.c, words, draw),
-      buttons: (it) => study.gradeButtons(study.kanjiDeck().cards[it.c]),
+      buttons: (it) => study.gradeButtons(study.kanjiDeck().cards[it.c], it.c),
       answer(it, g) {
         if (g === 1) again.add(it.c);
         return study.gradeKanji(it.c, g).again;

@@ -115,6 +115,8 @@ for (const word of words) {
   word.f = isKana(w) ? Math.min(score(e), ...cands.map((x) => rank(x.rebs.find((y) => y.text === r).pri))) : score(e);
   // A suru verb conjugates as する whatever its noun's first sense says [勉強 is n, 勉強する is vs].
   word.pos = word.suru ? ["vs", ...e.senses[0].pos.filter((p) => p !== "vs")] : e.senses[0].pos;
+  // A kana word's kanji spellings, which Tatoeba files its sentences under [そこ = 其処, 底].
+  if (isKana(w)) word.kebs = e.kebs.map((x) => x.text);
   // JMdict's "usually written in kana" on the word's first sense [沢山 is mostly たくさん].
   word.uk = !isKana(w) && e.senses[0].uk;
   // The sense the card's English names, the first on a tie, so its example uses the word that way [一番 "best (most)" = sense 2].
@@ -163,23 +165,30 @@ function furigana(w, r) {
 }
 
 // Tatoeba sentences whose index names the word, shortest first [会う: 駅で会いましょう。].
-const want = new Map();
-words.forEach((x) => push(want, x.base, x));
-const found = new Map();
+const want = new Map(), wantKanji = new Map();
+words.forEach((x) => { push(want, x.base, x); (x.kebs || []).forEach((k) => push(wantKanji, k, x)); });
+// Sentences under the word's own spelling, and a kana word's under its kanji one, used only when the first has none [そこ: 其処(そこ){そこ}].
+const found = new Map(), foundKanji = new Map();
+const add = (map, word, hit) => (map.get(word.k) || map.set(word.k, []).get(word.k)).push(hit);
+// A kana word's sentence filed under its kanji spelling and written in kana, a verb or adjective by its stem [其処(そこ){そこ} for そこ; 出来る{できない} for できる; 何時{なんじ} is not いつ].
+const writtenAs = (x, said) => !!said && isKana(said) && (said === x.base || (/^(v[15k]|vs-i|adj-i)/.test(x.pos[0] || "") && said.startsWith(x.base.slice(0, -1))));
 for (const line of read("tatoeba", "jpn_indices.csv").split(/\r?\n/)) {
   const [jid, eid, idx] = line.split("\t");
   if (!idx || eid === "-1") continue;
   for (const tok of idx.split(" ")) {
-    const m = tok.match(/^([^([{~]+)(?:\(([^)]+)\))?(?:\[(\d+)\])?(?:\{[^}]+\})?(~)?$/);
+    const m = tok.match(/^([^([{~]+)(?:\(([^)]+)\))?(?:\[(\d+)\])?(?:\{([^}]+)\})?(~)?$/);
     if (!m) continue;
+    const hit = { jid, eid, checked: !!m[5], sense: m[3] ? +m[3] : 0 };
+    const kana = (wantKanji.get(m[1]) || []).filter((x) => (!m[2] || x.baseR === m[2]) && writtenAs(x, m[4]));
+    if (kana.length === 1) add(foundKanji, kana[0], hit);
     // A spelling with two readings takes only sentences tagged with one, else the list's last word of it [七(しち) to しち, an untagged 七 to neither].
     const cands = (want.get(m[1]) || []).filter((x) => !m[2] || x.baseR === m[2]);
     const word = new Set(cands.map((x) => x.baseR)).size === 1 && cands.at(-1);
     if (!word || (!m[2] && m[1] !== word.baseR && isKana(m[1]))) continue;
-    (found.get(word.k) || found.set(word.k, []).get(word.k)).push({ jid, eid, checked: !!m[4], sense: m[3] ? +m[3] : 0 });
+    add(found, word, hit);
   }
 }
-const need = new Set([...found.values()].flat().flatMap((x) => [x.jid, x.eid]));
+const need = new Set([...found.values(), ...foundKanji.values()].flat().flatMap((x) => [x.jid, x.eid]));
 const text = new Map();
 for (const file of ["jpn_sentences.tsv", "eng_sentences.tsv"]) {
   for (const line of read("tatoeba", file).split(/\r?\n/)) {
@@ -209,24 +218,85 @@ const PICK = {
   "乗り物|のりもの": "車やバスやトラックはすべて乗り物である。", "止める|やめる": "喋るのをやめろ。", "運転する|うんてんする": "トムは車を運転した。",
   "結婚する|けっこんする": "二人は結婚した。", "凄い|すごい": "すごいですね。", "手袋|てぶくろ": "彼は手袋をはめている。",
   "お～|お～": null, "～時|～とき": null, "～目|～め": null, "内|うち": null,
+  // Found under a kanji spelling in another sense [そうして "and then", not そうしてくれて "doing so"; うかがう "ask", Tatoeba's only "visit"].
+  "そうして|そうして": null, "おる|おる": null, "うかがう|うかがう": null,
+};
+// The only sentences kept where the other found one is another word or sense [つける: not 仕事につけ, which is 就く; ～ころ: not 詩情ごころ].
+const ONLY = {
+  "うち|うち": ["うちに来ないか。"], "つける|つける": ["トムがテレビをつけたとたんにヒューズがとんだ。"], "～ころ|～ころ": ["最初のころを思い出す。"],
+  "～おわる|～おわる": ["このペン、私が使いおわったら君に貸してあげるよ。"], "びっくりする|びっくりする": ["彼女はびっくりして叫んだ。"],
+  "きっと|きっと": ["彼はきっと来る。"], "まだ|まだ": ["彼はまだ若い。"], "まずい|まずい": ["すき腹にまずいものなし。"],
 };
 const out = words.map((x) => {
   // The word's own kanji in the sentence [遭った is filed under 会う, 円 the circle under ～円].
   const own = (x.base.match(KANJI) || [""])[0];
   // A counter after a number, not the same kanji standing alone [100万円, not 完全な円].
   const used = /^[～〜]/.test(x.w) && own ? new RegExp(`[0-9０-９一二三四五六七八九十百千万何]${own}`) : { test: (t) => t.includes(own) };
-  let ex = (found.get(x.k) || []).filter((s) => text.has(s.jid) && text.has(s.eid) && (used.test(text.get(s.jid)) || PICK[x.k] === text.get(s.jid)));
+  const usable = (map) => (map.get(x.k) || []).filter((s) => text.has(s.jid) && text.has(s.eid) && (used.test(text.get(s.jid)) || PICK[x.k] === text.get(s.jid)));
+  let ex = usable(found);
+  if (!ex.length) ex = usable(foundKanji);
   // A hand pick first, then Tatoeba's tag for the card's own sense, untagged next, another sense last, each checked (~) first [焼く: not こんがり焼こう, a tan].
   const fit = (s) => (PICK[x.k] === text.get(s.jid) ? -1 : s.sense === x.sense ? 0 : s.sense ? 2 : 1);
-  ex = ex.sort((a, b) => fit(a) - fit(b) || b.checked - a.checked || text.get(a.jid).length - text.get(b.jid).length)
-    .filter((s, i, all) => all.findIndex((t) => text.get(t.jid) === text.get(s.jid)) === i)
-    .slice(0, 2).map((s) => [text.get(s.jid), text.get(s.eid)]);
+  const ranked = ex.sort((a, b) => fit(a) - fit(b) || b.checked - a.checked || text.get(a.jid).length - text.get(b.jid).length)
+    .filter((s, i, all) => all.findIndex((t) => text.get(t.jid) === text.get(s.jid)) === i);
+  ex = ranked.slice(0, 2).map((s) => [text.get(s.jid), text.get(s.eid)]);
+  if (ONLY[x.k]) ex = ONLY[x.k].map((jp) => {
+    const s = ranked.find((t) => text.get(t.jid) === jp);
+    if (!s) throw new Error(`${x.k}: ${jp} isn't one of its sentences`);
+    return [jp, text.get(s.eid)];
+  });
   if (PICK[x.k] && ex[0]?.[0] !== PICK[x.k]) throw new Error(`${x.k}: the picked example isn't one of its sentences`);
   if (PICK[x.k] === null) ex = [];
   return { k: x.k, w: x.w, r: x.r, m: MEANING[x.k] || x.m, t: typeOf(x.pos), pos: x.pos, lv: x.lv, f: x.f, fu: furigana(x.w, x.r), ex, ...(x.uk && { uk: 1 }),
     // A WaniKani recording fetched by tools/fetch-wk-audio.js [929 words; none for 後 read あと, whose file is 後 read ご].
     ...(fs.existsSync(path.join(__dirname, "..", wordClip(x.k))) && { au: 1 }) };
 });
+// Numbers with two readings for one meaning, one card on the everyday reading with the other's uses and examples [九: きゅう, also く as in 九時].
+const MERGE = [
+  ["九|きゅう", "九|く", [["九時", "くじ", "nine o'clock"], ["九月", "くがつ", "September"]]],
+  ["四|よん", "四|し", [["四月", "しがつ", "April"], ["四季", "しき", "the four seasons"]]],
+  ["七|なな", "七|しち", [["七時", "しちじ", "seven o'clock"], ["七月", "しちがつ", "July"]]],
+];
+for (const [keep, drop, said] of MERGE) {
+  const a = out.find((x) => x.k === keep), b = out.find((x) => x.k === drop);
+  if (!a || !b) throw new Error(`${keep} or ${drop} isn't on the list`);
+  a.alt = [[b.r, said]];
+  a.ex = [...a.ex, ...b.ex].filter(([jp], i, all) => all.findIndex(([x]) => x === jp) === i).slice(0, 2);
+  out.splice(out.indexOf(b), 1);
+}
+// List words built with an affix, and the verb a compound one comes from, for cards that are otherwise only their meaning [お～: お茶, お金; ～始める: 始める].
+const USES = {
+  "お～|お～": ["お茶|おちゃ", "お金|おかね", "お酒|おさけ", "お菓子|おかし", "お弁当|おべんとう", "お手洗い|おてあらい"],
+  "御～|ご～": ["ご飯|ごはん", "ご主人|ごしゅじん", "ご存じ|ごぞんじ"],
+  "～さん|～さん": ["お母さん|おかあさん", "お父さん|おとうさん", "皆さん|みなさん", "奥さん|おくさん"],
+  "～ちゃん|～ちゃん": ["赤ちゃん|あかちゃん"],
+  "～たち|～たち": ["友達|ともだち"],
+  "～語|～ご": ["英語|えいご"],
+  "～人|～じん": ["外国人|がいこくじん"],
+  "～員|～いん": ["店員|てんいん", "公務員|こうむいん"],
+  "～中|～ちゅう": ["途中|とちゅう"],
+  "～度|～ど": ["一度|いちど", "今度|こんど"],
+  "～日|～にち": ["一日|いちにち"],
+  "～年|～ねん": ["来年|らいねん", "去年|きょねん", "再来年|さらいねん"],
+  "～番|～ばん": ["一番|いちばん"],
+  "～屋|～や": ["八百屋|やおや", "床屋|とこや"],
+  "～会|～かい": ["展覧会|てんらんかい"],
+  "～代|～だい": ["時代|じだい"],
+  "～月|～つき": ["一月|ひとつき"],
+  "～杯|～はい": ["一杯|いっぱい"],
+  "～だけ|～だけ": ["できるだけ|できるだけ"],
+  "～ころ|～ころ": ["この頃|このごろ"],
+};
+const ROOT = { "～始める|～はじめる": "始める|はじめる", "～続ける|～つづける": "続ける|つづける", "～だす|～だす": "出す|だす", "～おわる|～おわる": "終わる|おわる", "～すぎ|～すぎ": "過ぎる|すぎる" };
+const listed = new Set(out.map((x) => x.k));
+for (const [k, ks] of [...Object.entries(USES), ...Object.entries(ROOT).map(([k, r]) => [k, [r]])]) {
+  const missing = [k, ...ks].filter((x) => !listed.has(x));
+  if (missing.length) throw new Error(`${k}: ${missing.join(", ")} isn't on the list`);
+}
+for (const x of out) {
+  if (USES[x.k]) x.uses = USES[x.k];
+  if (ROOT[x.k]) x.root = ROOT[x.k];
+}
 // Most common first within a level, the list's own order breaking ties [N5 before any N4].
 const order = new Map(out.map((x, i) => [x, i]));
 out.sort((a, b) => b.lv - a.lv || a.f - b.f || order.get(a) - order.get(b));

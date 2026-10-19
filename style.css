@@ -328,6 +328,10 @@ footer .credits[open] summary { margin-bottom: .3rem; }
 .vcard .meaning { font-size: 1.4rem; font-weight: 600; }
 .examples { margin-top: .8rem; border-top: 1px solid var(--line); padding-top: .6rem; display: grid; gap: .5rem; text-align: left; width: 100%; }
 .ex .jp { font-size: 1.1rem; }
+/* An affix's words and a compound verb's root under the answer, one per row [お茶 (green) tea]. */
+.built { margin-top: .8rem; border-top: 1px solid var(--line); padding-top: .6rem; display: grid; gap: .3rem; text-align: left; width: 100%; }
+.built .jp { font-size: 1.1rem; }
+.vcard .built rt, .vcard .alt rt { font-size: .55em; }
 /* A word's kanji under its answer, each kanji a button to its popup [学 study, learning · also in 大学, 学校]. */
 .kanji-note { margin-top: .8rem; border-top: 1px solid var(--line); padding-top: .6rem; display: grid; gap: .3rem; text-align: left; width: 100%; }
 .kn-k { font-family: var(--jp); font-size: 1.3rem; padding: .1rem .45rem; min-width: 2.4rem; background: transparent; color: var(--accent); border: 1px solid var(--line); border-radius: 8px; }
