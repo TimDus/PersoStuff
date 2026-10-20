@@ -17,6 +17,15 @@
 
   // A kanji's parts that are deck kanji, a radical form as its full kanji [海 = 水 毎; 学's ⺍ and 冖 aren't kanji, so 子].
   const partsOf = (c, info) => [...new Set((info[c]?.c || []).map((p) => info[c].v?.[p] || p))].filter((p) => p !== c && info[p]);
+  // A word's pieces: deck kanji as parts, everything else as radicals, each once [海: part 毎, radical 氵 from 水; 語: part 言, radical 吾, as 吾 isn't a deck kanji].
+  function pieces(word, info) {
+    const parts = [], radicals = [];
+    for (const c of kanjiOf(word)) for (const p of info[c]?.c || []) {
+      if (info[p]) { if (!parts.includes(p)) parts.push(p); }
+      else if (!radicals.some((r) => r.p === p)) radicals.push({ p, full: info[c].v?.[p] || null });
+    }
+    return { parts, radicals };
+  }
   // The deck in study order: each word's kanji as the word list reaches them, parts pulled in front all the way down, Heisig's frames
   // then stroke count breaking ties and ordering the rest [秋 first brings 火 秋; 会 814 holds 人 1023, so 人 goes first].
   function order(info, frames, words = []) {
@@ -113,7 +122,7 @@
     return [...groups.values()];
   }
 
-  const api = { kanjiOf, wordsWith, note, partsOf, order, forms, kanjiQueue, wordWaits, kanjiWaits, mature, ready, learned, readingIn, byReading, family };
+  const api = { kanjiOf, wordsWith, note, partsOf, pieces, order, forms, kanjiQueue, wordWaits, kanjiWaits, mature, ready, learned, readingIn, byReading, family };
   if (typeof module !== "undefined") module.exports = api;
   else root.HiraKanji = api;
 })(this);

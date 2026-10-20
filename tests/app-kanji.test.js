@@ -32,7 +32,7 @@ const readings = (page, scope) => page.evaluate((s) => {
     [...document.querySelectorAll(`${s} .ku-row`)].map((r) => [t(r.querySelector(".ku")), [...r.querySelectorAll(".kr-words > span")].map(t).join(" · ")])];
 }, scope);
 
-// The note under a word's answer: one line per kanji with its meaning and the met words that share it, on the back only.
+// The note under a word's answer, a line per kanji with the met words sharing it, and its parts and radicals last, on the back only [学生: Parts 子, Radicals ⺍ 冖].
 const kanjiDeck = () => deckWith({
   "学校|がっこう#r": reviewed({ first: day - 2, last: day - 2, due: day + 9 }), "大学|だいがく#r": reviewed({ first: day - 1, last: day - 1, due: day + 9 }),
   // 学生's Japanese side the only review due, so it comes first; its English side waits for tomorrow, as the two never come back to back.
@@ -54,6 +54,7 @@ test("a word's kanji note shows on the back of both sides and never on the front
     assert.equal(await page.locator(".kanji-note").isVisible(), false);
     await page.click("#card");
     assert.deepEqual(await page.locator(".kanji-note .kn").allTextContents(), ["学 study, learning · also in 大学, 学校", "生 life, genuine"]);
+    assert.deepEqual(await page.locator(".pieces .pc").allTextContents(), ["Parts 子 child, sign of the rat", "Radicals ⺍ three strokes · 冖 crown, cover"]);
     await page.close();
   }
 });

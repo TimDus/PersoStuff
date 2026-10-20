@@ -2,7 +2,7 @@
 (function () {
   const { dayOf, grade, preview, queue, place, spread, GAP, mergeStudy, DRILLS } = window.HiraSRS;
   const { same, bump, wordClip } = window.HiraSync;
-  const { note, learned, ready: hasKanji, wordWaits } = window.HiraKanji;
+  const { note, pieces, learned, ready: hasKanji, wordWaits } = window.HiraKanji;
   const { keywordOf } = window.HiraKeywords;
   let shell = null;
   let words = null;
@@ -84,6 +84,15 @@
     const lines = note(w, words, deck.cards);
     return lines.length ? `<div class="kanji-note">${lines.map(({ c, also }) => `<div class="kn"><button class="kn-k jp" type="button" data-kanji="${esc(c)}" title="About ${esc(c)}">${esc(c)}</button>${keyword(c) ? ` ${esc(keyword(c))}` : ""}${
       also.length ? ` · also in ${also.map((x) => `<span class="jp">${esc(x.w)}</span>`).join(", ")}` : ""}</div>`).join("")}</div>` : "";
+  };
+  // At the bottom of the back, what the word's kanji are built from [学生: Parts 子 child, Radicals ⺍ three strokes · 冖 crown, cover; 海's 氵 is water (from 水)].
+  const piecesNote = (w) => {
+    const { parts, radicals } = pieces(w, kanjiInfo || {});
+    const named = (p, name) => `<span><span class="jp">${esc(p)}</span>${name ? ` ${esc(name)}` : ""}</span>`;
+    const row = (label, items) => (items.length ? `<div class="pc"><span class="muted">${label}</span> ${items.join(" · ")}</div>` : "");
+    const html = row("Parts", parts.map((p) => named(p, keyword(p))))
+      + row("Radicals", radicals.map(({ p, full }) => named(p, full ? `${keyword(full)} (from ${full})` : window.HiraRadicals.NAMES[p])));
+    return html ? `<div class="pieces small">${html}</div>` : "";
   };
   const days = (n) => (n === 0 ? "now" : n < 30 ? `${n}d` : n < 365 ? `${Math.round(n / 30)}mo` : `${Math.round(n / 365)}y`);
   // The four grades with when each brings the card back, fuzzed by the card's key [a fresh card: Again now, Hard now, Good 1d, Easy 3d to 5d].
@@ -204,7 +213,7 @@
     const meaning = `<div class="meaning">${esc(w.m)}</div><div class="muted small">${esc(w.t || "word")} · N${w.lv}</div>`;
     const kana = w.uk ? `<div class="muted small">Usually written in kana: <span class="jp">${esc(w.r)}</span></div>` : "";
     const smart = learned(w, deck.kanji?.cards || {}) ? `<div class="smart small">★ Every kanji in it learned</div>` : "";
-    const back = `${speak(w.r, w)} ${it.dir === "r" ? meaning : word}${kana}${smart}${extras(w)}${kanjiNote(w)}${examples(w)}`;
+    const back = `${speak(w.r, w)} ${it.dir === "r" ? meaning : word}${kana}${smart}${extras(w)}${kanjiNote(w)}${examples(w)}${piecesNote(w)}`;
     return { front: it.dir === "r" ? word : meaning, back: it.dir === "r" ? back : `${back}<div class="muted small">${esc(w.m)}</div>` };
   }
 

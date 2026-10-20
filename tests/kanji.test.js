@@ -125,7 +125,7 @@ test("a kanji's word list puts met words first, newest first, then the rest in l
 });
 
 // The Kanji tab's deck: every kanji in the word list's order with its parts in front, and the day's new kanji the next ones in it.
-const { order, partsOf, forms, kanjiQueue, wordWaits, kanjiWaits, ready, learned } = require("../kanji.js");
+const { order, partsOf, pieces, forms, kanjiQueue, wordWaits, kanjiWaits, ready, learned } = require("../kanji.js");
 // RTK frames as Koohii gives them, kept here as Koohii's file is private [人 1023 comes after 会 814, which holds it].
 const FRAMES = { 一: 1, 二: 2, 口: 11, 日: 12, 水: 137, 味: 233, 立: 462, 海: 500, 音: 518, 心: 639, 意: 654, 会: 814, 人: 1023 };
 const before = (list, c) => partsOf(c, kanji).filter((p) => list.indexOf(p) > list.indexOf(c));
@@ -134,6 +134,15 @@ test("a kanji's parts are the deck's kanji in it, a radical form as its full kan
   assert.deepEqual(partsOf("意", kanji), ["音", "心"]);
   assert.deepEqual(partsOf("海", kanji), ["水", "毎"]);
   assert.deepEqual([partsOf("学", kanji), partsOf("一", kanji)], [["子"], []]);
+});
+
+test("a word's pieces split deck kanji from radicals, a radical form keeps its full kanji, each piece once", () => {
+  assert.deepEqual(pieces({ w: "学生" }, kanji), { parts: ["子"], radicals: [{ p: "⺍", full: null }, { p: "冖", full: null }] });
+  assert.deepEqual(pieces({ w: "海水" }, kanji), { parts: ["毎"], radicals: [{ p: "氵", full: "水" }] });
+  assert.deepEqual(pieces({ w: "語る" }, kanji), { parts: ["言"], radicals: [{ p: "吾", full: null }] });
+  assert.deepEqual(pieces({ w: "洗濯" }, kanji), { parts: ["先"], radicals: [{ p: "氵", full: "水" }, { p: "翟", full: null }] });
+  assert.deepEqual(pieces({ w: "時間" }, kanji).parts, ["日", "寺", "門"]);
+  assert.deepEqual(pieces({ w: "一" }, kanji), { parts: [], radicals: [] });
 });
 
 // Heisig's order alone made 今 the deck's 731st kanji and 来 its 841st, so 今日 and 来年 opened on day 74 and 85 at 10 kanji a day.
