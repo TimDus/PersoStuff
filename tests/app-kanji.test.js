@@ -1,7 +1,9 @@
 // The kanji in the browser: a word card's note and recording, the popup over a review, and the Kanji tab, each case a way they broke [a popup's 1–4 graded the card underneath].
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { open, next, net, listed, day, deckOf, studySaves, reviewed, deckWith, KANJI, HISTORY, started, pastIntros, answer } = require("./browser.js");
+const { open, next, net, listed: shuffled, day, deckOf, studySaves, reviewed, deckWith, KANJI, HISTORY, started, pastIntros, answer } = require("./browser.js");
+// Reviews in the order the deck lists them, as these cases read it [Math.random 0: the one due review before the new words].
+const listed = { ...shuffled, rand0: true };
 
 // ---------- Kanji ----------
 // A word card's 🔊 spoke the kana through the browser's voice, which most phones lack; the word's WaniKani recording plays instead.

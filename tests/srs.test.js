@@ -68,14 +68,14 @@ test("a fresh deck offers the first 20 words, Japanese side only", () => {
   const q = queue({ words: deck, cards: {}, today: 100, newPerDay: 20 });
   assert.equal(q.length, 20);
   assert.deepEqual(q.map((c) => c.dir), Array(20).fill("r"));
-  assert.equal(q[0].word.k, "w0|r0");
+  assert.deepEqual(q.map((c) => c.word.k).sort(), deck.slice(0, 20).map((w) => w.k).sort());
 });
 
 test("words met today use up the day's 20, so a second session only offers the rest", () => {
   const cards = {};
   for (let i = 0; i < 15; i++) cards[`w${i}|r${i}#r`] = { st: "review", ivl: 1, ease: 2.5, due: 101, n: 1, lapses: 0, first: 100, last: 100 };
   const q = queue({ words: deck, cards, today: 100, newPerDay: 20 });
-  assert.deepEqual(q.map((c) => c.word.k), ["w15|r15", "w16|r16", "w17|r17", "w18|r18", "w19|r19"]);
+  assert.deepEqual(q.map((c) => c.word.k).sort(), ["w15|r15", "w16|r16", "w17|r17", "w18|r18", "w19|r19"]);
 });
 
 test("the English-side card of a word arrives the day after its Japanese side was first seen", () => {
@@ -85,14 +85,14 @@ test("the English-side card of a word arrives the day after its Japanese side wa
   assert.deepEqual(next.filter((c) => c.word.k === "w0|r0").map((c) => c.dir), ["r", "p"]);
 });
 
-test("due reviews come before new words, whatever day each fell due", () => {
+test("reviews are offered whatever day each fell due, and not before", () => {
   const cards = {
     "w5|r5#r": { st: "review", ivl: 3, ease: 2.5, due: 99, n: 2, lapses: 0, first: 90, last: 96 },
     "w6|r6#r": { st: "review", ivl: 3, ease: 2.5, due: 97, n: 2, lapses: 0, first: 90, last: 94 },
     "w7|r7#r": { st: "review", ivl: 3, ease: 2.5, due: 105, n: 2, lapses: 0, first: 90, last: 99 },
   };
   const q = queue({ words: deck, cards, today: 100, newPerDay: 20 });
-  assert.deepEqual(q.slice(0, 2).map((c) => c.key).sort(), ["w5|r5#r", "w6|r6#r"]);
+  assert.ok(["w5|r5#r", "w6|r6#r"].every((k) => q.some((c) => c.key === k)));
   assert.ok(!q.some((c) => c.key === "w7|r7#r"));
 });
 
@@ -124,6 +124,40 @@ test("a word's two sides have at least 10 cards between them when the session ha
     for (let i = 0; i < 5; i++) cards[`w${i}|r${i}#p`] = card(100);
     const q = queue({ words: deck, cards, today: 100, newPerDay: 0, rand: seeded(seed) });
     return q.length === 30 && [0, 1, 2, 3, 4].every((i) => apart(q, `w${i}|r${i}`) > 10);
+  }));
+});
+
+// Ten gap cards were the most a side ever got, so in a long session the English side still came right on the heels of its Japanese one.
+test("a word's two sides sit a third of the session apart, half when every card has a pair", () => {
+  fc.assert(fc.property(fc.integer({ min: 1, max: 25 }), fc.integer({ min: 0, max: 25 }), fc.integer(), (pairs, singles, seed) => {
+    const cards = {};
+    for (let i = 0; i < pairs + singles; i++) cards[`w${i}|r${i}#r`] = card(100);
+    for (let i = 0; i < pairs; i++) cards[`w${i}|r${i}#p`] = card(100);
+    const q = queue({ words: deck, cards, today: 100, newPerDay: 0, rand: seeded(seed) });
+    const n = q.length, least = Math.min(Math.max(11, Math.ceil(n / 3)), Math.floor(n / 2));
+    return n === 2 * pairs + singles && Array.from({ length: pairs }, (_, i) => apart(q, `w${i}|r${i}`)).every((d) => d >= least);
+  }), { examples: [[20, 0, 1], [25, 0, 7], [1, 1, 3]] });
+});
+
+// The day ran due reviews, then the English sides in word-list order, then new words, so the run was predictable block by block.
+test("reviews, English sides and new words come mixed, not in blocks", () => {
+  const cards = {};
+  for (let i = 0; i < 10; i++) cards[`w${i}|r${i}#r`] = { ...card(100), first: 99, last: 99 };
+  for (let i = 10; i < 20; i++) cards[`w${i}|r${i}#r`] = card(100);
+  const run = (seed) => queue({ words: deck, cards, today: 100, newPerDay: 10, rand: seeded(seed) });
+  const seeds = Array.from({ length: 20 }, (_, i) => i + 1);
+  assert.ok(seeds.some((s) => run(s).slice(0, 20).some((c) => c.dir === "r" && !cards[c.key])), "new words always came after every review");
+  const english = (s) => run(s).filter((c) => c.dir === "p").map((c) => c.word.k).join();
+  assert.ok(new Set(seeds.map(english)).size > 1, "the English sides came in one order every time");
+});
+
+test("a new English side always comes after its Japanese side", () => {
+  fc.assert(fc.property(fc.integer(), (seed) => {
+    const cards = {};
+    for (let i = 0; i < 10; i++) cards[`w${i}|r${i}#r`] = { ...card(100), first: 99, last: 99 };
+    const q = queue({ words: deck, cards, today: 100, newPerDay: 10, rand: seeded(seed) });
+    const at = (k) => q.findIndex((c) => c.key === k);
+    return Array.from({ length: 10 }, (_, i) => at(`w${i}|r${i}#r`) < at(`w${i}|r${i}#p`)).every(Boolean);
   }));
 });
 
@@ -179,7 +213,7 @@ test("with fuzz, Easy still beats Good and Good still beats Hard", () => {
 // Words follow the kanji: one with kanji waits until each has a card, while a word already met keeps going [学生 opens once 学 and 生 have one].
 test("only words the ready rule passes are offered new, while a met word keeps its reviews and gets its English side", () => {
   const ready = (w) => !["w0|r0", "w2|r2"].includes(w.k);
-  assert.deepEqual(queue({ words: deck, cards: {}, today: 100, newPerDay: 3, ready }).map((c) => c.word.k), ["w1|r1", "w3|r3", "w4|r4"]);
+  assert.deepEqual(queue({ words: deck, cards: {}, today: 100, newPerDay: 3, ready }).map((c) => c.word.k).sort(), ["w1|r1", "w3|r3", "w4|r4"]);
   const cards = { "w0|r0#r": { st: "review", ivl: 1, ease: 2.5, due: 100, n: 1, lapses: 0, first: 99, last: 99 } };
   const q = queue({ words: deck, cards, today: 100, newPerDay: 3, ready });
   assert.deepEqual(q.filter((c) => c.word.k === "w0|r0").map((c) => c.dir), ["r", "p"]);

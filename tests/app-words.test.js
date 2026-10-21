@@ -3,7 +3,9 @@
 // that must not write, and the deck following the account like the kana do.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { open, next, saves, listed, romajiOf, dayOf, day, deckOf, studySaves, reviewed, deckWith, started, pastIntros, answer } = require("./browser.js");
+const { open, next, saves, listed: shuffled, romajiOf, dayOf, day, deckOf, studySaves, reviewed, deckWith, started, pastIntros, answer } = require("./browser.js");
+// Reviews in the order the deck lists them, as these cases read it [Math.random 0: the one due review before the new words].
+const listed = { ...shuffled, rand0: true };
 
 test("the Japanese section has its own tabs, and the kana tabs stay as they were", async () => {
   const page = await open(listed, "#words");

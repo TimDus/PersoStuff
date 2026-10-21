@@ -75,20 +75,59 @@
     }
     return best;
   }
-  // The first card of each word keeps its place and its kin move to fit [会う#r 3rd and 会う#p 4th: #p goes 11 places after #r].
-  function spread(items) {
-    const out = [], later = [];
-    for (const it of items) (out.some((x) => kin(x, it)) ? later : out).push(it);
-    const at = new Map(items.map((it, i) => [it, i]));
-    for (const it of later) out.splice(place(out, it, out.filter((x) => at.get(x) < at.get(it)).length, { before: true }), 0, it);
-    return out;
+  // Cards in one shuffled run, each group of kin at least `need` apart, a `late` card after its kin [60 cards: 会う#r and 会う#p 20 or more apart; 3 cards: first and last].
+  function mix(items, { rand = Math.random, late = new Set() } = {}) {
+    const n = items.length, pick = (xs) => xs[Math.floor(rand() * xs.length)];
+    const groups = [];
+    for (const it of items) {
+      const own = groups.filter((g) => g.some((x) => kin(x, it)));
+      groups.push([...own.flat(), it]);
+      for (const g of own) groups.splice(groups.indexOf(g), 1);
+    }
+    const shuffle = (xs) => xs.map((it) => [rand(), it]).sort((a, b) => a[0] - b[0]).map(([, it]) => it);
+    const need = (m) => Math.min(Math.max(GAP + 1, Math.ceil(n / (m + 1))), Math.floor((n - 1) / (m - 1)));
+    // A random free slot for each card of a group, all `need` apart; null when the run has painted itself in [20 pairs in 40 cards].
+    const tryLayout = () => {
+      const slots = Array(n).fill(null);
+      for (const g of groups.filter((g) => g.length > 1).sort((a, b) => b.length - a.length)) {
+        const at = [];
+        for (let j = 0; j < g.length; j++) {
+          const free = slots.map((x, p) => p).filter((p) => !slots[p] && !at.includes(p) && at.every((q) => Math.abs(p - q) >= need(g.length)));
+          if (!free.length) return null;
+          at.push(pick(free));
+        }
+        at.sort((a, b) => a - b).forEach((p, j) => { slots[p] = g[j]; });
+      }
+      return slots;
+    };
+    // Evenly spaced when random slots don't fit, which always fits pairs [40 cards: slots s and s + 20].
+    const evenLayout = () => {
+      const slots = Array(n).fill(null);
+      for (const g of groups.filter((g) => g.length > 1).sort((a, b) => b.length - a.length)) {
+        const at = (s) => g.map((x, j) => s + Math.round((j * n) / g.length));
+        const starts = slots.map((x, s) => s).filter((s) => at(s).every((p) => p < n && !slots[p]));
+        const ps = starts.length ? at(pick(starts)) : [];
+        if (!starts.length) for (const x of g) {
+          const gapTo = (p) => Math.min(Infinity, ...ps.map((q) => Math.abs(p - q)));
+          const free = slots.map((x, p) => p).filter((p) => !slots[p] && !ps.includes(p));
+          ps.push(free.reduce((best, p) => (gapTo(p) > gapTo(best) ? p : best)));
+        }
+        ps.sort((a, b) => a - b).forEach((p, j) => { slots[p] = g[j]; });
+      }
+      return slots;
+    };
+    groups.forEach((g, i) => { groups[i] = shuffle(g).sort((a, b) => late.has(a) - late.has(b)); });
+    let slots = null;
+    for (let t = 0; t < 20 && !slots; t++) slots = tryLayout();
+    slots = slots || evenLayout();
+    const singles = shuffle(groups.filter((g) => g.length === 1).flat());
+    return slots.map((x) => x || singles.shift());
   }
 
-  // Today's cards: due reviews shuffled whatever their day, learning cards a closed tab left behind, then new ones, kin kept apart by `spread`.
+  // Today's cards in one `mix`: due reviews whatever their day, learning cards a closed tab left behind, and new ones, a new English side after its Japanese side.
   // New: the English side of words whose Japanese side was first seen before today, and the next words in deck order,
   // each kind up to newPerDay less what today already introduced [15 met this morning = 5 more tonight]; a word meets `ready` to be new [学生 once 学 and 生 have kanji cards], and a word that `waits` sits today out [秋 once its kanji card is answered today].
   function queue({ words, cards, today, newPerDay, rand = Math.random, ready = () => true, waits = () => false }) {
-    const out = [];
     const item = (word, dir) => ({ key: `${word.k}#${dir}`, word, dir });
     const due = [], learning = [], prod = [], rec = [];
     let recToday = 0, prodToday = 0;
@@ -104,10 +143,8 @@
       if (!r) { if (ready(word)) rec.push(item(word, "r")); }
       else if (!p && r.first < today) prod.push(item(word, "p"));
     }
-    out.push(...due.map((it) => [rand(), it]).sort((a, b) => a[0] - b[0]).map(([, it]) => it), ...learning);
-    // A word's two sides on the same day are its new English card and its Japanese review [w0 Monday: r, Tuesday: r then p].
-    out.push(...prod.slice(0, Math.max(0, newPerDay - prodToday)), ...rec.slice(0, Math.max(0, newPerDay - recToday)));
-    return spread(out);
+    const fresh = prod.slice(0, Math.max(0, newPerDay - prodToday));
+    return mix([...due, ...learning, ...fresh, ...rec.slice(0, Math.max(0, newPerDay - recToday))], { rand, late: new Set(fresh) });
   }
 
   // The copy of a card to keep: more answers, then the later day, then a fixed order both devices agree on [n 4 on day 100 each: the lower due].
@@ -142,7 +179,7 @@
     return { ...out, cards: mergeCards(sides), settings: latest(sides, { newPerDay: 20, at: 0 }), ...drills, ...kanji, savedAt: Math.max(0, ...sides.map((s) => s.savedAt || 0)) };
   }
 
-  const api = { dayOf, grade, preview, queue, place, spread, GAP, mergeStudy, DRILLS };
+  const api = { dayOf, grade, preview, queue, place, mix, GAP, mergeStudy, DRILLS };
   if (typeof module !== "undefined") module.exports = api;
   else root.HiraSRS = api;
 })(this);

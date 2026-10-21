@@ -1,6 +1,6 @@
 // The Japanese section: JLPT vocabulary on Anki-style reviews, both directions, synced to its own column [progress.study, beside the kana in progress.data].
 (function () {
-  const { dayOf, grade, preview, queue, place, spread, GAP, mergeStudy, DRILLS } = window.HiraSRS;
+  const { dayOf, grade, preview, queue, place, mix, GAP, mergeStudy, DRILLS } = window.HiraSRS;
   const { same, bump, wordClip } = window.HiraSync;
   const { note, pieces, learned, ready: hasKanji, wordWaits } = window.HiraKanji;
   const { keywordOf } = window.HiraKeywords;
@@ -339,7 +339,7 @@
     const all = byKey();
     const keys = set === "today" ? answeredToday(false) : set === "missed" ? answeredToday(true)
       : levelKeys(set === "n4" ? 4 : 5);
-    const items = spread(keys.map((k) => all.get(k)).filter(Boolean).sort(() => Math.random() - 0.5));
+    const items = mix(keys.map((k) => all.get(k)).filter(Boolean));
     if (!items.length) return hub();
     const title = { today: "Practice: today's cards", missed: "Practice: today's misses", n5: "Practice: N5", n4: "Practice: N4" }[set] || "Practice";
     const missed = new Set();
