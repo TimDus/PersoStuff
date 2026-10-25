@@ -507,3 +507,46 @@ test("a sentence typed in romaji marks the kana where it goes wrong, and counts 
   assert.equal(await page.inputValue("#typed"), "");
   await page.close();
 });
+
+// A lookup by English on the Words hub: nothing listed until a key is typed, then only the matches, met words plain.
+test("the Words hub's search lists the matching words as you type, unmet ones muted, and an empty box lists none", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: deckWith({ "食べる|たべる#r": reviewed() }) } }, "#words");
+  await page.locator("#w-find").waitFor();
+  assert.equal(await page.locator("#w-hits .find-row").count(), 0);
+  await page.fill("#w-find", "eat");
+  const rows = () => page.locator("#w-hits .find-row").evaluateAll((rs) => rs.map((r) => r.dataset.k + (r.classList.contains("unmet") ? "~" : "")));
+  assert.deepEqual(await rows(), ["食べる|たべる", "召し上がる|めしあがる~", "頂く|いただく~"]);
+  assert.deepEqual(await page.locator("#w-hits mark").allTextContents(), ["eat", "eat", "eat"]);
+  await page.fill("#w-find", "");
+  assert.equal(await page.textContent("#w-hits"), "");
+  await page.close();
+});
+
+test("a long Words search shows 50 until Show all, and a row's kanji opens its popup", async () => {
+  const page = await open(listed, "#words");
+  await page.fill("#w-find", "to");
+  assert.equal(await page.locator("#w-hits .find-row").count(), 50);
+  await page.click("#w-more");
+  assert.ok(await page.locator("#w-hits .find-row").count() > 300);
+  await page.fill("#w-find", "taberu");
+  await page.click("#w-hits [data-kanji='食']");
+  await page.locator(".kanji-pop[data-c='食']").waitFor({ timeout: 3000 });
+  await page.close();
+});
+
+test("the Words search is still there after leaving the hub and coming back, and a new key folds Show all away", async () => {
+  const page = await open(listed, "#words");
+  await page.fill("#w-find", "t");
+  await page.click("#w-more");
+  assert.ok(await page.locator("#w-hits .find-row").count() > 50);
+  await page.fill("#w-find", "to");
+  assert.equal(await page.locator("#w-hits .find-row").count(), 50);
+  await page.fill("#w-find", "eat");
+  await page.click("nav a[data-tab='kanji']");
+  await page.locator("#k-find").waitFor();
+  await page.click("nav a[data-tab='words']");
+  await page.locator("#w-find").waitFor();
+  assert.equal(await page.inputValue("#w-find"), "eat");
+  assert.equal(await page.locator("#w-hits .find-row").count(), 3);
+  await page.close();
+});

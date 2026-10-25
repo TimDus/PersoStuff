@@ -373,6 +373,20 @@ footer .credits[open] summary { margin-bottom: .3rem; }
 .kgrid a.next { border: 1px dashed var(--accent); }
 .kgrid a.studying { border-color: var(--accent); }
 .kgrid a.learned { background: var(--good-soft); color: var(--good); border-color: var(--good); }
+/* The hubs' search: Kanji lights its matching tiles and dims the rest, Words lists its matches [eat: 食 喫 lit; 食べる listed]. */
+.find { margin: .8rem 0 1rem; }
+.find-box {
+  font: inherit; width: min(420px, 100%); padding: .45rem .7rem; border: 2px solid var(--line); border-radius: 10px;
+  background: var(--panel); color: var(--ink); outline: none;
+}
+.find-box:focus { border-color: var(--accent); }
+#k-hits a { font-size: 1.2rem; margin-right: .15rem; }
+#w-hits { display: grid; gap: .35rem; margin-top: .4rem; }
+#w-hits p { margin: 0; }
+.find-row .kn-k { font-size: 1rem; min-width: 2rem; margin-left: .25rem; }
+mark { background: var(--accent-soft); color: inherit; border-radius: 3px; padding: 0 .1rem; }
+.kgrid.finding a:not(.hit) { opacity: .12; }
+.kgrid.finding a.hit { opacity: 1; outline: 2px solid var(--accent); outline-offset: 1px; }
 .kanji-prompt { font-size: 1.8rem; font-weight: 600; }
 /* Draw mode's pad under the keyword, nothing judged [touch-action off so a stroke doesn't scroll the page]. */
 .kpad { margin-top: .8rem; display: grid; justify-items: center; gap: .4rem; cursor: default; }

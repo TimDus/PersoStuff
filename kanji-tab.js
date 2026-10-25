@@ -186,12 +186,32 @@
           <label>New kanji a day <select id="kper">${[5, 10, 20].map((n) => `<option ${n === k.settings.newPerDay ? "selected" : ""}>${n}</option>`).join("")}</select></label>
         </div>
       </div>
+      <div class="find"><input type="search" id="k-find" class="find-box" placeholder="Search kanji: English, kana or romaji" value="${esc(findK)}" aria-label="Search kanji">
+        <p class="muted small" id="k-hits"></p></div>
       ${(Object.keys(info).length ? groups : [["All kanji", () => true]]).map(([title, ok]) => {
         const cs = all.filter(ok);
         return cs.length ? `<h2>${title}</h2><div class="kgrid">${cs.map((c) => `<a class="jp ${state(c)}" href="#kanji/${esc(c)}" title="${esc(study.keyword(c))}">${esc(c)}</a>`).join("")}</div>` : "";
       }).join("")}`;
     app.querySelector("#kper").addEventListener("change", (e) => { study.setKanjiSettings(+e.target.value); hub(words); });
     app.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => { localStorage.setItem(MODE, JSON.stringify(b.dataset.mode)); hub(words); }));
+    const box = app.querySelector("#k-find");
+    box.addEventListener("input", (e) => { findK = e.target.value; light(all); });
+    light(all);
+    // Heisig's keywords match once Koohii's file lands, past the hub's 3 s wait [nightbreak typed at once: 旦 lit when it arrives].
+    study.loadKoohii().then(() => { if (box.isConnected) light(all); });
+  }
+
+  // The hub's search, its tiles lit and named English hits first, kept until a reload [eat: 食 喫, still lit after Back from 食's page].
+  let findK = "";
+  function light(all) {
+    const { app } = study.shell();
+    const list = window.HiraSearch.kanji(all, study.kanjiInfo() || {}, findK, study.koohiiAll());
+    const hit = new Set(list);
+    const on = !!findK.trim();
+    app.querySelectorAll(".kgrid").forEach((g) => g.classList.toggle("finding", on));
+    app.querySelectorAll(".kgrid a").forEach((a) => a.classList.toggle("hit", hit.has(a.textContent)));
+    app.querySelector("#k-hits").innerHTML = !on ? "" : !list.length ? "No kanji match"
+      : `${list.length} kanji match${list.length === 1 ? "es" : ""}: ${list.slice(0, 30).map((c) => `<a class="jp" href="#kanji/${esc(c)}" title="${esc(study.keyword(c))}">${esc(c)}</a>`).join(" ")}${list.length > 30 ? " …" : ""}`;
   }
 
   function page(c, words) {

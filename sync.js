@@ -7,6 +7,8 @@
   const imagePath = (kana) => `img/${hex(kana)}`;
   // A word's recording, in the repo rather than the bucket [会う|あう = data/words/4f1a-3046-7c-3042-3046.mp3].
   const wordClip = (key) => `data/words/${hex(key)}.mp3`;
+  // Katakana as hiragana, one block 0x60 down [テスト = てすと].
+  const hira = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
 
   // A kana's history after one answer, box 0 unseen to 5 mastered [a miss drops any box to 1, a first right lands on 2].
   const bump = (p, ok) => {
@@ -72,7 +74,7 @@
     : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])])) : v);
   const same = (a, b) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
 
-  const api = { clipPath, imagePath, wordClip, bump, better, merge, mergeWrite, same, wholeCategories };
+  const api = { clipPath, imagePath, wordClip, hira, bump, better, merge, mergeWrite, same, wholeCategories };
   if (typeof module !== "undefined") module.exports = api;
   else root.HiraSync = api;
 })(this);

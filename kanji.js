@@ -69,7 +69,7 @@
   // A word reads as known once every kanji in it is mature [学生 with 学 at 21 days and 生 at 20: not yet].
   const learned = (word, kcards) => kanjiOf(word).length > 0 && kanjiOf(word).every((c) => mature(kcards[c]));
 
-  const hira = (s) => s.replace(/[ァ-ヶ]/g, (k) => String.fromCharCode(k.charCodeAt(0) - 0x60));
+  const { hira } = typeof module !== "undefined" ? require("./sync.js") : root.HiraSync;
   const VOICED = { か: "が", き: "ぎ", く: "ぐ", け: "げ", こ: "ご", さ: "ざ", し: "じ", す: "ず", せ: "ぜ", そ: "ぞ", た: "だ", ち: "ぢ", つ: "づ", て: "で", と: "ど", は: "ばぱ", ひ: "びぴ", ふ: "ぶぷ", へ: "べぺ", ほ: "ぼぽ" };
   // The shapes a reading takes inside a word: as written, voiced, then cut short by a small っ [がく; かみ, がみ; がっ].
   function shapes(s) {

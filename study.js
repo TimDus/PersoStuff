@@ -2,7 +2,7 @@
 (function () {
   const { dayOf, grade, preview, queue, place, mix, GAP, mergeStudy, DRILLS } = window.HiraSRS;
   const { same, bump, wordClip } = window.HiraSync;
-  const { note, pieces, learned, ready: hasKanji, wordWaits } = window.HiraKanji;
+  const { note, pieces, learned, ready: hasKanji, wordWaits, kanjiOf } = window.HiraKanji;
   const { keywordOf } = window.HiraKeywords;
   let shell = null;
   let words = null;
@@ -16,7 +16,7 @@
   const loadWords = () => (loading ||= Promise.all([json("data/vocab.json"), json("data/kanji.json").catch(() => ({}))])
     .then(([list, info]) => { kanjiInfo = info; return (words = list); })
     .catch((e) => { loading = null; throw e; }));
-  // Heisig's keywords and Koohii's stories from the private bucket [never awaited by the words; a failure is asked again by the next Words visit or popup, a sign that never answers leaves them out until a reload].
+  // Heisig's keywords and Koohii's stories from the private bucket [never awaited by the words; a failure is asked again by the next Words or Kanji visit or popup, a sign that never answers leaves them out until a reload].
   let koohiiLoading = null;
   const loadKoohii = () => (koohiiLoading ||= shell.backend.signedUrls(["koohii.json"])
     .then((m) => (m.get("koohii.json") ? json(m.get("koohii.json")) : {}))
@@ -79,10 +79,12 @@
   const examples = (w) => (w.ex.length ? `<div class="examples">${w.ex.map(([jp, en]) => `
     <div class="ex"><span class="jp">${esc(jp)}</span> ${speak(jp)}<div class="muted small">${esc(en)}</div></div>`).join("")}</div>` : "");
   const keyword = (c) => keywordOf(c, koohii, kanjiInfo);
+  // A kanji as a button opening its popup over the page [学 on 学生's note, 食 on a search row].
+  const kanjiButton = (c) => `<button class="kn-k jp" type="button" data-kanji="${esc(c)}" title="About ${esc(c)}">${esc(c)}</button>`;
   // Under the answer, a line per kanji with the met words that share it [学 study, learning · also in 大学, 学校].
   const kanjiNote = (w) => {
     const lines = note(w, words, deck.cards);
-    return lines.length ? `<div class="kanji-note">${lines.map(({ c, also }) => `<div class="kn"><button class="kn-k jp" type="button" data-kanji="${esc(c)}" title="About ${esc(c)}">${esc(c)}</button>${keyword(c) ? ` ${esc(keyword(c))}` : ""}${
+    return lines.length ? `<div class="kanji-note">${lines.map(({ c, also }) => `<div class="kn">${kanjiButton(c)}${keyword(c) ? ` ${esc(keyword(c))}` : ""}${
       also.length ? ` · also in ${also.map((x) => `<span class="jp">${esc(x.w)}</span>`).join(", ")}` : ""}</div>`).join("")}</div>` : "";
   };
   // At the bottom of the back, what the word's kanji are built from [学生: Parts 子 child, Radicals ⺍ three strokes · 冖 crown, cover; 海's 氵 is water (from 水)].
@@ -159,6 +161,8 @@
       <p class="lead">The JLPT N5 words, then N4, most common first, a word with kanji once you've started its kanji. Each word
         is a card both ways: read the Japanese, then recall it from English the next day. Answer honestly; the buttons set
         when it comes back.</p>
+      <div class="find"><input type="search" id="w-find" class="find-box" placeholder="Search words: English, kana or romaji" value="${esc(findW)}" aria-label="Search words">
+        <div id="w-hits"></div></div>
       <div class="panel">
         <div class="stats" style="margin-bottom:1rem">
           <div><div class="big-number" id="due">${q.length - fresh}</div>to review</div>
@@ -193,6 +197,25 @@
       save();
       hub();
     });
+    shell.app.querySelector("#w-find").addEventListener("input", (e) => { findW = e.target.value; findAll = false; findWords(); });
+    findWords();
+  }
+
+  // The Words hub's search, kept until a reload [eat typed, off to Kanji and back: still eat, 食べる 召し上がる 頂く].
+  let findW = "", findAll = false;
+  const SHOWN = 50;
+  function findWords() {
+    const box = shell.app.querySelector("#w-hits");
+    const { words: search, mark } = window.HiraSearch;
+    const hits = search(words, findW);
+    const marked = (m) => mark(m, findW).map(([t, hit]) => (hit ? `<mark>${esc(t)}</mark>` : esc(t))).join("");
+    const row = (w) => `<div class="find-row kw-row${metWord(w.k) ? "" : " unmet"}" data-k="${esc(w.k)}"><span class="jp">${ruby(w)}</span>
+      <span class="small">${marked(w.m)}</span> <span class="muted small">N${w.lv}</span>
+      ${kanjiOf(w).map(kanjiButton).join("")}</div>`;
+    box.innerHTML = !findW.trim() ? "" : !hits.length ? `<p class="muted small">No word matches</p>`
+      : `<p class="muted small">${hits.length} word${hits.length > 1 ? "s" : ""}</p>${(findAll ? hits : hits.slice(0, SHOWN)).map(row).join("")}${
+        !findAll && hits.length > SHOWN ? `<button class="ghost small" type="button" id="w-more">Show all ${hits.length}</button>` : ""}`;
+    box.querySelector("#w-more")?.addEventListener("click", () => { findAll = true; findWords(); });
   }
 
   let byWord = null;
@@ -417,6 +440,7 @@
     cards: () => deck.cards,
     kanjiInfo: () => kanjiInfo,
     koohii: (c) => koohii[c],
+    koohiiAll: () => koohii,
     // Heisig's frame per kanji, empty until Koohii's file is in [学 = 346].
     frames: () => Object.fromEntries(Object.entries(koohii).filter(([, k]) => k.frame).map(([c, k]) => [c, k.frame])),
     loadKoohii: () => loadKoohii(),

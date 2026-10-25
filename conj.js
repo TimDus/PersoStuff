@@ -130,12 +130,12 @@
     return out;
   }
 
-  // Katakana as hiragana, for answers romaji can only give in hiragana [テストします = てすとします].
-  const hira = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
+  // Romaji only gives hiragana, so answers compare as hiragana [テストします = てすとします].
+  const { hira } = typeof module !== "undefined" ? require("./sync.js") : root.HiraSync;
   // Either spelling of a contraction [ではない = じゃない, 食べてはいけない = 食べちゃいけない].
   const short = (s) => s.replace(/ては|てわ/g, "ちゃ").replace(/では|でわ/g, "じゃ");
   // Kana as romaji says them: づ ぢ as zu ji, a particle は as wa, を as o [つづきます = tsuzukimasu, たべてはいけない = tabetewaikenai].
-  const said = (s) => s.replace(/づ/g, "ず").replace(/ぢ/g, "じ").replace(/(?<=[てでにと])は/g, "わ").replace(/を/g, "お");
+  const said = (s) => s.replace(/づ/g, "ず").replace(/ぢ/g, "じ").replace(/([てでにと])は/g, "$1わ").replace(/を/g, "お");
   // A typed answer against a form, in kana, romaji or the kanji spelling [書きます, かきます and kakimasu all count].
   const accepts = (want, typed) => {
     const t = typed.trim();

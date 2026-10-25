@@ -1,7 +1,8 @@
 // The Listening round: a met word's recording, its meaning picked from four [はな → flower, with no nose beside it].
 (function (root) {
+  const { hira } = typeof module !== "undefined" ? require("./sync.js") : root.HiraSync;
   // A reading as it sounds, katakana as hiragana and a suffix's ～ dropped [ペン = ぺん, ～だい = だい].
-  const sound = (r) => r.replace(/～/g, "").replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
+  const sound = (r) => hira(r.replace(/～/g, ""));
   // The group a word's wrong choices come from [suru verb = verb, pre-noun adjective = adjective, number = noun, adverb alone].
   const kindOf = (w) => (w.t.endsWith(" verb") ? "verb" : w.t.endsWith("adjective") ? "adjective"
     : ["noun", "pronoun", "number"].includes(w.t) ? "noun" : w.t === "adverb" ? "adverb" : "other");

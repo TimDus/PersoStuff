@@ -764,3 +764,73 @@ test("a link with a broken escape still routes, to its tab's own page", async ()
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+// A lookup by English on the Kanji hub lights the matches in the grid it already shows, and Back from one keeps the search.
+test("the Kanji hub's search lights the matching kanji, dims the rest, names them, and is still there after a kanji page", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#kanji");
+  await page.locator(".kgrid").first().waitFor();
+  assert.equal(await page.locator(".kgrid.finding").count(), 0);
+  await page.fill("#k-find", "eat");
+  const hits = () => page.locator(".kgrid a.hit").allTextContents();
+  assert.deepEqual((await hits()).sort(), ["喫", "食"]);
+  assert.ok(await page.locator(".kgrid.finding").count() > 0);
+  assert.match(await page.textContent("#k-hits"), /^2 kanji match/);
+  await page.click("#k-hits a:text('食')");
+  await page.locator(".kanji-page[data-c='食']").waitFor({ timeout: 3000 });
+  await page.goBack();
+  await page.locator(".kgrid").first().waitFor();
+  assert.equal(await page.inputValue("#k-find"), "eat");
+  assert.deepEqual((await hits()).sort(), ["喫", "食"]);
+  await page.fill("#k-find", "");
+  assert.equal(await page.locator(".kgrid.finding").count(), 0);
+  assert.equal(await page.textContent("#k-hits"), "");
+  await page.close();
+});
+
+// The stories call 旦 nightbreak while its tile says dawn, so a search by the stories' word still has to find it.
+test("the Kanji hub's search finds a kanji by Heisig's keyword where a plain one is shown", async () => {
+  const page = await open({ ...listed, koohii: { 旦: { kw: "nightbreak", frame: 30, mine: null, stories: [] } }, local: { "study.user": "u1", study: kanjiDeck() } }, "#kanji");
+  await page.locator(".kgrid").first().waitFor();
+  await page.fill("#k-find", "nightbreak");
+  assert.deepEqual(await page.locator(".kgrid a.hit").allTextContents(), ["旦"]);
+  await page.close();
+});
+
+// The hub draws after 3 s without Koohii's file; a query typed then has to light up when it lands.
+test("a Kanji search typed before Koohii's file lands lights its kanji when it does", async () => {
+  const page = await open({ ...listed, koohii: { 旦: { kw: "nightbreak", frame: 30, mine: null, stories: [] } }, koohiiHold: true, local: { "study.user": "u1", study: kanjiDeck() } }, "#kanji");
+  await page.locator("#k-find").waitFor({ timeout: 8000 });
+  await page.fill("#k-find", "nightbreak");
+  assert.equal(await page.textContent("#k-hits"), "No kanji match");
+  await page.evaluate(() => window.__releaseKoohii());
+  await page.locator(".kgrid a.hit").waitFor({ timeout: 3000 });
+  assert.deepEqual(await page.locator(".kgrid a.hit").allTextContents(), ["旦"]);
+  await page.close();
+});
+
+// With Koohii's sign hanging, only the hub's own draw can light a kept query; the relight on its landing never comes.
+test("a kept Kanji search lights the hub again on its return while Koohii's file never answers", async () => {
+  const page = await open({ ...listed, koohiiHang: true, local: { "study.user": "u1", study: kanjiDeck() } }, "#kanji");
+  await page.locator("#k-find").waitFor({ timeout: 8000 });
+  await page.fill("#k-find", "eat");
+  await page.click("#k-hits a:text('食')");
+  await page.locator(".kanji-page[data-c='食']").waitFor();
+  await page.goBack();
+  await page.locator("#k-find").waitFor({ timeout: 8000 });
+  assert.deepEqual((await page.locator(".kgrid a.hit").allTextContents()).sort(), ["喫", "食"]);
+  await page.close();
+});
+
+// The hub's relight waits on Koohii's file; landing after the hub was left, it found no box to light and threw.
+test("leaving the Kanji hub before Koohii's file lands throws nothing when it does", async () => {
+  const page = await open({ ...listed, koohii: { 旦: { kw: "nightbreak", frame: 30, mine: null, stories: [] } }, koohiiHold: true, local: { "study.user": "u1", study: kanjiDeck() } }, "#kanji");
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.locator("#k-find").waitFor({ timeout: 8000 });
+  await page.click("nav a[data-tab='words']");
+  await page.locator("#w-find").waitFor();
+  await page.evaluate(() => window.__releaseKoohii());
+  await page.waitForTimeout(300);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
