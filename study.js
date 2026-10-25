@@ -72,8 +72,8 @@
   addEventListener("online", () => { if (shell?.user) sync(); });
 
   const esc = (s) => shell.esc(s);
-  // Furigana, the ones over kanji at the word's level marked to be recalled [学生 at N5: asked; 写真's kanji are N4: given].
-  const ruby = (w) => w.fu.map(([text, rt, lv]) => (rt ? `<ruby>${esc(text)}<rt${lv >= w.lv ? ' class="ask"' : ""}>${esc(rt)}</rt></ruby>` : esc(text))).join("");
+  // Furigana, every one marked to be recalled on a card's front [写真 shows no しゃしん until the card turns].
+  const ruby = (w) => w.fu.map(([text, rt]) => (rt ? `<ruby>${esc(text)}<rt class="ask">${esc(rt)}</rt></ruby>` : esc(text))).join("");
   // A word with a WaniKani recording plays it, shown even without a Japanese voice.
   const speak = (text, w) => `<button class="speak${w?.au ? " rec" : ""}" data-say="${esc(text)}"${w?.au ? ` data-rec="${wordClip(w.k)}"` : ""} title="Listen">🔊</button>`;
   const examples = (w) => (w.ex.length ? `<div class="examples">${w.ex.map(([jp, en]) => `

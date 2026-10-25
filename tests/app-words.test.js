@@ -28,6 +28,7 @@ test("a fresh account is offered 20 new kana words, and a word with kanji once i
   const ready = await open({ ...listed, local: { "study.user": "u1", study: { ...deckWith({}), kanji: { cards: { 秋: reviewed({ first: day - 1, last: day - 1 }) }, settings: { newPerDay: 10, at: 0 } } } } }, "#words/review");
   await ready.locator(".face.front").waitFor();
   assert.equal(await ready.locator(".face.front ruby rt").first().textContent(), "あき");
+  assert.equal(await ready.locator(".face.front ruby rt").first().isVisible(), true, "a new word's intro shows its reading");
   await ready.close();
 });
 
@@ -178,18 +179,18 @@ test("a merged number names its other reading on the back, and an affix the word
   }
 });
 
-// Furigana on the Japanese side gave the reading away before the learner had to recall it [学生 with がくせい over it],
-// yet hiding every one asked for readings of kanji years above the word [写真 at N5, both kanji N4].
-test("a reading at the word's level stays hidden until the card turns, one above it shows from the start", async () => {
-  // One page per word, as a day's reviews come shuffled [学生 hidden, 写真 and 沢山 shown].
-  for (const [key, front, kana] of [["学生|がくせい", "hidden", null], ["写真|しゃしん", "visible", null], ["沢山|たくさん", "visible", "たくさん"]]) {
+// Furigana on the Japanese side gave the reading away before the learner had to recall it [学生 with がくせい over it];
+// sparing kanji above the word's level still gave it away on 742 of 1,105 kanji words [写真 at N5, both kanji N4].
+test("every reading stays hidden until the card turns", async () => {
+  // One page per word, as a day's reviews come shuffled.
+  for (const [key, kana] of [["学生|がくせい", null], ["写真|しゃしん", null], ["沢山|たくさん", "たくさん"]]) {
     const study = deckWith({ [`${key}#r`]: reviewed({ first: day - 3, last: day - 3, due: day }) });
     const page = await open({ ...listed, local: { "study.user": "u1", study } }, "#words/review");
     const rt = page.locator(".face.front ruby rt").first();
     const shown = () => rt.evaluate((r) => getComputedStyle(r).visibility);
     await rt.waitFor({ state: "attached" });
     assert.match(await page.textContent(".face.front"), new RegExp(key.split("|")[0]));
-    assert.equal(await shown(), front, key);
+    assert.equal(await shown(), "hidden", key);
     await page.click("#card");
     assert.equal(await shown(), "visible");
     const back = await page.textContent(".face.back");
