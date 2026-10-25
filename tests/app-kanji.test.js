@@ -834,3 +834,43 @@ test("leaving the Kanji hub before Koohii's file lands throws nothing when it do
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+// Esc follows a page's ← link, so a kanji's page or a review is left without reaching for the link.
+test("Esc on a kanji's page goes back to the Kanji hub, and in a kanji review back to its hub", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#kanji/食");
+  await page.locator(".kanji-page[data-c='食']").waitFor();
+  await page.keyboard.press("Escape");
+  await page.locator("#k-find").waitFor({ timeout: 8000 });
+  assert.equal(new URL(page.url()).hash, "#kanji");
+  await page.goto(page.url().replace(/#.*/, "#kanji/review"));
+  await page.locator(".face.front").waitFor({ timeout: 8000 });
+  await page.keyboard.press("Escape");
+  await page.locator("#k-find").waitFor({ timeout: 8000 });
+  assert.equal(new URL(page.url()).hash, "#kanji");
+  await page.close();
+});
+
+test("Esc with a popup open closes only the popup, and the next Esc leaves the review", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#words/review");
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  await page.click(".kanji-note .kn-k >> nth=0");
+  await page.locator(".modal-back").waitFor();
+  await page.keyboard.press("Escape");
+  assert.equal(await page.locator(".modal-back").count(), 0);
+  assert.equal(new URL(page.url()).hash, "#words/review");
+  await page.keyboard.press("Escape");
+  await page.locator("#w-find").waitFor();
+  assert.equal(new URL(page.url()).hash, "#words");
+  await page.close();
+});
+
+// Esc while a Japanese keyboard is composing cancels the composition, never the page under it.
+test("Esc during an IME composition stays on the page", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#kanji/食");
+  await page.locator(".kanji-page[data-c='食']").waitFor();
+  await page.evaluate(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", isComposing: true, bubbles: true })));
+  await page.waitForTimeout(200);
+  assert.equal(decodeURIComponent(new URL(page.url()).hash), "#kanji/食");
+  await page.close();
+});

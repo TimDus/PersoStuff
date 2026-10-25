@@ -569,3 +569,15 @@ test("a second press while the strokes are still loading cancels them", async ()
   assert.equal(await toggle.textContent(), "Stroke order");
   await page.close();
 });
+
+// A Learn step has two arrows: ← All steps back to the list, and ← Hiragana 2 to the step before; Esc means the first.
+test("Esc on a Learn step goes back to All steps, never the step before, and a page with no back link stays", async () => {
+  const page = await open(listed, "#learn/3");
+  await page.locator(".kana-card").first().waitFor();
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => location.hash === "#learn");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
+  assert.equal(new URL(page.url()).hash, "#learn");
+  await page.close();
+});

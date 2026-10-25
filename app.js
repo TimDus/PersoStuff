@@ -1370,6 +1370,12 @@
     routes[view](rest);
     scrollTo(0, 0);
   }
+  // Esc follows the page's first ← link, registered before any popup so an open one closes alone [#kanji/食 → #kanji; #learn/3 → ← All steps, above ← Hiragana 2].
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || e.isComposing || document.querySelector(".modal-back")) return;
+    const back = [...app.querySelectorAll("a")].find((a) => a.textContent.trim().startsWith("←"));
+    if (back) { e.preventDefault(); back.click(); }
+  });
   async function loadContent() {
     try {
       const c = await backend.content();
