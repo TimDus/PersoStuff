@@ -71,6 +71,13 @@ button.bad { background: var(--bad); border-color: var(--bad); }
 /* Lesson list */
 .lesson-card { text-decoration: none; color: inherit; display: block; position: relative; }
 .lesson-card:hover { border-color: var(--accent); }
+.verb-step.done { border-color: var(--good); }
+.verb-step.done .step { color: var(--good); }
+.verb-ex-wrap { overflow-x: auto; }
+.verb-ex { border-collapse: collapse; }
+.verb-ex th, .verb-ex td { text-align: left; padding: .4rem .8rem .4rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.verb-ex td .jp { font-size: 1.2rem; white-space: nowrap; }
+.verb-ex td .muted { min-width: 7rem; }
 .lesson-card .step { color: var(--accent); font-weight: 700; font-size: .8rem; letter-spacing: .05em; text-transform: uppercase; }
 .lesson-card .title { font-family: var(--jp); font-size: 1.5rem; margin: .2rem 0; }
 .bar { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; margin-top: .6rem; }

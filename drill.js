@@ -106,6 +106,7 @@
           note = prev ? `New best! Previous ${fmt(prev.ms)} at ${prev.acc}%` : "First run — now beat it.";
         } else note = `Best: ${fmt(prev.ms)} at ${prev.acc}%`;
       }
+      d.finished?.({ ms, acc });
       // A finished drill uploads at once, like a finished review [a new best reaches the other devices now, not in 20 s].
       study.flush();
       const misses = [...new Set(missed)];

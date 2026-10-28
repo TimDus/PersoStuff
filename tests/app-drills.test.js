@@ -33,6 +33,64 @@ async function answerRight(page) {
   await next(page, prog);
 }
 
+// The tab first opened on a drill of four forms nobody had taught [polite, polite negative, polite past, polite past negative].
+test("a fresh Verbs tab lists the steps and its review waits for Step 1", async () => {
+  const page = await open(drill, "#verbs");
+  await page.locator(".verb-step").first().waitFor();
+  assert.equal(await page.locator(".verb-step").count(), 15);
+  assert.equal(await page.locator(".verb-step.done").count(), 0);
+  assert.match(await page.getAttribute("#review", "class"), /\bdisabled\b/);
+  assert.match(await page.textContent("#review-note"), /Step 1/);
+  await page.close();
+});
+
+test("a step's lesson shows the form on real words, and finishing its drill marks it done for the review", async () => {
+  const page = await open({ ...drill, local: { "study.user": "u1", study: deckWith({ "飲む|のむ#r": reviewed() }) } }, "#verbs/learn/masu");
+  await page.locator(".verb-lesson").waitFor();
+  assert.match(await page.textContent(".verb-lesson h1"), /ます/);
+  assert.equal(await page.textContent(".verb-ex tbody tr:first-child .jp"), "飲む");
+  assert.match(await page.textContent(".verb-ex tbody tr:first-child"), /飲みます/);
+  await page.click("#drill");
+  await page.locator(".verb-q").waitFor();
+  assert.equal(await page.textContent("#prog"), "1 / 10");
+  while (!(await page.locator("h1", { hasText: "Done!" }).count())) {
+    assert.equal(await page.getAttribute(".verb-q", "data-form"), "masu");
+    await answerRight(page);
+  }
+  assert.doesNotMatch(await page.textContent(".panel"), /best/i);
+  assert.deepEqual(Object.keys((await deckOf(page)).verbs.best), ["step:masu"]);
+  await page.goto("/#verbs");
+  await page.locator(".verb-step.done").waitFor();
+  assert.match(await page.textContent("#review-note"), /^1 of 15/);
+  assert.doesNotMatch(await page.getAttribute("#review", "class"), /\bdisabled\b/);
+  await page.close();
+});
+
+const stepsDone = (ids) => ({ kana: {}, resetAt: 0, best: Object.fromEntries(ids.map((id) => [`step:${id}`, { ms: 9000, acc: 100 }])) });
+// Each question's form with its word's kind [食べる asked as ない = "nai|verb"].
+const askedPair = (page) => page.evaluate(async () => {
+  const q = document.querySelector(".verb-q").dataset;
+  const w = (await (await fetch("data/vocab.json")).json()).find((x) => x.k === q.k);
+  const c = HiraConj.classOf(w);
+  return `${q.form}|${c === "adj-na" ? "adj-na" : c.startsWith("adj") ? "adj-i" : "verb"}`;
+});
+
+// Steps 1 and 7 done put ない on verbs too, when the picker's chips stood for the finished steps and crossed every form with every kind.
+test("the review asks only what the finished steps taught, even when done out of order", async () => {
+  const page = await open({ ...drill, local: { "study.user": "u1", study: { ...deckWith({}), verbs: stepsDone(["masu", "adj-i"]) } } }, "#verbs/review");
+  await page.locator(".verb-q").waitFor();
+  const asked = new Set();
+  while (!(await page.locator("h1", { hasText: "Done!" }).count())) {
+    asked.add(await askedPair(page));
+    await answerRight(page);
+  }
+  const taught = ["masu|verb", "nai|adj-i", "ta|adj-i", "nakatta|adj-i", "te|adj-i"];
+  assert.deepEqual([...asked].filter((p) => !taught.includes(p)), []);
+  assert.ok(asked.has("masu|verb") && [...asked].some((p) => p.endsWith("|adj-i")), [...asked].join(" "));
+  assert.deepEqual(Object.keys((await deckOf(page)).verbs.best).sort(), ["step:adj-i", "step:masu"]);
+  await page.close();
+});
+
 // The Particles tab: a sentence's gap answered by a choice, a miss shown and asked again, and the best kept in the synced deck.
 const { SENTENCES } = require("../particles.js");
 const gapCard = async (page) => SENTENCES[+(await page.getAttribute(".gap-q", "data-id"))];
