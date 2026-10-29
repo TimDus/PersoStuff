@@ -20,7 +20,7 @@ test("the 40 N5 points come grouped by what they attach to, each drilled by its 
     assert.ok(p.title && p.explain && p.attach, p.id);
     if (p.particles) {
       assert.ok(p.particles.every((x) => CHOICES.includes(x)), p.id);
-      // A particle drill names its point by its particles, so the title has to be them [に／へ].
+      // A particle point is titled by its particles, as its Particles step names them [に／へ].
       assert.equal(p.particles.join("／"), p.title, p.id);
       assert.ok(PARTICLE_SENTENCES.filter((c) => c.ok.some((x) => p.particles.includes(x))).length >= 5, p.id);
       assert.equal(sentences.filter((s) => s.p === p.id).length, 0, p.id);

@@ -129,6 +129,60 @@ test("a particle gap takes a right choice, shows and requeues a wrong one, and k
   await page.close();
 });
 
+// The tab first opened on a mixed drill of 13 particles nobody had explained.
+const PSTEPS = require("../particle-lessons.js").STEPS;
+const ownOf = (id) => SENTENCES.filter((c) => c.ok.some((p) => PSTEPS.find((s) => s.id === id).particles.includes(p)));
+test("a fresh Particles tab lists the steps above the picker and its review waits for Step 1", async () => {
+  const page = await open(drill, "#particles");
+  await page.locator(".verb-step").first().waitFor();
+  assert.equal(await page.locator(".verb-step").count(), 8);
+  assert.equal(await page.locator(".verb-step.done").count(), 0);
+  assert.match(await page.getAttribute("#review", "class"), /\bdisabled\b/);
+  assert.match(await page.textContent("#review-note"), /Step 1/);
+  assert.equal(await page.getAttribute("#go", "href"), "#particles/run");
+  await page.close();
+});
+
+test("a step's lesson shows its sentences filled in, and finishing its drill marks it done for the review", async () => {
+  const page = await open(drill, "#particles/learn/wa-ga");
+  await page.locator(".verb-lesson").waitFor();
+  assert.match(await page.textContent(".verb-lesson h1"), /は and が/);
+  const shown = await page.locator(".part-ex li").evaluateAll((ls) => ls.map((l) => ({ id: +l.dataset.id, fill: l.querySelector(".gap.filled").textContent })));
+  assert.deepEqual(shown.map((x) => x.id).sort((a, b) => a - b), ownOf("wa-ga").map((c) => c.id));
+  for (const { id, fill } of shown) assert.ok(["は", "が"].includes(fill) && SENTENCES[id].ok.includes(fill), `${id} ${fill}`);
+  assert.match(await page.textContent(".part-ex"), /I am a student\./);
+  await page.click("#drill");
+  await page.locator(".gap-q").waitFor();
+  assert.equal(await page.textContent("#prog"), "1 / 10");
+  while (!(await page.locator("h1", { hasText: "Done!" }).count())) {
+    const { prog } = await choose(page, true);
+    await next(page, prog);
+  }
+  assert.doesNotMatch(await page.textContent(".panel"), /best/i);
+  assert.deepEqual(Object.keys((await deckOf(page)).particles.best), ["step:wa-ga"]);
+  await page.goto("/#particles");
+  await page.locator(".verb-step.done").waitFor();
+  assert.match(await page.textContent("#review-note"), /^1 of 8/);
+  assert.doesNotMatch(await page.getAttribute("#review", "class"), /\bdisabled\b/);
+  await page.close();
+});
+
+test("the particle review asks only the finished steps' sentences and keeps no best", async () => {
+  const study = { ...deckWith({}), particles: { kana: {}, resetAt: 0, best: { "step:kara-made": { ms: 9000, acc: 100 } } } };
+  const page = await open({ ...drill, local: { "study.user": "u1", study } }, "#particles/review");
+  await page.locator(".gap-q").waitFor();
+  const n = ownOf("kara-made").length;
+  assert.equal(await page.textContent("#prog"), `1 / ${Math.min(20, n)}`);
+  while (!(await page.locator("h1", { hasText: "Done!" }).count())) {
+    const { c, prog } = await choose(page, true);
+    assert.ok(c.ok.some((p) => ["から", "まで"].includes(p)), c.s);
+    await next(page, prog);
+  }
+  assert.equal(await page.getAttribute(".panel a.btn", "href"), "#particles");
+  assert.deepEqual(Object.keys((await deckOf(page)).particles.best), ["step:kara-made"]);
+  await page.close();
+});
+
 test("the Verbs tab drills met verbs in the chosen form, romaji turning into kana as it's typed", async () => {
   const page = await open({ ...drill, local: { ...verbsSel({}), "study.user": "u1", study: deckWith({ "食べる|たべる#r": reviewed() }) } }, "#verbs/run");
   await page.locator(".verb-q").waitFor();
@@ -458,20 +512,18 @@ test("the picker drills only the points picked, and a stale saved pick keeps onl
   await page.close();
 });
 
-test("a particle point's drill is the Particles drill on that particle only, and keeps no best", async () => {
-  const page = await open(drill, "#grammar/wo");
+// Grammar's particle pages once had their own drill beside Particles' lessons, so one particle was explained in two places.
+test("a grammar particle point leads to its Particles lesson [に and に／へ both to Step 3]", async () => {
+  const page = await open(drill, "#grammar/ni");
   await page.locator("#drill").waitFor();
-  assert.equal(await page.getAttribute("#drill", "href"), "#particles/run/" + encodeURIComponent("を") + "/wo");
+  assert.equal(await page.textContent("#drill"), "Learn in Particles");
+  assert.equal(await page.getAttribute("#drill", "href"), "#particles/learn/ni-he");
+  await page.goto("/#grammar/wa");
+  await page.reload();
+  await page.locator("#drill").waitFor();
+  assert.equal(await page.getAttribute("#drill", "href"), "#particles/learn/wa-ga");
   await page.click("#drill");
-  await page.locator(".gap-q").waitFor();
-  const n = SENTENCES.filter((c) => c.ok.includes("を")).length;
-  assert.equal(await page.textContent("#prog"), `1 / ${Math.min(10, n)}`);
-  while (!(await page.locator("h1", { hasText: "Done!" }).count())) {
-    assert.ok((await gapCard(page)).ok.includes("を"));
-    const { prog } = await choose(page, true);
-    await next(page, prog);
-  }
-  assert.equal((await deckOf(page))?.particles?.best, undefined);
+  await page.locator(".verb-lesson").waitFor();
   await page.close();
 });
 
@@ -519,10 +571,8 @@ test("two grammar cards with the same answer never come back to back [行きま�
   await page.close();
 });
 
-test("Again on a particle point's drill draws afresh from that particle's sentences", async () => {
-  const pool = SENTENCES.filter((c) => c.ok.includes("に"));
-  assert.ok(pool.length > 10);
-  const page = await open(drill, "#particles/run/" + encodeURIComponent("に"));
+test("Again on a step drill draws afresh from that step's sentences", async () => {
+  const page = await open(drill, "#particles/learn/ni-he/run");
   const sets = [];
   for (let run = 0; run < 3; run++) {
     await page.locator(".gap-q").waitFor();
@@ -532,7 +582,6 @@ test("Again on a particle point's drill draws afresh from that particle's senten
       ids.push(c.id);
       await next(page, prog);
     }
-    assert.ok(ids.every((id) => pool.some((c) => c.id === id)));
     sets.push([...ids].sort().join(","));
     await page.click("#re");
   }
@@ -540,8 +589,8 @@ test("Again on a particle point's drill draws afresh from that particle's senten
   await page.close();
 });
 
-test("a particle filter that fits nothing opens the Particles picker", async () => {
-  const page = await open(drill, "#particles/run/xyz");
+test("an old particle-filter link opens the Particles picker", async () => {
+  const page = await open(drill, "#particles/run/" + encodeURIComponent("を") + "/wo");
   await page.locator("#go").waitFor();
   assert.equal(await page.textContent("h1"), "Particles");
   assert.equal(await page.locator(".gap-q").count(), 0);
@@ -560,30 +609,20 @@ test("a point whose answer never changes drills with its sibling [より with �
   await page.close();
 });
 
-test("a particle drill opened from a grammar point leads back to that point", async () => {
-  const page = await open(drill, "#grammar/wo");
-  await page.locator("#drill").waitFor();
-  await page.click("#drill");
+test("a step drill leads back to its lesson from the run, Done and the missed ones", async () => {
+  const page = await open(drill, "#particles/learn/wo/run");
   await page.locator(".gap-q").waitFor();
-  assert.equal(await page.getAttribute(".row a", "href"), "#grammar/wo");
-  assert.equal(await page.textContent(".row a"), "← を");
-  while (!(await page.locator("h1", { hasText: "Done!" }).count())) {
-    const { prog } = await choose(page, true);
-    await next(page, prog);
-  }
-  assert.equal(await page.getAttribute(".panel a.btn", "href"), "#grammar/wo");
-  await page.click("#re");
-  await page.locator(".gap-q").waitFor();
-  assert.equal(await page.getAttribute(".row a", "href"), "#grammar/wo");
+  assert.equal(await page.getAttribute(".row a", "href"), "#particles/learn/wo");
   await choose(page, false);
   await page.keyboard.press("Enter");
   while (!(await page.locator("h1", { hasText: "Done!" }).count())) {
     const { prog } = await choose(page, true);
     await next(page, prog);
   }
+  assert.equal(await page.getAttribute(".panel a.btn", "href"), "#particles/learn/wo");
   await page.click("#miss");
   await page.locator(".gap-q").waitFor();
-  assert.equal(await page.getAttribute(".row a", "href"), "#grammar/wo");
+  assert.equal(await page.getAttribute(".row a", "href"), "#particles/learn/wo");
   await page.close();
 });
 

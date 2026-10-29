@@ -1,4 +1,4 @@
-// The Grammar tab at 1280, 390 and 360 px against a fake backend: hub, a point page, a right answer, a miss, Done and a particle drill.
+// The Grammar tab at 1280, 390 and 360 px against a fake backend: hub, a point page, a right answer, a miss, Done and a particle point's link to its Particles lesson.
 // It exists because every test passed while the phone showed the blank as ＿ glyphs over a border a line below, and a filled
 // answer underlined a line under its own text: the gap took the sentence's 2.4 line height. Read the screenshots it leaves;
 // report.txt has page width against viewport (equal = nothing overflows) and how many N5 readings were hidden, then shown.
@@ -75,8 +75,8 @@ fs.mkdirSync(out, { recursive: true });
     await page.screenshot({ path: path.join(out, `${name}-done.png`) });
     await page.goto(base + "#grammar/wo");
     await page.locator("#drill").click();
-    await page.locator(".gap-q").waitFor();
-    report.push(`${name} particle drill: ${await page.textContent("#prog")}`);
+    await page.locator(".verb-lesson").waitFor();
+    report.push(`${name} particle point: ${await page.evaluate(() => location.hash)}`);
     report.push(`${name} errors: ${errors.length ? errors.join(" | ") : "none"}`);
     await ctx.close();
   }

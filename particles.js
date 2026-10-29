@@ -25,7 +25,7 @@
     ["{先生|せんせい}＿{話|はな}しました。", ["と"], "I talked with the teacher.", ["に", "が", "は", "も"]],
     ["{九時|くじ}＿{寝|ね}ます。", ["に"], "I go to bed at nine.", ["から", "まで", "は", "も"]],
     ["テストは{九時|くじ}＿{始|はじ}まります。", ["に", "から"], "The test starts at nine.", ["も"]],
-    ["{五時|ごじ}＿{待|ま}ちます。", ["まで"], "I'll wait until five.", ["に", "から", "は", "も"]],
+    ["{五時|ごじ}＿{待|ま}ちます。", ["まで"], "I'll wait until five.", ["に", "から", "を", "は", "も"]],
     ["{月曜日|げつようび}＿{金曜日|きんようび}まで{働|はたら}きます。", ["から"], "I work from Monday to Friday.", ["は", "も"]],
     ["りんご＿バナナを{買|か}いました。", ["と"], "I bought apples and bananas.", ["や", "が", "の", "は", "も"]],
     ["りんご＿バナナなどを{買|か}いました。", ["や"], "I bought apples, bananas and things like that.", ["と", "の", "は", "も"]],
@@ -68,6 +68,16 @@
     ["{兄|あに}＿{姉|あね}がいます。", ["と"], "I have an older brother and an older sister.", ["や", "も", "の", "は"]],
     ["{東京|とうきょう}＿{大|おお}きい{町|まち}です。", ["は"], "Tokyo is a big city.", ["が", "も"]],
     ["{日曜日|にちようび}＿{休|やす}みます。", ["は"], "On Sundays I take the day off.", ["に", "を", "も"]],
+    ["{店|みせ}は{夜|よる}{十時|じゅうじ}＿{開|あ}いています。", ["まで"], "The shop is open until ten at night.", ["に", "から", "は", "も"]],
+    ["{明日|あした}＿{待|ま}ってください。", ["まで"], "Please wait until tomorrow.", ["から", "に", "を", "は", "も"]],
+    ["{夏休|なつやす}みは{八月|はちがつ}＿です。", ["まで"], "The summer holidays last until August.", ["から", "に", "は", "も"]],
+    ["{母|はは}＿{車|くるま}は{赤|あか}いです。", ["の"], "My mother's car is red.", ["と", "や", "は", "も"]],
+    ["{日本語|にほんご}＿{先生|せんせい}は{優|やさ}しいです。", ["の"], "The Japanese teacher is kind.", ["と", "や", "で", "は", "も"]],
+    ["あれは{誰|だれ}＿{傘|かさ}ですか。", ["の"], "Whose umbrella is that?", ["が", "は", "も"]],
+    ["{電車|でんしゃ}はバス＿{速|はや}いです。", ["より"], "The train is faster than the bus.", ["が", "も"]],
+    ["{今日|きょう}は{昨日|きのう}＿{暑|あつ}いです。", ["より"], "Today is hotter than yesterday.", ["から", "が", "も"]],
+    ["{私|わたし}は{肉|にく}＿{魚|さかな}が{好|す}きです。", ["より"], "I like fish more than meat.", ["と", "や", "も"]],
+    ["{兄|あに}は{父|ちち}＿{背|せ}が{高|たか}いです。", ["より"], "My older brother is taller than my father.", ["の", "も"]],
   ].map(([s, ok, en, near], id) => ({ id, s, ok, en, near }));
 
   // A card's four choices in a shuffled order: one right particle and three that fit no reading [バス＿行きます: で, を, と, の].

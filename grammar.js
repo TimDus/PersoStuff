@@ -108,8 +108,9 @@
   function page(p) {
     const { app } = study.shell();
     const examples = data.sentences.filter((s) => s.p === p.id).slice(0, 3);
-    // A particle point drills in the Particles tab, on only its own particles [に／へ = #particles/run/に,へ/ni-he].
-    const drill = p.particles ? `#particles/run/${encodeURIComponent(p.particles.join(","))}/${p.id}` : `#grammar/${p.id}/run`;
+    // A particle point is taught by the Particles step holding its particle [に and に／へ = #particles/learn/ni-he].
+    const step = p.particles && window.HiraParticleLessons.STEPS.find((s) => s.particles.includes(p.particles[0]));
+    const drill = step ? `#particles/learn/${step.id}` : `#grammar/${p.id}/run`;
     app.innerHTML = `
       <div class="row"><a href="#grammar">← Grammar</a><span class="spacer"></span><span class="muted small">${esc(p.group)}</span></div>
       <h1 class="jp">${esc(p.title)}</h1>
@@ -118,7 +119,7 @@
       ${examples.length ? `<div class="examples">${examples.map((s) => `
         <div class="ex"><span class="jp gr-ex">${sentence(s, s.gap)}</span><div class="muted small">${esc(s.en)}</div></div>`).join("")}</div>` : ""}
       <div class="row" style="margin-top:1.2rem">
-        <a class="btn" id="drill" href="${drill}">${p.particles ? "Drill in Particles" : p.with ? `Drill with ${p.with.map((id) => esc(pointOf(id).title)).join(", ")}` : "Drill this point"}</a>
+        <a class="btn" id="drill" href="${drill}">${step ? "Learn in Particles" : p.with ? `Drill with ${p.with.map((id) => esc(pointOf(id).title)).join(", ")}` : "Drill this point"}</a>
         <a class="btn ghost tofugu" href="https://www.tofugu.com/japanese-grammar/${esc(p.tofugu)}/" target="_blank" rel="noopener">Tofugu on this ↗</a>
       </div>
       <p class="muted small">Explanation adapted from Wikibooks' <a href="https://en.wikibooks.org/wiki/JLPT_Guide/JLPT_N5_Grammar" target="_blank" rel="noopener">JLPT Guide</a>; sentences from <a href="https://tatoeba.org" target="_blank" rel="noopener">Tatoeba</a>.</p>`;

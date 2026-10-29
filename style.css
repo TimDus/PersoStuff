@@ -74,6 +74,9 @@ button.bad { background: var(--bad); border-color: var(--bad); }
 .verb-step.done { border-color: var(--good); }
 .verb-step.done .step { color: var(--good); }
 .verb-ex-wrap { overflow-x: auto; }
+.part-ex { list-style: none; padding: 0; }
+.part-ex li { padding: .4rem 0; border-bottom: 1px solid var(--line); }
+.part-ex .jp { font-size: 1.2rem; }
 .verb-ex { border-collapse: collapse; }
 .verb-ex th, .verb-ex td { text-align: left; padding: .4rem .8rem .4rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
 .verb-ex td .jp { font-size: 1.2rem; white-space: nowrap; }
