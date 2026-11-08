@@ -21,6 +21,8 @@ test("kanji.json holds the word list's kanji, all 2,136 jōyō and the hand-pick
   assert.equal(Object.keys(kanji).length, 2189);
   assert.deepEqual([..."未竹貝寸羊衣阜疫悦帝鯛辰亥萌"].filter((c) => !added.includes(c)), []);
   assert.deepEqual([..."翔莉葵彦梓凜"].filter((c) => kanji[c]), []);
+  // Levels are Waller's N5 to N1, as KANJIDIC2's pre-2010 ones put 政 and 胃 both at old 2 and 曜 there too [政 N3, 胃 N2, 曜 N4, 誰 none].
+  assert.deepEqual([..."政胃曜誰大"].map((c) => kanji[c].lv), [3, 2, 4, 0, 5]);
   assert.deepEqual(added.filter((c) => !kanji[c].m || !(kanji[c].sc > 0) || !strokes[c]?.d.length), []);
 });
 

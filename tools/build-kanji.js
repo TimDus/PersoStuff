@@ -51,8 +51,8 @@ for (const c of want) {
 }
 const deck = [...want];
 
-// Today's N level from KANJIDIC2's pre-2010 JLPT level, 0 for none, as build-vocab.js reads it [old 4 = N5].
-const OLD_TO_N = { 4: 5, 3: 4, 2: 2, 1: 1 };
+// Today's N level from Jonathan Waller's lists, 0 for none, as KANJIDIC2's pre-2010 levels have no N3 [曜 N4, 政 N3; 誰 none].
+const WALLER = JSON.parse(fs.readFileSync(path.join(dataDir, "waller", "kanji-data.json"), "utf8"));
 // A kun reading a listed word spells with the kanji alone, by its whole okurigana or, for a derived form, its first kana [生きる = い.きる; 休み = やす.む].
 const used = (c, kun, whole) => {
   const [stem, oku = ""] = kun.split(".");
@@ -73,12 +73,11 @@ function kunOf(c, all) {
 const kanji = {};
 for (const m of chars) {
   if (!want.has(m[1])) continue;
-  const old = m[0].match(/<jlpt>(\d)<\/jlpt>/);
   // English meanings only, the first two [大: large, big; French and Spanish carry m_lang].
   const meanings = [...m[0].matchAll(/<meaning>([^<]+)<\/meaning>/g)].map((x) => x[1]).slice(0, 2);
   // Readings without the affix forms [大's おお- and -おお.いに], on in KANJIDIC2's order.
   const read = (type) => [...m[0].matchAll(new RegExp(`<reading r_type="${type}">([^<]+)</reading>`, "g"))].map((x) => x[1]).filter((r) => !r.includes("-"));
-  kanji[m[1]] = { m: meanings.join(", "), sc: +m[0].match(/<stroke_count>(\d+)<\/stroke_count>/)[1], lv: old ? OLD_TO_N[old[1]] : 0,
+  kanji[m[1]] = { m: meanings.join(", "), sc: +m[0].match(/<stroke_count>(\d+)<\/stroke_count>/)[1], lv: WALLER[m[1]]?.jlpt_new || 0,
     on: read("ja_on").slice(0, 3), kun: kunOf(m[1], read("ja_kun")) };
 }
 

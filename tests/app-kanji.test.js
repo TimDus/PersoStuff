@@ -605,13 +605,13 @@ test("a popup opened before history.json lands gets its note and story when the 
 });
 
 // The parts no word uses are deck kanji too, so their grid links and pages must open [未, only in 味 and 妹].
-test("a kanji that is only a part has a page, and the hub lists it under its own heading", async () => {
+test("a kanji that is only a part has a page, and the hub files every kanji by its JLPT level", async () => {
   const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#kanji");
   await page.locator(".kgrid").first().waitFor();
-  assert.deepEqual(await page.locator("h2").allTextContents(), ["JLPT N5", "JLPT N4", "Beyond N4", "Only as parts", "No word yet: up to N2", "No word yet: N1", "No word yet: no JLPT level"]);
-  // A jōyō kanji no word uses sits by its level, never among the parts [胃 old 2, 県 N4 with no list word, 疫 old 1].
+  assert.deepEqual(await page.locator("h2").allTextContents(), ["JLPT N5", "JLPT N4", "JLPT N3", "JLPT N2", "JLPT N1", "No JLPT level"]);
+  // Every kanji sits by its level on Waller's lists, word or no word [政 N3, 胃 N2, 疫 N1, 誰 none though 誰 is in N5 words].
   const under = (c) => page.locator(".kgrid", { has: page.locator(`a:text-is('${c}')`) }).evaluate((g) => g.previousElementSibling.textContent);
-  assert.deepEqual([await under("胃"), await under("県"), await under("疫"), await under("未")], ["No word yet: up to N2", "No word yet: up to N2", "No word yet: N1", "Only as parts"]);
+  assert.deepEqual([await under("政"), await under("胃"), await under("疫"), await under("誰")], ["JLPT N3", "JLPT N2", "JLPT N1", "No JLPT level"]);
   await page.click(".kgrid a:text('未')");
   await page.locator(".kanji-page[data-c='未']").waitFor({ timeout: 3000 });
   assert.equal(await page.locator(".kanji-page .kanji-words .kw-row").count(), 0);

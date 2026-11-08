@@ -43,7 +43,7 @@
     const info = study.kanjiInfo()?.[c] || {}, k = study.koohii(c);
     return `
       <div class="kanji-kw">${esc(study.keyword(c))}</div>
-      <div class="muted small kanji-meta">${[info.sc && `${info.sc} strokes`, info.lv >= 4 && `N${info.lv}`, k?.frame && `RTK ${k.frame}`].filter(Boolean).join(" · ")}</div>
+      <div class="muted small kanji-meta">${[info.sc && `${info.sc} strokes`, info.lv > 0 && `N${info.lv}`, k?.frame && `RTK ${k.frame}`].filter(Boolean).join(" · ")}</div>
       ${k && study.keyword(c) === k.kw ? `<div class="muted small">Keyword from Remembering the Kanji © James W. Heisig</div>` : ""}
       ${parts(c, page)}`;
   }
@@ -164,17 +164,9 @@
     const q = kanjiQueue({ order: all, cards: k.cards, today: study.today(), newPerDay: k.settings.newPerDay, waits: waits(words, k) });
     const next = new Set(q.filter((c) => !k.cards[c]));
     const info = study.kanjiInfo() || {};
-    const used = new Set(words.flatMap(kanjiOf));
-    const parts = new Set();
-    const under = (c) => partsOf(c, info).forEach((p) => { if (!parts.has(p)) { parts.add(p); under(p); } });
-    used.forEach(under);
     const state = (c) => (mature(k.cards[c]) ? "learned" : k.cards[c] ? "studying" : next.has(c) ? "next" : "later");
-    // A kanji no word uses yet goes by KANJIDIC2's old level, whose 2 spans today's N3 and N2 [胃 old 2, 県 N4 with no list word; 誰 none, jōyō since 2010].
-    const bare = (c) => !used.has(c) && !parts.has(c);
-    const groups = [["JLPT N5", (c) => used.has(c) && info[c]?.lv === 5], ["JLPT N4", (c) => used.has(c) && info[c]?.lv === 4],
-      ["Beyond N4", (c) => used.has(c) && info[c]?.lv !== 5 && info[c]?.lv !== 4], ["Only as parts", (c) => !used.has(c) && parts.has(c)],
-      ["No word yet: up to N2", (c) => bare(c) && info[c]?.lv >= 2], ["No word yet: N1", (c) => bare(c) && info[c]?.lv === 1],
-      ["No word yet: no JLPT level", (c) => bare(c) && !info[c]?.lv]];
+    // Every kanji by its level on Waller's lists, word or no word [政 N3 though no N5 or N4 word uses it yet; 誰 none].
+    const groups = [...[5, 4, 3, 2, 1].map((n) => [`JLPT N${n}`, (c) => info[c]?.lv === n]), ["No JLPT level", (c) => !info[c]?.lv]];
     app.innerHTML = `
       <h1>Kanji</h1>
       <p class="lead">Kanji come in Heisig's order, each one's parts before it, and a word opens in Words once you've started
