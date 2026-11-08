@@ -368,7 +368,8 @@ footer .credits[open] summary { margin-bottom: .3rem; }
 /* Koohii stories under the stroke order, each author above its text [the Koohii account's story, then three by stars]. */
 .stories { margin-top: .8rem; display: grid; gap: .6rem; text-align: left; }
 .stories:empty { display: none; }
-.story { border-left: 3px solid var(--accent-soft); padding-left: .6rem; }
+/* A story may carry a bare link with no break in it, so it wraps anywhere [橋's guardian-angel URL ran 254 px past a 360 px card]. */
+.story { border-left: 3px solid var(--accent-soft); padding-left: .6rem; min-width: 0; overflow-wrap: anywhere; }
 .story-text strong { color: var(--accent); }
 .kanji-comps { margin-top: .5rem; display: flex; flex-wrap: wrap; gap: .3rem .8rem; justify-content: center; }
 .kanji-comps .jp { font-size: 1.15rem; }

@@ -165,9 +165,16 @@
     const next = new Set(q.filter((c) => !k.cards[c]));
     const info = study.kanjiInfo() || {};
     const used = new Set(words.flatMap(kanjiOf));
+    const parts = new Set();
+    const under = (c) => partsOf(c, info).forEach((p) => { if (!parts.has(p)) { parts.add(p); under(p); } });
+    used.forEach(under);
     const state = (c) => (mature(k.cards[c]) ? "learned" : k.cards[c] ? "studying" : next.has(c) ? "next" : "later");
+    // A kanji no word uses yet goes by KANJIDIC2's old level, whose 2 spans today's N3 and N2 [胃 old 2, 県 N4 with no list word; 誰 none, jōyō since 2010].
+    const bare = (c) => !used.has(c) && !parts.has(c);
     const groups = [["JLPT N5", (c) => used.has(c) && info[c]?.lv === 5], ["JLPT N4", (c) => used.has(c) && info[c]?.lv === 4],
-      ["Beyond N4", (c) => used.has(c) && info[c]?.lv !== 5 && info[c]?.lv !== 4], ["Only as parts", (c) => !used.has(c)]];
+      ["Beyond N4", (c) => used.has(c) && info[c]?.lv !== 5 && info[c]?.lv !== 4], ["Only as parts", (c) => !used.has(c) && parts.has(c)],
+      ["No word yet: up to N2", (c) => bare(c) && info[c]?.lv >= 2], ["No word yet: N1", (c) => bare(c) && info[c]?.lv === 1],
+      ["No word yet: no JLPT level", (c) => bare(c) && !info[c]?.lv]];
     app.innerHTML = `
       <h1>Kanji</h1>
       <p class="lead">Kanji come in Heisig's order, each one's parts before it, and a word opens in Words once you've started

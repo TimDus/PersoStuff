@@ -315,8 +315,8 @@ test("the Kanji hub offers the next kanji as the word list needs them, and a rev
   const page = await open({ ...listed, koohii: { ...koohii, ...frames }, local: { "study.user": "u1", study: withKanji({}, { newPerDay: 5, at: 0 }) } }, "#kanji");
   await page.locator("#k-new").waitFor();
   assert.deepEqual([await page.textContent("#k-new"), await page.textContent("#k-due")], ["5", "0"]);
-  assert.match(await page.textContent("#k-sum"), /0 of 902 started · 0 learned/);
-  assert.equal(await page.locator(".kgrid a").count(), 902);
+  assert.match(await page.textContent("#k-sum"), /0 of 2189 started · 0 learned/);
+  assert.equal(await page.locator(".kgrid a").count(), 2189);
   assert.deepEqual((await page.locator(".kgrid a.next").allTextContents()).sort(), [..."火秋口足後"].sort());
   await page.click("#go");
   await page.locator("#got").waitFor();
@@ -386,6 +386,19 @@ test("a kanji card's back with no met word shows every reading muted", async () 
   await page.click("#card");
   assert.deepEqual(await readings(page, ".face.back"), [["ガク~", "まな.ぶ~"], [["ガク~", "学生~ · 学校~ · 大学~"]]]);
   assert.equal(await page.locator(".face.back .kanji-words .kw-row").count(), 0);
+  await page.close();
+});
+
+// Members paste bare links into stories [橋's guardian-angel image URL], and a word with no break pushed the card 254 px past a 360 px phone.
+test("a story with a long bare link wraps inside the card on a phone", async () => {
+  const url = "http://www.example.org/yahoo_site_admin/assets/images/Guardian_angel_on_a_wooden_bridge_over_the_river.jpg";
+  const long = { 学: { ...koohii["学"], stories: [{ by: "SammyB", text: `A tall <em>angel</em> at ${url}`, stars: 9 }] } };
+  const page = await open({ ...listed, koohii: long, local: { "study.user": "u1", study: metOnly([], { 学: reviewed({ first: day - 5, last: day - 1, due: day }) }) } }, "#kanji/review");
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.locator(".face.front .kanji-prompt", { hasText: "study" }).waitFor();
+  await page.click("#card");
+  await page.locator(".face.back .story", { hasText: "Guardian" }).waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 360);
   await page.close();
 });
 
@@ -516,7 +529,7 @@ test("a radical form names its full kanji, the full kanji names its forms, and a
   const forms = await page.locator(".kanji-forms").allTextContents();
   // The first 8 of 37 in study order, as the word list reaches them [海 in 海, 池 in 池], not kanji.json's 泳 汚 温 海.
   assert.equal(forms[0], "As a radical it's written 氵: 海 池 漢 浴 洗 濯 洋 渡 …");
-  assert.deepEqual(forms.slice(1), ["As a radical it's written 氺: 様"]);
+  assert.deepEqual(forms.slice(1), ["As a radical it's written 氺: 様 求 剝 泰 膝"]);
   await page.goto("#kanji/近");
   await page.locator(".kanji-page[data-c='近'] .kanji-comps").waitFor({ timeout: 3000 });
   assert.match(await page.textContent(".kanji-comps"), /⻌ \w/);
@@ -595,7 +608,10 @@ test("a popup opened before history.json lands gets its note and story when the 
 test("a kanji that is only a part has a page, and the hub lists it under its own heading", async () => {
   const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#kanji");
   await page.locator(".kgrid").first().waitFor();
-  assert.ok((await page.locator("h2").allTextContents()).includes("Only as parts"));
+  assert.deepEqual(await page.locator("h2").allTextContents(), ["JLPT N5", "JLPT N4", "Beyond N4", "Only as parts", "No word yet: up to N2", "No word yet: N1", "No word yet: no JLPT level"]);
+  // A jōyō kanji no word uses sits by its level, never among the parts [胃 old 2, 県 N4 with no list word, 疫 old 1].
+  const under = (c) => page.locator(".kgrid", { has: page.locator(`a:text-is('${c}')`) }).evaluate((g) => g.previousElementSibling.textContent);
+  assert.deepEqual([await under("胃"), await under("県"), await under("疫"), await under("未")], ["No word yet: up to N2", "No word yet: up to N2", "No word yet: N1", "Only as parts"]);
   await page.click(".kgrid a:text('未')");
   await page.locator(".kanji-page[data-c='未']").waitFor({ timeout: 3000 });
   assert.equal(await page.locator(".kanji-page .kanji-words .kw-row").count(), 0);
@@ -645,15 +661,15 @@ test("a kanji's page lists the list's kanji sharing its sound and reading as lin
   const deck = deckWith({ "晴れる|はれる#r": reviewed({ first: day - 1, last: day - 1, due: day }) });
   const page = await open({ ...listed, local: { "study.user": "u1", study: deck } }, "#kanji/晴");
   await page.locator(".kanji-family").waitFor({ timeout: 3000 });
-  assert.equal(await page.textContent(".kanji-family"), "Same sound セイ: 青 静");
-  assert.deepEqual(await page.locator(".kanji-family a").evaluateAll((as) => as.map((a) => a.getAttribute("href"))), ["#kanji/青", "#kanji/静"]);
+  assert.equal(await page.textContent(".kanji-family"), "Same sound セイ: 情 清 精 請 青 静");
+  assert.deepEqual(await page.locator(".kanji-family a").evaluateAll((as) => as.map((a) => a.getAttribute("href"))), ["#kanji/情", "#kanji/清", "#kanji/精", "#kanji/請", "#kanji/青", "#kanji/静"]);
   assert.deepEqual(await readings(page, ".kanji-page"), [["は.れる", "セイ~"], [["は.れる", "晴れる · 晴れ~ · 素晴らしい~"]]]);
   await page.goto("#words/review");
   await page.locator(".face.front").waitFor();
   await page.click("#card");
   await page.click(".kn-k[data-kanji='晴']");
   await page.locator(".modal .kanji-family").waitFor({ timeout: 3000 });
-  assert.equal(await page.textContent(".modal .kanji-family"), "Same sound セイ: 青 静");
+  assert.equal(await page.textContent(".modal .kanji-family"), "Same sound セイ: 情 清 精 請 青 静");
   assert.equal(await page.locator(".modal .kanji-family a").count(), 0, "a link would leave the review");
   await page.close();
 });

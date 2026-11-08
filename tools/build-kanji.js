@@ -36,11 +36,13 @@ function partsIn(svg, c) {
   }
   return out;
 }
-// The word list's kanji, then every jōyō kanji they're built from, as a part or as a radical form's full kanji [味 adds 未; 興's 𦥑 adds 臼; 778 + 124].
+// Non-jōyō kanji seen on signs, menus, maps and calendars, picked by hand over the name-only ones [鯛 sea bream and 辰 the dragon year in; 翔 and 莉 out].
+const EXTRA = [..."伊阿杜苑磯凪鷹猪鳩鯉隼鯛鮎鳳麟栗蓮桐蘭笹萩柚椿橘杏李楠楓樺芹柊茄丑寅卯辰巳酉亥萌栞吾"];
+// The word list's kanji, every jōyō kanji and EXTRA, then every jōyō kanji they're built from, as a part or as a radical form's full kanji [味 adds 未; 興's 𦥑 adds 臼].
 const chars = [...xml.matchAll(/<literal>([^<]+)<\/literal>[\s\S]*?<\/character>/g)];
 const joyo = new Set(chars.filter((m) => /<grade>[1-8]<\/grade>/.test(m[0])).map((m) => m[1]));
 const listed = [...new Set(words.flatMap(require("../kanji.js").kanjiOf))];
-const want = new Set(listed);
+const want = new Set([...listed, ...joyo, ...EXTRA]);
 for (const c of want) {
   if (!fs.existsSync(svgFile(c))) continue;
   for (const p of partsIn(fs.readFileSync(svgFile(c), "utf8"), c)) {

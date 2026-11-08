@@ -15,13 +15,12 @@ test("every kanji in the word list has a meaning, a stroke count and a level", (
   assert.deepEqual(kanji["大"], { m: "large, big", sc: 3, lv: 5, on: ["ダイ", "タイ"], kun: ["おお.きい"], c: [], top: "ダイ" });
 });
 
-// The deck learns a kanji's parts before the kanji, so a jōyō part no N5 or N4 word uses needs its own entry [味 is 口 and 未].
-test("kanji.json adds the jōyō kanji the word list's kanji are built from, and only those", () => {
+// The deck is the word list's kanji, every jōyō kanji and a hand-picked few more [疫 and 誰 jōyō, 鯛 on menus; 翔 only in names].
+test("kanji.json holds the word list's kanji, all 2,136 jōyō and the hand-picked extras, never a name-only kanji", () => {
   const added = Object.keys(kanji).filter((c) => !listed.includes(c));
-  assert.equal(added.length, 124);
-  assert.deepEqual([..."未竹貝寸羊衣阜"].filter((c) => !added.includes(c)), []);
-  const partOf = (p) => Object.values(kanji).some((k) => k.c.includes(p) || Object.values(k.v || {}).includes(p));
-  assert.deepEqual(added.filter((c) => !partOf(c)), []);
+  assert.equal(Object.keys(kanji).length, 2189);
+  assert.deepEqual([..."未竹貝寸羊衣阜疫悦帝鯛辰亥萌"].filter((c) => !added.includes(c)), []);
+  assert.deepEqual([..."翔莉葵彦梓凜"].filter((c) => kanji[c]), []);
   assert.deepEqual(added.filter((c) => !kanji[c].m || !(kanji[c].sc > 0) || !strokes[c]?.d.length), []);
 });
 
@@ -139,7 +138,7 @@ test("a kanji's parts are the deck's kanji in it, a radical form as its full kan
 test("a word's pieces split deck kanji from radicals, a radical form keeps its full kanji, each piece once", () => {
   assert.deepEqual(pieces({ w: "学生" }, kanji), { parts: ["子"], radicals: [{ p: "⺍", full: null }, { p: "冖", full: null }] });
   assert.deepEqual(pieces({ w: "海水" }, kanji), { parts: ["毎"], radicals: [{ p: "氵", full: "水" }] });
-  assert.deepEqual(pieces({ w: "語る" }, kanji), { parts: ["言"], radicals: [{ p: "吾", full: null }] });
+  assert.deepEqual(pieces({ w: "語る" }, kanji), { parts: ["言", "吾"], radicals: [] });
   assert.deepEqual(pieces({ w: "洗濯" }, kanji), { parts: ["先"], radicals: [{ p: "氵", full: "水" }, { p: "翟", full: null }] });
   assert.deepEqual(pieces({ w: "時間" }, kanji).parts, ["日", "寺", "門"]);
   assert.deepEqual(pieces({ w: "一" }, kanji), { parts: [], radicals: [] });
@@ -306,15 +305,15 @@ test("kanji.json keeps KanjiVG's sound parts, only where a kanji has one", () =>
   assert.deepEqual(kanji["仮"].p, ["叚", "反"]);
 });
 
-test("a sound family is the list's kanji sharing a sound part and an on'yomi, never one whose reading moved on", () => {
-  assert.deepEqual(family("晴", kanji), [{ r: ["セイ"], cs: ["青", "静"] }]);
-  assert.deepEqual(family("青", kanji), [{ r: ["セイ"], cs: ["晴", "静"] }]);
+test("a sound family is the deck's kanji sharing a sound part and an on'yomi, never one whose reading moved on", () => {
+  assert.deepEqual(family("晴", kanji), [{ r: ["セイ"], cs: ["情", "清", "精", "請", "青", "静"] }]);
+  assert.deepEqual(family("青", kanji), [{ r: ["セイ"], cs: ["情", "晴", "静"] }, { r: ["セイ", "ショウ"], cs: ["清", "精", "請"] }]);
   // 活 and 話 both take 舌, but read カツ and ワ.
-  assert.deepEqual([family("活", kanji), family("話", kanji)], [[], []]);
+  assert.deepEqual([family("活", kanji), family("話", kanji)], [[{ r: ["カツ"], cs: ["括"] }], []]);
   assert.deepEqual(family("会", kanji), [{ r: ["カイ", "エ"], cs: ["絵"] }]);
-  assert.deepEqual([family("金", kanji), family("売", kanji)], [[{ r: ["キン", "コン"], cs: ["今"] }], [{ r: ["バイ"], cs: ["買"] }]]);
+  assert.deepEqual([family("金", kanji), family("売", kanji)], [[{ r: ["キン", "ゴン"], cs: ["琴"] }, { r: ["キン", "コン"], cs: ["今"] }], [{ r: ["バイ"], cs: ["買"] }]]);
   // A part KanjiVG spells as a sum still joins the kanji that share it [新 and 親: 辛+木, シン].
-  assert.deepEqual([family("新", kanji), family("無", kanji)], [[{ r: ["シン"], cs: ["親"] }], [{ r: ["ブ"], cs: ["舞"] }]]);
+  assert.deepEqual([family("新", kanji), family("無", kanji)], [[{ r: ["シン"], cs: ["薪", "親"] }], [{ r: ["ブ"], cs: ["舞"] }]]);
   const old = Object.fromEntries(Object.entries(kanji).map(([c, { p, ...rest }]) => [c, rest]));
   assert.deepEqual(family("晴", old), []);
 });
