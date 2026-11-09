@@ -52,7 +52,7 @@
     "戊": "axe, fifth sign", "妾": "concubine", "朔": "new moon", "楚": "whip, cane", "辶": "road, movement, two dots", "爻": "crossed lines",
     "忩": "hurry", "澡": "wash", "禹": "Yu the Great", "戎": "warrior, weapons", "酋": "chieftain, aged sake", "雁": "wild goose",
     "蜀": "caterpillar", "奞": "spread wings", "耑": "tip, sprout", "亶": "sincere, granary", "筑": "zither", "宁": "store, standstill",
-    "冘": "hesitate", "冢": "burial mound", "乕": "tiger", "忝": "humbled", "荅": "beans, answer", "滕": "rising water",
+    "冘": "hesitate", "嵒": "crags", "尢": "lame leg", "惟": "think it over", "冢": "burial mound", "乕": "tiger", "忝": "humbled", "荅": "beans, answer", "滕": "rising water",
     "駦": "horse leaping", "㝵": "obtain", "屮": "sprout", "䏍": "bear, a 能-like shape", "䩗": "leather, rawhide", "𠂢": "branching stream",
     "尃": "spread, announce", "䚯": "punish by words", "㔾": "crouching person", "潘": "rice water", "畐": "full jar", "旉": "spread out",
     "賁": "decorate", "屏": "screen, wall", "敝": "worn-out", "扁": "flat, small", "夆": "meet head-on", "逢": "meet",

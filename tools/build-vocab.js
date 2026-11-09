@@ -1,9 +1,10 @@
-// Builds data/vocab.json: the JLPT N5 and N4 words with JMdict's word type and frequency, furigana with KANJIDIC2's kanji level, and up to two Tatoeba examples [会う|あう = godan verb, nf26].
+// Builds data/vocab.json: the JLPT N5, N4 and N3 words with JMdict's word type and frequency, a descriptor where words share a first sense, furigana with KANJIDIC2's kanji level, and up to two Tatoeba examples [会う|あう = godan verb, nf26].
 // Usage: node tools/build-vocab.js _data data/vocab.json
 const fs = require("fs");
 const path = require("path");
 const MEANING = require("./meanings.js");
 const HAND = require("./examples.js");
+const DESC = require("./descriptors.js");
 const { wordClip } = require("../sync.js");
 
 const [dataDir, outFile] = process.argv.slice(2);
@@ -34,14 +35,15 @@ const bare = (s) => s.replace(/^\([^)]*\)\s*/, "").replace(/^[～〜]|[～〜]$/
 const fits = (w, r) => new RegExp("^" + (w.match(/[぀-ヿ]+|[^぀-ヿ]+/g) || []).map((s) => (isKana(s) ? s : ".+?")).join("") + "$").test(r);
 // One list row as the words it names [回る、回す = two words; いい; よい = いい; 運動|うんどうする = the suru verb 運動する].
 function rowWords(w, r) {
-  r = (r || w).replace(/^\([^)]*\)\s*/, "");
+  w = w.replace(/\s*\(かん\)$/, "");
+  r = (r || w).replace(/^\([^)]*\)\s*/, "").replace(/\s*\(かん\)$/, "");
   if (isKana(w) && !isKana(bare(r))) [w, r] = [r, w];
   const ws = w.split("、"), rs = r.split("、");
   if (ws.length > 1 && ws.length === rs.length) return ws.flatMap((x, i) => rowWords(x, rs[i]));
   const wAlt = w.split(/;\s*/), rAlt = r.split(/;\s*/);
   if (wAlt.length > 1 && wAlt.length === rAlt.length) [w, r] = [wAlt[0], rAlt[0]];
   else { w = wAlt[0]; r = rAlt.find((x) => fits(bare(w), bare(x))) || rAlt[0]; }
-  const suru = /\s*\(する\)$/.test(r) || (/する$/.test(r) && !/する$/.test(w)) || (/する$/.test(w) && w !== "する");
+  const suru = /\s*\(する\)$/.test(r) || (/する$/.test(r) && r !== "する" && !/する$/.test(w)) || (/する$/.test(w) && w !== "する");
   if (suru) {
     w = w.replace(/\s*\(する\)$|する$/, "") + "する";
     r = r.replace(/\s*\(する\)$|する$/, "") + "する";
@@ -50,22 +52,30 @@ function rowWords(w, r) {
 }
 // The list's dated or cut-short spellings as written today [終る = 終わる, 伯父 read おじさん = 伯父さん, 堅 read かたい = 固い].
 const SPELL = { 終る: "終わる", 曲る: "曲がる", 落る: "落ちる", 楽む: "楽しむ", 落す: "落とす", 下る: "下がる", さ来年: "再来年", 舟: "船", 真中: "真ん中",
-  伯父: "伯父さん", 堅: "固い", 御飯: "ご飯", 朝御飯: "朝ご飯", 昼御飯: "昼ご飯", 晩御飯: "晩ご飯" };
-// A second spelling of a word already on the list [在る and 有る are one JMdict entry, ある].
-const SKIP = new Set(["在る|ある"]);
+  伯父: "伯父さん", 堅: "固い", 御飯: "ご飯", 朝御飯: "朝ご飯", 昼御飯: "昼ご飯", 晩御飯: "晩ご飯",
+  支払: "支払い", 知合い: "知り合い", 或: "或る", 押える: "押さえる", 下す: "下ろす", 当り: "当たり", 付合う: "付き合う", 釣: "釣り", 年寄: "年寄り", 引越し: "引っ越し", 祭: "祭り", 代る: "代わる", 中味: "中身", 唯: "たった" };
+// A second spelling of a word already on the list, or a listed word again [在る and 有る are one JMdict entry, ある; N3's 四|よん is N5's].
+const SKIP = new Set(["在る|ある", "四|よん", "被る|かぶる", "為る|する", "為る|なる", "たしか|たしか", "清む|すむ", "只|ただ", "唯|ただ", "具える|そなえる", "殖やす|ふやす", "塵|ごみ", "出合い|であい", "濠|ほり", "円|まる", "角|すみ"]);
+const spelled = new Set(), skipped = new Set();
 const words = [];
 const seen = new Set();
-for (const lv of [5, 4]) {
+for (const lv of [5, 4, 3]) {
   for (const line of read("jlpt", `n${lv}.csv`).split(/\r?\n/).slice(1).filter(Boolean)) {
     const [w0, r0, m] = csvRow(line);
     for (const { w: listed, r, suru } of rowWords(w0, r0)) {
-      const w = SPELL[listed] || listed, k = `${w}|${r}`;
+      // A rename only where it fits the reading [N4's 下る read さがる is 下がる; N3's 下る read くだる stays].
+      const respell = SPELL[listed] && fits(bare(SPELL[listed]), bare(r));
+      if (respell) spelled.add(listed);
+      const w = respell ? SPELL[listed] : listed, k = `${w}|${r}`;
+      if (SKIP.has(k)) skipped.add(k);
       if (seen.has(k) || SKIP.has(k)) continue;
       seen.add(k);
       words.push({ k, w, r, m, lv, suru });
     }
   }
 }
+const unused = [...Object.keys(SPELL).filter((x) => !spelled.has(x)), ...[...SKIP].filter((x) => !skipped.has(x))];
+if (unused.length) throw new Error(`SPELL or SKIP: ${unused.join(", ")} isn't on the list`);
 // Everyday readings the list leaves out, placed after the reading it has [四 read し only, while four said alone is よん].
 const ADD = [["四", "よん", "four", "四|し"], ["七", "なな", "seven", "七|しち"]];
 for (const [w, r, m, after] of ADD) words.splice(words.findIndex((x) => x.k === after) + 1, 0, { k: `${w}|${r}`, w, r, m, lv: 5, suru: false });
@@ -100,11 +110,17 @@ const words_ = (s) => s.toLowerCase().split(/[^a-z]+/).filter((x) => x && !STOP.
 const unmatched = [];
 for (const word of words) {
   const strip = (s) => (word.suru ? bare(s).replace(/する$/, "") : bare(s));
-  const w = strip(word.w), r = strip(word.r);
-  word.base = w; word.baseR = r;
+  let w = strip(word.w), r = strip(word.r);
   const withReading = (list) => (list || []).filter((e) => e.rebs.some((x) => x.text === r));
   let cands = isKana(w) ? withReading(byReb.get(w)) : withReading(byKeb.get(w));
   if (!cands.length) cands = withReading(byReb.get(r));
+  // A suru verb whose noun JMdict lacks is looked up whole, and Tatoeba spells it whole [達 alone isn't a word; 達する is].
+  if (!cands.length && word.suru) {
+    [w, r] = [bare(word.w), bare(word.r)];
+    cands = withReading(byKeb.get(w));
+    if (!cands.length) [w, r] = [strip(word.w), strip(word.r)];
+  }
+  word.base = w; word.baseR = r;
   if (!cands.length) { unmatched.push(word.k); word.f = 99; word.pos = word.suru ? ["vs"] : []; continue; }
   const score = (e) => Math.min(rank(e.kebs.find((x) => x.text === w)?.pri || []), rank(e.rebs.find((x) => x.text === r).pri));
   // Homophones are told apart by the list's English, then by being a kana word, then by frequency [かける "to sit down" is 掛ける, not 翔る "to soar"].
@@ -173,6 +189,9 @@ const found = new Map(), foundKanji = new Map();
 const add = (map, word, hit) => (map.get(word.k) || map.set(word.k, []).get(word.k)).push(hit);
 // A kana word's sentence filed under its kanji spelling and written in kana, a verb or adjective by its stem [其処(そこ){そこ} for そこ; 出来る{できない} for できる; 何時{なんじ} is not いつ].
 const writtenAs = (x, said) => !!said && isKana(said) && (said === x.base || (/^(v[15k]|vs-i|adj-i)/.test(x.pos[0] || "") && said.startsWith(x.base.slice(0, -1))));
+// A sentence two slices could take goes to the earlier one, so N3 never takes an N5 or N4 word's [明後日 untagged is あさって, never みょうごにち].
+const slice = (x) => Math.max(0, 4 - x.lv);
+const earliest = (xs) => xs.filter((x) => slice(x) === Math.min(...xs.map(slice)));
 for (const line of read("tatoeba", "jpn_indices.csv").split(/\r?\n/)) {
   const [jid, eid, idx] = line.split("\t");
   if (!idx || eid === "-1") continue;
@@ -180,10 +199,10 @@ for (const line of read("tatoeba", "jpn_indices.csv").split(/\r?\n/)) {
     const m = tok.match(/^([^([{~]+)(?:\(([^)]+)\))?(?:\[(\d+)\])?(?:\{([^}]+)\})?(~)?$/);
     if (!m) continue;
     const hit = { jid, eid, checked: !!m[5], sense: m[3] ? +m[3] : 0 };
-    const kana = (wantKanji.get(m[1]) || []).filter((x) => (!m[2] || x.baseR === m[2]) && writtenAs(x, m[4]));
+    const kana = earliest((wantKanji.get(m[1]) || []).filter((x) => (!m[2] || x.baseR === m[2]) && writtenAs(x, m[4])));
     if (kana.length === 1) add(foundKanji, kana[0], hit);
     // A spelling with two readings takes only sentences tagged with one, else the list's last word of it [七(しち) to しち, an untagged 七 to neither].
-    const cands = (want.get(m[1]) || []).filter((x) => !m[2] || x.baseR === m[2]);
+    const cands = earliest((want.get(m[1]) || []).filter((x) => !m[2] || x.baseR === m[2]));
     const word = new Set(cands.map((x) => x.baseR)).size === 1 && cands.at(-1);
     if (!word || (!m[2] && m[1] !== word.baseR && isKana(m[1]))) continue;
     add(found, word, hit);
@@ -266,7 +285,7 @@ const out = words.map((x) => {
     if (missing.length) throw new Error(`${x.k}: ${missing[0][0]} doesn't use the word`);
     ex = HAND[x.k];
   }
-  return { k: x.k, w: x.w, r: x.r, m: MEANING[x.k] || x.m, t: typeOf(x.pos), pos: x.pos, lv: x.lv, f: x.f, fu: furigana(x.w, x.r), ex, ...(x.uk && { uk: 1 }),
+  return { k: x.k, w: x.w, r: x.r, m: MEANING[x.k] || x.m, t: typeOf(x.pos), pos: x.pos, lv: x.lv, f: x.f, fu: furigana(x.w, x.r), ex, ...(x.uk && { uk: 1 }), ...(DESC[x.k] && { d: DESC[x.k] }),
     // A WaniKani recording fetched by tools/fetch-wk-audio.js [929 words; none for 後 read あと, whose file is 後 read ご].
     ...(fs.existsSync(path.join(__dirname, "..", wordClip(x.k))) && { au: 1 }) };
 });
@@ -310,6 +329,11 @@ const ROOT = { "～始める|～はじめる": "始める|はじめる", "～続
 const listed = new Set(out.map((x) => x.k));
 const strays = Object.keys(HAND).filter((k) => !listed.has(k));
 if (strays.length) throw new Error(`tools/examples.js: ${strays.join(", ")} isn't on the list`);
+const descStrays = Object.keys(DESC).filter((k) => !listed.has(k));
+if (descStrays.length) throw new Error(`tools/descriptors.js: ${descStrays.join(", ")} isn't on the list`);
+// A descriptor tells words apart in English, so it never holds kana or kanji that would give the answer away [魚 read うお: literary, never its reading].
+const japanese = Object.entries(DESC).filter(([, d]) => !d || !d.trim() || /[぀-ヿ㐀-鿿々]/.test(d)).map(([k]) => k);
+if (japanese.length) throw new Error(`tools/descriptors.js: ${japanese.join(", ")} is empty or in Japanese`);
 for (const [k, ks] of [...Object.entries(USES), ...Object.entries(ROOT).map(([k, r]) => [k, [r]])]) {
   const missing = [k, ...ks].filter((x) => !listed.has(x));
   if (missing.length) throw new Error(`${k}: ${missing.join(", ")} isn't on the list`);
@@ -324,5 +348,6 @@ out.sort((a, b) => b.lv - a.lv || a.f - b.f || order.get(a) - order.get(b));
 fs.mkdirSync(path.dirname(outFile), { recursive: true });
 fs.writeFileSync(outFile, JSON.stringify(out));
 const noEx = out.filter((x) => !x.ex.length).length;
-console.log(`${out.length} words (N5 ${out.filter((x) => x.lv === 5).length}, N4 ${out.filter((x) => x.lv === 4).length}), ${unmatched.length} not in JMdict, ${noEx} without examples -> ${outFile} (${fs.statSync(outFile).size} bytes)`);
+const levels = [...new Set(out.map((x) => x.lv))].map((lv) => `N${lv} ${out.filter((x) => x.lv === lv).length}`).join(", ");
+console.log(`${out.length} words (${levels}), ${unmatched.length} not in JMdict, ${noEx} without examples -> ${outFile} (${fs.statSync(outFile).size} bytes)`);
 if (unmatched.length) console.log("not in JMdict:", unmatched.join(" "));

@@ -7,6 +7,7 @@
 const http = require("http"), fs = require("fs"), path = require("path");
 const [root, out] = process.argv.slice(2).map((p) => path.resolve(p));
 const { chromium } = require(path.join(root, "node_modules", "playwright"));
+const { meaningOf } = require(path.join(root, "sync.js"));
 const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".mp3": "audio/mpeg" };
 const WORDS = JSON.parse(fs.readFileSync(path.join(root, "data", "vocab.json"), "utf8"));
 const MET = ["花|はな", "食べる|たべる", "赤い|あかい", "学生|がくせい", "行く|いく", "静か|しずか", "時々|ときどき", "水|みず", "見る|みる", "大きい|おおきい", "後|あと"];
@@ -89,7 +90,7 @@ fs.mkdirSync(out, { recursive: true });
     await page.waitForFunction(() => document.querySelector("#prog")?.textContent.startsWith("2 /"));
     w = await heard();
     opts = await page.locator(".gap-opt").evaluateAll((bs) => bs.map((b) => b.dataset.p));
-    await page.click(`.gap-opt >> nth=${opts.findIndex((m) => m !== w.m)}`);
+    await page.click(`.gap-opt >> nth=${opts.findIndex((m) => m !== meaningOf(w))}`);
     report.push(`${name} miss on ${w.w}: right lit "${await page.textContent(".gap-opt.right")}", word "${await page.textContent("#word")}", width ${await width()}`);
     await page.screenshot({ path: path.join(out, `${name}-miss.png`) });
     await page.click("#play");
@@ -99,7 +100,7 @@ fs.mkdirSync(out, { recursive: true });
       const prog = await page.textContent("#prog");
       w = await heard();
       opts = await page.locator(".gap-opt").evaluateAll((bs) => bs.map((b) => b.dataset.p));
-      await page.click(`.gap-opt >> nth=${opts.indexOf(w.m)}`);
+      await page.click(`.gap-opt >> nth=${opts.indexOf(meaningOf(w))}`);
       await page.waitForFunction((p) => document.querySelector("h1")?.textContent === "Done!" || document.querySelector("#prog")?.textContent !== p, prog);
     }
     report.push(`${name} done: ${(await page.textContent(".panel")).replace(/\s+/g, " ").trim().slice(0, 200)} | best ${JSON.stringify(await page.evaluate(() => JSON.parse(localStorage.getItem("hira.study")).listening?.best))}`);

@@ -53,10 +53,11 @@ const deck = [...want];
 
 // Today's N level from Jonathan Waller's lists, 0 for none, as KANJIDIC2's pre-2010 levels have no N3 [曜 N4, 政 N3; 誰 none].
 const WALLER = JSON.parse(fs.readFileSync(path.join(dataDir, "waller", "kanji-data.json"), "utf8"));
-// A kun reading a listed word spells with the kanji alone, by its whole okurigana or, for a derived form, its first kana [生きる = い.きる; 休み = やす.む].
+// A kun reading an N5 or N4 word spells with the kanji alone, by its whole okurigana or, for a derived form, its first kana; a later slice's words never reorder it [生きる = い.きる; 休み = やす.む; 入 keeps はい.る with N3's 気に入る].
+const ranking = words.filter((w) => w.lv >= 4);
 const used = (c, kun, whole) => {
   const [stem, oku = ""] = kun.split(".");
-  return words.some((w) => w.fu.some(([text, rt], i) => text === c && rt === stem && (w.fu[i + 1]?.[0] || "").startsWith(whole ? oku : oku[0] || "")));
+  return ranking.some((w) => w.fu.some(([text, rt], i) => text === c && rt === stem && (w.fu[i + 1]?.[0] || "").startsWith(whole ? oku : oku[0] || "")));
 };
 // Up to 3 kun, the word list's first, one per stem and spelling, a whole match taking its stem's place [生: い.きる, う.まれる, お.う, not い.かす; 分: わ.かる, not わ.かれる].
 function kunOf(c, all) {

@@ -12,7 +12,7 @@
   // Asked fresh each visit, the kept copy only when the server can't be reached [a kanji.json from before its readings stayed for days].
   const json = (url) => fetch(url, { cache: "no-cache" }).catch(() => fetch(url, { cache: "force-cache" }))
     .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
-  // Fetched on the first visit and kept, the kanji meanings optional [data/vocab.json, 1,384 words, 381 KB; data/kanji.json, 87 KB, failing = note lines without meanings].
+  // Fetched on the first visit and kept, the kanji meanings optional [data/vocab.json, 3,506 words, about 1.2 MB; data/kanji.json, 293 KB, failing = note lines without meanings].
   const loadWords = () => (loading ||= Promise.all([json("data/vocab.json"), json("data/kanji.json").catch(() => ({}))])
     .then(([list, info]) => { kanjiInfo = info; return (words = list); })
     .catch((e) => { loading = null; throw e; }));
@@ -154,11 +154,13 @@
     // A word counts as known once both its sides are on three-week intervals [Anki calls 21 days mature].
     const known = (lv) => words.filter((w) => w.lv === lv && ["r", "p"].every((d) => deck.cards[`${w.k}#${d}`]?.ivl >= 21)).length;
     const total = (lv) => words.filter((w) => w.lv === lv).length;
+    // The levels on the list, easiest first [5, 4, 3].
+    const levels = [...new Set(words.map((w) => w.lv))].sort((a, b) => b - a);
     const today_ = answeredToday(false).length, missed = answeredToday(true).length;
     const hear = window.HiraListen.pool(words, metWord).length;
     shell.app.innerHTML = `
       <h1>Words</h1>
-      <p class="lead">The JLPT N5 words, then N4, most common first, a word with kanji once you've started its kanji. Each word
+      <p class="lead">The JLPT ${levels.map((lv, i) => (i ? `N${lv}` : `N${lv} words`)).join(", then ")}, most common first, a word with kanji once you've started its kanji. Each word
         is a card both ways: read the Japanese, then recall it from English the next day. Answer honestly; the buttons set
         when it comes back.</p>
       <div class="find"><input type="search" id="w-find" class="find-box" placeholder="Search words: English, kana or romaji" value="${esc(findW)}" aria-label="Search words">
@@ -181,12 +183,11 @@
       <div class="row">
         <a class="btn ghost ${today_ ? "" : "disabled"}" href="#words/practice/today">Today's cards (${today_})</a>
         <a class="btn ghost ${missed ? "" : "disabled"}" href="#words/practice/missed">Today's misses (${missed})</a>
-        <a class="btn ghost ${levelCards(5) ? "" : "disabled"}" href="#words/practice/n5">N5 cards so far (${levelCards(5)})</a>
-        <a class="btn ghost ${levelCards(4) ? "" : "disabled"}" href="#words/practice/n4">N4 cards so far (${levelCards(4)})</a>
+        ${levels.map((lv) => `<a class="btn ghost ${levelCards(lv) ? "" : "disabled"}" href="#words/practice/n${lv}">N${lv} cards so far (${levelCards(lv)})</a>`).join("")}
         <a class="btn ghost ${hear ? "" : "disabled"}" href="#words/listen">Listening (${hear})</a>
       </div>
       <h2>Levels</h2>
-      <div class="grid">${[5, 4].map((lv) => `
+      <div class="grid">${levels.map((lv) => `
         <div class="panel"><div class="title">JLPT N${lv}</div>
           <div class="muted small">${seen(lv)} of ${total(lv)} met · ${known(lv)} known</div>
           <div class="bar"><span style="width:${Math.round((seen(lv) / total(lv)) * 100)}%"></span></div></div>`).join("")}
@@ -210,7 +211,7 @@
     const hits = search(words, findW);
     const marked = (m) => mark(m, findW).map(([t, hit]) => (hit ? `<mark>${esc(t)}</mark>` : esc(t))).join("");
     const row = (w) => `<div class="find-row kw-row${metWord(w.k) ? "" : " unmet"}" data-k="${esc(w.k)}"><span class="jp">${ruby(w)}</span>
-      <span class="small">${marked(w.m)}</span> <span class="muted small">N${w.lv}</span>
+      <span class="small">${marked(w.m)}</span>${w.d ? ` <span class="muted small">(${desc(w, "span")})</span>` : ""} <span class="muted small">N${w.lv}</span>
       ${kanjiOf(w).map(kanjiButton).join("")}</div>`;
     box.innerHTML = !findW.trim() ? "" : !hits.length ? `<p class="muted small">No word matches</p>`
       : `<p class="muted small">${hits.length} word${hits.length > 1 ? "s" : ""}</p>${(findAll ? hits : hits.slice(0, SHOWN)).map(row).join("")}${
@@ -218,6 +219,8 @@
     box.querySelector("#w-more")?.addEventListener("click", () => { findAll = true; findWords(); });
   }
 
+  // The small line telling a word from others of its first sense, nothing where it has none [赤: the colour; 噂 rumour: none].
+  const desc = (w, tag = "div") => (w.d ? `<${tag} class="desc muted small">${esc(w.d)}</${tag}>` : "");
   let byWord = null;
   const wordOf = (k) => (byWord ||= new Map(words.map((w) => [w.k, w]))).get(k);
   const wordRow = (w) => `<div><span class="jp">${ruby(w)}</span> ${esc(w.m)}</div>`;
@@ -233,11 +236,11 @@
   function faces(it) {
     const w = it.word;
     const word = `<div class="word jp">${ruby(w)}</div>`;
-    const meaning = `<div class="meaning">${esc(w.m)}</div><div class="muted small">${esc(w.t || "word")} · N${w.lv}</div>`;
+    const meaning = `<div class="meaning">${esc(w.m)}</div>${desc(w)}<div class="muted small">${esc(w.t || "word")} · N${w.lv}</div>`;
     const kana = w.uk ? `<div class="muted small">Usually written in kana: <span class="jp">${esc(w.r)}</span></div>` : "";
     const smart = learned(w, deck.kanji?.cards || {}) ? `<div class="smart small">★ Every kanji in it learned</div>` : "";
     const back = `${speak(w.r, w)} ${it.dir === "r" ? meaning : word}${kana}${smart}${extras(w)}${kanjiNote(w)}${examples(w)}${piecesNote(w)}`;
-    return { front: it.dir === "r" ? word : meaning, back: it.dir === "r" ? back : `${back}<div class="muted small">${esc(w.m)}</div>` };
+    return { front: it.dir === "r" ? word : meaning, back: it.dir === "r" ? back : `${back}<div class="muted small">${esc(w.m)}</div>${desc(w)}` };
   }
 
   // A run of cards: flip, then answer; `buttons` are [label, key, value] and `answer` says whether the card comes back this run [the Kanji tab passes its own faces and back link].
@@ -358,13 +361,15 @@
       </div>`;
   }
 
+  // A level's practice set by its name, N5 for anything else as before [n3 = 3; n9 or junk = 5].
+  const level = (set) => (words.some((w) => `n${w.lv}` === set) ? +set.slice(1) : 5);
   function runPractice(set) {
     const all = byKey();
     const keys = set === "today" ? answeredToday(false) : set === "missed" ? answeredToday(true)
-      : levelKeys(set === "n4" ? 4 : 5);
+      : levelKeys(level(set));
     const items = mix(keys.map((k) => all.get(k)).filter(Boolean));
     if (!items.length) return hub();
-    const title = { today: "Practice: today's cards", missed: "Practice: today's misses", n5: "Practice: N5", n4: "Practice: N4" }[set] || "Practice";
+    const title = { today: "Practice: today's cards", missed: "Practice: today's misses" }[set] || `Practice: N${level(set)}`;
     const missed = new Set();
     runCards({
       items, title,

@@ -25,7 +25,8 @@
     const k = JAPANESE.test(q) ? fold(q) : /^[a-z' -]+$/i.test(q) ? toKana(q.replace(/\s+/g, ""), true) : "";
     return KANA.test(k) ? k : "";
   };
-  // English first, then the reading or spelling: 3 exact, 4 starting, 5 inside, the last for typed Japanese only [me: 下さい, then 目 め, then 眼鏡 めがね].
+  // English first, then the reading or spelling: 3 exact, 4 starting, 5 inside, the last for typed Japanese only, ties N5 and N4 before N3, then the commonest [me: 下さい, then 目 め, then 眼鏡 めがね; go: 行く before 碁].
+  const slice = (w) => Math.max(0, 4 - w.lv);
   function words(list, q) {
     q = tidy(q);
     if (!q) return [];
@@ -38,7 +39,7 @@
       return forms.includes(kana) ? 3 : forms.some((f) => f.startsWith(kana)) ? 4 : typed && forms.some((f) => f.includes(kana)) ? 5 : null;
     };
     return list.map((w, i) => ({ w, i, r: rankOf(w) })).filter((x) => x.r !== null)
-      .sort((a, b) => a.r - b.r || a.w.f - b.w.f || a.i - b.i).map((x) => x.w);
+      .sort((a, b) => a.r - b.r || slice(a.w) - slice(b.w) || a.w.f - b.w.f || a.i - b.i).map((x) => x.w);
   }
   // A kanji's English: the keyword shown, Heisig's, KANJIDIC's meanings [旦: dawn, nightbreak, daybreak, dawn].
   const names = (c, info, koohii) => [keywordOf(c, koohii, info), koohii[c]?.kw, info[c]?.m];

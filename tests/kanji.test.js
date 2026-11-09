@@ -10,7 +10,7 @@ const strokes = require("../data/kanji-strokes.json");
 const listed = [...new Set(vocab.flatMap((w) => [...w.w].filter((c) => /[一-鿿]/.test(c))))];
 
 test("every kanji in the word list has a meaning, a stroke count and a level", () => {
-  assert.equal(listed.length, 778);
+  assert.equal(listed.length, 1435);
   assert.deepEqual(listed.filter((c) => !kanji[c]?.m || !(kanji[c].sc > 0) || !(kanji[c].lv >= 0)), []);
   assert.deepEqual(kanji["大"], { m: "large, big", sc: 3, lv: 5, on: ["ダイ", "タイ"], kun: ["おお.きい"], c: [], top: "ダイ" });
 });
@@ -18,8 +18,8 @@ test("every kanji in the word list has a meaning, a stroke count and a level", (
 // The deck is the word list's kanji, every jōyō kanji and a hand-picked few more [疫 and 誰 jōyō, 鯛 on menus; 翔 only in names].
 test("kanji.json holds the word list's kanji, all 2,136 jōyō and the hand-picked extras, never a name-only kanji", () => {
   const added = Object.keys(kanji).filter((c) => !listed.includes(c));
-  assert.equal(Object.keys(kanji).length, 2189);
-  assert.deepEqual([..."未竹貝寸羊衣阜疫悦帝鯛辰亥萌"].filter((c) => !added.includes(c)), []);
+  assert.equal(Object.keys(kanji).length, 2229);
+  assert.deepEqual([..."尺竹臼寸羊阜疫悦帝鯛辰亥萌"].filter((c) => !added.includes(c)), []);
   assert.deepEqual([..."翔莉葵彦梓凜"].filter((c) => kanji[c]), []);
   // Levels are Waller's N5 to N1, as KANJIDIC2's pre-2010 ones put 政 and 胃 both at old 2 and 曜 there too [政 N3, 胃 N2, 曜 N4, 誰 none].
   assert.deepEqual([..."政胃曜誰大"].map((c) => kanji[c].lv), [3, 2, 4, 0, 5]);
@@ -63,7 +63,7 @@ test("every kanji has up to 3 on and 3 kun readings, without KANJIDIC's prefix a
 test("every kanji has KanjiVG's strokes, one number per stroke, as many as KANJIDIC counts", () => {
   assert.deepEqual(listed.filter((c) => !strokes[c]?.d.length || strokes[c].d.length !== strokes[c].n.length), []);
   // KanjiVG draws the older glyph of two [飴 14 strokes to KANJIDIC2's 13, 噌 15 to 14].
-  assert.deepEqual(listed.filter((c) => strokes[c].d.length !== kanji[c].sc), ["飴", "噌"]);
+  assert.deepEqual(listed.filter((c) => strokes[c].d.length !== kanji[c].sc), ["飴", "噌", "謎", "餌", "兎", "賭", "僅"]);
   assert.equal(strokes["学"].d.length, 8);
 });
 
@@ -122,7 +122,7 @@ test("a word spelled like the card's own word is left out of its note", () => {
 test("a kanji's word list puts met words first, newest first, then the rest in list order", () => {
   const cards = { "学校|がっこう#r": met(11), "科学|かがく#r": met(13), "大学|だいがく#p": met(14) };
   assert.deepEqual(wordsWith("学", vocab, cards).map((w) => w.k).slice(0, 5), ["科学|かがく", "学校|がっこう", "学生|がくせい", "大学|だいがく", "留学生|りゅうがくせい"]);
-  assert.equal(wordsWith("学", vocab, cards).length, 13);
+  assert.equal(wordsWith("学", vocab, cards).length, 29);
 });
 
 // The Kanji tab's deck: every kanji in the word list's order with its parts in front, and the day's new kanji the next ones in it.
@@ -275,12 +275,12 @@ test("the main reading comes apart from the rest, each with up to 3 list words u
   };
   // A word not met yet is marked ~ [四 with nothing met: シ from 四 merged with its other reading し, よん from 四 itself].
   const rows = (c, cs, info = kanji) => { const b = byReading(c, vocab, cs, info); const ws = (x) => [x.r, x.words.map(({ w, met }) => w.w + (met ? "" : "~"))]; return [b.top && ws(b.top), b.rest.map(ws)]; };
-  assert.deepEqual(rows("学", cards), [["ガク", ["大学", "科学", "医学"]], [["まな.ぶ", []]]]);
-  assert.deepEqual(rows("四", {}), [["シ", ["四~"]], [["よっ.つ", ["四つ~"]], ["よん", ["四~"]], ["よ", []]]]);
+  assert.deepEqual(rows("学", cards), [["ガク", ["大学", "科学", "医学"]], [["まな.ぶ", ["学ぶ~"]]]]);
+  assert.deepEqual(rows("四", {}), [["シ", ["四~", "四季~", "四角~"]], [["よっ.つ", ["四つ~"]], ["よん", ["四~"]], ["よ", []]]]);
   // A word met only English side first counts as not met.
   assert.deepEqual(rows("学", { "学生|がくせい#p": met(10) })[0], ["ガク", ["学生~", "学校~", "大学~"]]);
   // 今日 is read whole, so it stands under no reading.
-  assert.deepEqual(rows("今", { "今日|きょう#r": met(10), "今晩|こんばん#r": met(11) }), [["いま", ["今~"]], [["コン", ["今晩", "今月~", "今週~"]], ["キン", []]]]);
+  assert.deepEqual(rows("今", { "今日|きょう#r": met(10), "今晩|こんばん#r": met(11) }), [["いま", ["今~", "今に~", "今にも~"]], [["コン", ["今晩", "今月~", "今週~"]], ["キン", []]]]);
   // The rest keep kanji.json's order whichever was met first.
   assert.deepEqual(rows("生", { "生きる|いきる#r": met(12), "先生|せんせい#r": met(10) })[1].map(([r]) => r), ["ショウ", "い.きる", "う.まれる", "お.う"]);
   // A kanji.json cached before the main reading puts every reading in the rest.
@@ -290,8 +290,9 @@ test("the main reading comes apart from the rest, each with up to 3 list words u
 });
 
 // A kanji page listed 四's シ, よっ.つ, よ and よん alike, with nothing to say which one to learn first.
+// N3 words joining the kun ranking moved 10 main readings, 入 to い.る and 扱 to こ.く, so only N5/N4 words rank kun.
 test("kanji.json marks the reading anime subtitles use most or one picked by hand, always one of the kanji's own [今 = いま, 人 = ひと; 上 = うえ over ジョウ]", () => {
-  assert.deepEqual(["今", "人", "何", "行", "上", "夫", "四", "晴"].map((c) => kanji[c].top), ["いま", "ひと", "なに", "い.く", "うえ", "おっと", "シ", "は.れる"]);
+  assert.deepEqual(["今", "人", "何", "行", "上", "夫", "四", "晴", "入", "扱"].map((c) => kanji[c].top), ["いま", "ひと", "なに", "い.く", "うえ", "おっと", "シ", "は.れる", "はい.る", "あつか.い"]);
   assert.deepEqual(Object.keys(kanji).filter((c) => kanji[c].top && ![...kanji[c].on, ...kanji[c].kun].includes(kanji[c].top)), []);
   assert.ok(Object.values(kanji).filter((k) => k.top).length > 890);
 });

@@ -175,7 +175,7 @@
         app.querySelector("#word").innerHTML = shown(q.word);
         app.querySelector("#type").textContent = q.word.t + (base(q.word).w !== q.word.w ? " + する" : "");
         // The meaning says which word is meant where the kana alone doesn't [はく: to put on, not to vomit].
-        app.querySelector("#meaning").textContent = q.word.m;
+        app.querySelector("#meaning").textContent = window.HiraSync.meaningOf(q.word);
         app.querySelector("#form").textContent = label(q.form);
         app.querySelector(".verb-q").dataset.k = q.word.k;
         app.querySelector(".verb-q").dataset.form = q.form;

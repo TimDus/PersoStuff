@@ -329,6 +329,54 @@ test("the end of a session counts the cards that got Again, not the presses", as
   await page.close();
 });
 
+// The hub's levels were written out as [5, 4], so N3's 2,123 words would have had no panel and no practice round.
+test("the hub has a level panel and a practice round for each level on the list, N3 after N4", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: deckWith({ "現在|げんざい#r": reviewed(), "現在|げんざい#p": reviewed() }) } }, "#words");
+  await page.locator("#new").waitFor();
+  assert.deepEqual(await page.locator(".grid .title").allTextContents(), ["JLPT N5", "JLPT N4", "JLPT N3"]);
+  assert.match(await page.locator(".grid .panel").nth(2).textContent(), /1 of 2123 met/);
+  assert.match(await page.textContent(".lead"), /The JLPT N5 words, then N4, then N3, most common first/);
+  assert.match(await page.textContent("a[href='#words/practice/n3']"), /N3 cards so far \(2\)/);
+  await page.click("a[href='#words/practice/n3']");
+  await page.locator(".face.front").waitFor();
+  assert.equal(await page.locator(".row > span.muted.small").first().textContent(), "Practice: N3");
+  assert.equal(await page.textContent("#left"), "2 left");
+  await page.close();
+});
+
+// 赤 and 赤い both ask "red" on their English side; the small line under the meaning says which one is meant.
+test("a word sharing its first sense shows its descriptor under the meaning, on the English front, both backs and a search hit, and a list from before the field shows none", async () => {
+  const d = require("../data/vocab.json").find((w) => w.k === "赤|あか").d;
+  assert.ok(d, "赤 has a descriptor");
+  const yesterday = deckWith({ "赤|あか#r": reviewed({ first: day - 1, last: day - 1, due: day + 1 }) });
+  const english = await open({ ...listed, local: { "study.user": "u1", study: yesterday } }, "#words/review");
+  await english.locator(".face.front").waitFor();
+  assert.deepEqual(await english.locator(".face.front > div").evaluateAll((ds) => ds.slice(0, 3).map((x) => [x.className, x.textContent])),
+    [["meaning", "red"], ["desc muted small", d], ["muted small", "noun · N5"]]);
+  await english.click("#card");
+  assert.equal(await english.textContent(".face.back .desc"), d);
+  await english.close();
+  const japanese = await open({ ...listed, local: { "study.user": "u1", study: deckWith({ "赤|あか#r": reviewed({ first: day - 3, last: day - 3, due: day }) }) } }, "#words/review");
+  await japanese.locator(".face.front").waitFor();
+  await japanese.click("#card");
+  assert.equal(await japanese.textContent(".face.back .desc"), d);
+  await japanese.goto("#words");
+  await japanese.fill("#w-find", "red");
+  assert.equal(await japanese.textContent("#w-hits .find-row[data-k='赤|あか'] .desc"), d);
+  // The row read "redthe colour" until the descriptor got its own brackets.
+  assert.ok((await japanese.textContent("#w-hits .find-row[data-k='赤|あか']")).replace(/\s+/g, " ").includes(`red (${d})`));
+  await japanese.close();
+  // A vocab.json kept from before descriptors has no `d`.
+  const old = await open({ ...listed, local: { "study.user": "u1", study: yesterday } }, "#learn");
+  await old.route("**/data/vocab.json", async (r) => { const res = await r.fetch(); await r.fulfill({ response: res, json: (await res.json()).map(({ d: _, ...w }) => w) }); });
+  await old.goto("#words/review");
+  await old.locator(".face.front").waitFor();
+  assert.equal(await old.textContent(".face.front .meaning"), "red");
+  assert.equal(await old.locator(".desc").count(), 0);
+  assert.doesNotMatch(await old.textContent("#app"), /undefined/);
+  await old.close();
+});
+
 test("practice buttons count the cards a round will show, both sides of a word", async () => {
   const page = await open({ ...listed, local: { "study.user": "u1", study: deckWith({ "秋|あき#r": reviewed(), "秋|あき#p": reviewed() }) } }, "#words");
   await page.locator("#new").waitFor();
@@ -516,8 +564,8 @@ test("the Words hub's search lists the matching words as you type, unmet ones mu
   assert.equal(await page.locator("#w-hits .find-row").count(), 0);
   await page.fill("#w-find", "eat");
   const rows = () => page.locator("#w-hits .find-row").evaluateAll((rs) => rs.map((r) => r.dataset.k + (r.classList.contains("unmet") ? "~" : "")));
-  assert.deepEqual(await rows(), ["食べる|たべる", "召し上がる|めしあがる~", "頂く|いただく~"]);
-  assert.deepEqual(await page.locator("#w-hits mark").allTextContents(), ["eat", "eat", "eat"]);
+  assert.deepEqual(await rows(), ["食べる|たべる", "食う|くう~", "召し上がる|めしあがる~", "頂く|いただく~"]);
+  assert.deepEqual(await page.locator("#w-hits mark").allTextContents(), ["eat", "eat", "eat", "eat"]);
   await page.fill("#w-find", "");
   assert.equal(await page.textContent("#w-hits"), "");
   await page.close();
@@ -548,6 +596,6 @@ test("the Words search is still there after leaving the hub and coming back, and
   await page.click("nav a[data-tab='words']");
   await page.locator("#w-find").waitFor();
   assert.equal(await page.inputValue("#w-find"), "eat");
-  assert.equal(await page.locator("#w-hits .find-row").count(), 3);
+  assert.equal(await page.locator("#w-hits .find-row").count(), 4);
   await page.close();
 });

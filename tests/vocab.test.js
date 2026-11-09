@@ -5,10 +5,46 @@ const assert = require("node:assert/strict");
 const vocab = require("../data/vocab.json");
 const by = (k) => vocab.find((w) => w.k === k);
 
-test("every N5 and N4 word is there once, all of N5 before any of N4", () => {
+test("every N5, N4 and N3 word is there once, each level after the one before", () => {
   assert.equal(new Set(vocab.map((w) => w.k)).size, vocab.length);
-  assert.deepEqual([vocab.filter((w) => w.lv === 5).length, vocab.filter((w) => w.lv === 4).length], [715, 668]);
-  assert.equal(vocab.findIndex((w) => w.lv === 4), 715);
+  assert.deepEqual([5, 4, 3].map((lv) => vocab.filter((w) => w.lv === lv).length), [715, 668, 2123]);
+  assert.deepEqual([vocab.findIndex((w) => w.lv === 4), vocab.findIndex((w) => w.lv === 3)], [715, 1383]);
+  assert.deepEqual(vocab.filter((w, i) => i && w.lv > vocab[i - 1].lv).map((w) => w.k), []);
+});
+
+// SPELL was keyed by spelling alone, so N3's 下る read くだる "to descend" took N4's rename and became 下がる read くだる.
+test("a dated spelling is renamed only where the new one fits the reading, and N3's are written as today [下る read くだる stays; 支払 = 支払い]", () => {
+  assert.ok(by("下る|くだる") && by("下がる|さがる") && !by("下がる|くだる"));
+  assert.deepEqual(["支払|しはらい", "当り|あたり", "押える|おさえる", "知合い|しりあい", "引越し|ひっこし", "中味|なかみ", "祭|まつり", "代る|かわる", "下す|おろす", "唯|たった"].filter(by), []);
+  assert.deepEqual(["支払い|しはらい", "当たり|あたり", "押さえる|おさえる", "知り合い|しりあい", "引っ越し|ひっこし", "中身|なかみ", "祭り|まつり", "代わる|かわる", "下ろす|おろす", "たった|たった"].filter((k) => !by(k)), []);
+});
+
+// N3 lists 被る beside N5's かぶる and 為る read する; a reading of する alone also made 刷る "to print" the suru noun 刷るする.
+test("an N3 row that is a listed word again or its second spelling is dropped, a pair with a sense of its own stays, and a verb read する is that verb", () => {
+  assert.deepEqual(["被る|かぶる", "為る|する", "為る|なる", "たしか|たしか", "清む|すむ", "只|ただ", "唯|ただ", "具える|そなえる", "殖やす|ふやす", "塵|ごみ", "出合い|であい", "濠|ほり", "円|まる", "角|すみ"].filter(by), []);
+  assert.deepEqual(vocab.filter((w) => w.k === "四|よん").map((w) => [w.lv, w.alt[0][0]]), [[5, "し"]]);
+  assert.deepEqual(["遭う|あう", "温かい|あたたかい", "河|かわ", "街|まち", "量る|はかる", "測る|はかる"].filter((k) => !by(k)), []);
+  assert.deepEqual(["刷る|する", "擦る|する"].map((k) => by(k)?.t), ["godan verb", "godan verb"]);
+  assert.deepEqual(vocab.filter((w) => /.する\|する$/.test(w.k)).map((w) => w.k), []);
+});
+
+// しまった (かん) kept the list's note in its key and matched nothing in JMdict, so it had no type; 達する matched nothing as 達.
+test("a spelling's note is dropped, and a suru verb JMdict lists only whole is matched whole [しまった (かん) = しまった; 達する nf15]", () => {
+  assert.deepEqual(vocab.filter((w) => w.k.includes("(かん)")).map((w) => w.k), []);
+  assert.deepEqual(["しまった|しまった", "すみません|すみません", "はあ|はあ"].map((k) => by(k)?.t), ["interjection", "expression", "interjection"]);
+  assert.deepEqual(["達する|たっする", "罰する|ばっする"].map((k) => [by(k)?.t, by(k)?.f]), [["suru verb", 15], ["suru verb", 25]]);
+});
+
+// 運転 and 明後日 read みょうごにち joined from N3 and took or blocked every sentence of N4's 運転する and N5's 明後日 あさって.
+test("an N5 or N4 word keeps its examples when an N3 word shares its spelling [明後日 あさって: 明後日の晩かえります]", () => {
+  const jp = (k) => by(k).ex.map(([s]) => s);
+  assert.deepEqual(jp("明後日|あさって"), ["明後日の晩かえります。", "明後日いらして下さい。"]);
+  assert.deepEqual(jp("～円|～えん"), ["私はそのレコードを買うのに３０００円かかった。", "５０円です。"]);
+  assert.deepEqual(jp("～中|～ちゅう"), ["今勤務中です。", "図１中のグラフは各学年の白人と黒人の総計点の平均値の相違を示している。"]);
+  assert.deepEqual(jp("～日|～にち"), ["１３日の金曜日は不吉な日だと言われている。", "私の誕生日は3月22日です。"]);
+  assert.deepEqual(jp("工場|こうじょう"), ["その工場は玩具を製造している。", "彼らは工場で働いた。"]);
+  assert.deepEqual(jp("運転する|うんてんする"), ["トムは車を運転した。", "現在５０台の機械が運転中です。"]);
+  assert.deepEqual(jp("下がる|さがる"), ["熱が下がった。", "ランプは天井から下がっていた。"]);
 });
 
 test("the list's dated spellings are written as today, and a second spelling of one word is dropped [終る = 終わる, 在る = 有る]", () => {
@@ -17,16 +53,28 @@ test("the list's dated spellings are written as today, and a second spelling of 
   assert.deepEqual(by("終わる|おわる").fu, [["終", "お", 4], ["わる"]]);
 });
 
-// The English side asks for a word from its meaning, so two words with one meaning both count as right ["red": 赤 and 赤い].
-test("no two words share an English line or its first sense, and every rewrite names a listed word", () => {
+// The English side asks for a word from its meaning, so two words with one first sense both look right ["red": 赤 and 赤い];
+// rewording 875 of them away was the other way, and a small line under the meaning keeps the plain word as the headline.
+test("words sharing a first sense each carry a descriptor, no two alike and none in Japanese, and every rewrite names a listed word", () => {
   const first = (m) => m.split(/[,;]/)[0].trim().toLowerCase();
-  for (const key of [(w) => w.m.toLowerCase(), (w) => first(w.m)]) {
-    const seen = new Map();
-    for (const w of vocab) seen.set(key(w), [...(seen.get(key(w)) || []), w.k]);
-    assert.deepEqual([...seen.values()].filter((ks) => ks.length > 1), []);
-  }
+  const groups = new Map();
+  for (const w of vocab) groups.set(first(w.m), [...(groups.get(first(w.m)) || []), w]);
+  const shared = [...groups.values()].filter((ws) => ws.length > 1);
+  assert.ok(shared.length > 370, `${shared.length} groups`);
+  assert.deepEqual(shared.flat().filter((w) => !w.d).map((w) => w.k), []);
+  assert.deepEqual(shared.filter((ws) => new Set(ws.map((w) => w.d.trim().toLowerCase())).size < ws.length).map((ws) => ws.map((w) => `${w.k} ${w.d}`)), []);
+  assert.deepEqual(vocab.filter((w) => "d" in w && (typeof w.d !== "string" || !w.d.trim() || /[぀-ヿ㐀-鿿々]/.test(w.d))).map((w) => w.k), []);
   assert.deepEqual(Object.keys(require("../tools/meanings.js")).filter((k) => !by(k)), []);
-  assert.deepEqual([by("赤|あか").m, by("赤い|あかい").m], ["red (the colour)", "red"]);
+});
+
+// "red (the colour)" and "who (polite)" told words apart inside the meaning; those notes moved to the descriptor line,
+// while a bracket saying what a verb acts on is part of the meaning and stays [回す to turn (something)].
+test("a sense or register note sits on the descriptor, a grammatical bracket stays in the meaning [赤 red with 'the colour'; 回す to turn (something)]", () => {
+  const moved = ["赤|あか", "明日|あす", "どなた|どなた", "頂く|いただく", "おいでになる|おいでになる", "祖父|そふ", "薄い|うすい", "やる|やる", "十|とお"];
+  assert.deepEqual(moved.map((k) => [by(k).m, !!by(k).d]), [["red", true], ["tomorrow", true], ["who", true], ["to receive; to eat or drink", true],
+    ["to come, to go, to be", true], ["grandfather", true], ["thin; weak, pale", true], ["to do; to give (to pets, plants)", true], ["ten, ten years old", true]]);
+  assert.deepEqual(["回す|まわす", "～だす|～だす", "支度する|したくする", "鳥|とり"].map((k) => by(k).m),
+    ["to turn (something), to spin", "to start doing ~ (suddenly), to burst out ~ing", "to get ready, to prepare (oneself)", "bird; chicken (meat)"]);
 });
 
 test("a kanji spelling JMdict says is usually kana is marked, a kana word never is [沢山 = たくさん]", () => {
@@ -110,14 +158,15 @@ test("a kana word ranks by how common its sound is [はい, よく, どう, そ�
   assert.deepEqual(["はい|はい", "よく|よく", "どう|どう", "その|その"].filter((k) => at(k) >= 359), []);
 });
 
-// A word's 🔊 plays data/words/<key>.mp3 when `au` says so, so a flag without its file is a silent button [929 words have one].
+// A word's 🔊 plays data/words/<key>.mp3 when `au` says so, so a flag without its file is a silent button [2,055 words have one].
 test("every word marked with a recording has its file, and every file belongs to a marked word", () => {
   const fs = require("fs"), path = require("path");
   const { wordClip } = require("../sync.js");
   const marked = vocab.filter((w) => w.au).map((w) => wordClip(w.k)).sort();
   const files = fs.readdirSync(path.join(__dirname, "../data/words")).map((f) => `data/words/${f}`).sort();
   assert.deepEqual(marked, files);
-  assert.equal(marked.length, 929);
+  // 929 N5/N4 files, 1,126 N3, and 四 よん and 七 なな, added after the first fetch.
+  assert.equal(marked.length, 2057);
   assert.equal(by("後|あと").au, undefined);
 });
 

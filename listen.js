@@ -1,6 +1,6 @@
 // The Listening round: a met word's recording, its meaning picked from four [はな → flower, with no nose beside it].
 (function (root) {
-  const { hira } = typeof module !== "undefined" ? require("./sync.js") : root.HiraSync;
+  const { hira, meaningOf } = typeof module !== "undefined" ? require("./sync.js") : root.HiraSync;
   // A reading as it sounds, katakana as hiragana and a suffix's ～ dropped [ペン = ぺん, ～だい = だい].
   const sound = (r) => hira(r.replace(/～/g, ""));
   // The group a word's wrong choices come from [suru verb = verb, pre-noun adjective = adjective, number = noun, adverb alone].
@@ -11,28 +11,32 @@
 
   // A meaning line's English shape [to eat = to, -- humble expression for する -- = --, flower = plain].
   const shape = (m) => (/^to /.test(m) ? "to" : /^--/.test(m) ? "--" : "plain");
-  // Whether a line names the word heard [なぜ's "why (same as どうして)" names どう].
-  const names = (m, w) => m.includes(w.w);
-  // The words a wrong choice may come from: its shape and kind, topped up from its shape in any kind, never sounding like it or naming it [花: 804 nouns; 嬉しい: 304 "to" lines, 欲しい the one adjective].
+  // Whether a line names the word heard, by spelling or by a reading of two kana or more [なぜ's "why (same as どうして)" names どう].
+  const names = (m, w) => m.includes(w.w) || (w.r.length > 1 && m.includes(w.r));
+  // A line's first sense, the part a learner reads as the answer [男 "man, male" and 男の人 "man" both "man"].
+  const firstSense = (m) => m.split(/[,;]/)[0].trim().toLowerCase();
+  // The words a wrong choice may come from: its shape and kind, topped up from its shape in any kind, never sounding like it, naming it or sharing its first sense [花: 804 nouns; 男: never 男の人's man].
   function candidates(word, words) {
-    const fair = words.filter((w) => shape(w.m) === shape(word.m) && sound(w.r) !== sound(word.r) && !names(w.m, word));
+    const fair = words.filter((w) => shape(w.m) === shape(word.m) && sound(w.r) !== sound(word.r) && !names(w.m, word)
+      && firstSense(w.m) !== firstSense(word.m));
     const kin = fair.filter((w) => kindOf(w) === kindOf(word));
     return kin.length >= 3 ? kin : fair;
   }
 
-  // The word's meaning and three candidates', shuffled [学生: student, hot water, village, ~ day of the month].
+  // The word's meaning and three candidates', each with its descriptor, four first senses apart, shuffled [学生: student (especially university), hot water, village, ~ day of the month].
   function options(word, words, rand = Math.random) {
     const wrong = candidates(word, words);
-    const out = [word.m];
-    while (out.length < 4) {
-      const left = wrong.filter((w) => !out.includes(w.m));
-      out.push(left[Math.floor(rand() * left.length)].m);
+    const picked = [word];
+    while (picked.length < 4) {
+      const left = wrong.filter((w) => !picked.some((p) => firstSense(p.m) === firstSense(w.m)));
+      picked.push(left[Math.floor(rand() * left.length)]);
     }
+    const out = picked.map(meaningOf);
     for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; }
     return out;
   }
 
-  const api = { sound, kindOf, pool, candidates, options };
+  const api = { sound, kindOf, pool, firstSense, candidates, options };
   if (typeof module !== "undefined") { module.exports = api; return; }
 
   const study = window.HiraStudy;
@@ -93,10 +97,10 @@
         play();
       },
       options: (w) => options(w, words),
-      judge: (w, m) => (m === w.m ? m : null),
+      judge: (w, m) => (m === meaningOf(w) ? m : null),
       right() { reveal(); return 1000; },
       wrong() { reveal(); return ""; },
-      missLine: (w) => `<span class="jp">${study.ruby(w)}</span> · ${esc(w.m)}`,
+      missLine: (w) => `<span class="jp">${study.ruby(w)}</span> · ${esc(meaningOf(w))}`,
       best: given ? null : { key: String(queue.length), store: study.listening },
       again: () => run(words, list, count, given),
       drillMissed: (misses) => run(words, list, count, misses),

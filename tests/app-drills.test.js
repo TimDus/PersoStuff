@@ -386,11 +386,11 @@ test("the kanji spelling from a Japanese keyboard counts as the answer", async (
   await page.close();
 });
 
-test("a drill question shows the word's meaning, so a kana-only verb says which one it is", async () => {
+test("a drill question shows the word's meaning with its descriptor, so a kana-only verb says which one it is", async () => {
   const page = await open({ ...drill, local: verbsSel({}) }, "#verbs/run");
   await page.locator(".verb-q").waitFor();
   const k = (await question(page)).k;
-  const m = await page.evaluate(async (key) => (await (await fetch("data/vocab.json")).json()).find((w) => w.k === key).m, k);
+  const m = await page.evaluate(async (key) => { const w = (await (await fetch("data/vocab.json")).json()).find((x) => x.k === key); return w.d ? `${w.m} (${w.d})` : w.m; }, k);
   assert.equal(await page.textContent("#meaning"), m);
   await page.close();
 });
@@ -779,7 +779,8 @@ test("Enter on a link while a miss shows follows the link instead of moving on",
 const heard = (page) => page.evaluate(async () => {
   const k = document.querySelector(".listen-q").dataset.k;
   const w = (await (await fetch("data/vocab.json")).json()).find((x) => x.k === k);
-  return { k, m: w.m, w: w.w, clip: HiraSync.wordClip(k) };
+  // A choice shows the meaning with its descriptor in brackets [召し上がる: to eat or drink (honorific)].
+  return { k, m: w.d ? `${w.m} (${w.d})` : w.m, w: w.w, clip: HiraSync.wordClip(k) };
 });
 const pickMeaning = async (page, right) => {
   const h = await heard(page), prog = await page.textContent("#prog");

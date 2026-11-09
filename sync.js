@@ -74,7 +74,10 @@
     : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])])) : v);
   const same = (a, b) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
 
-  const api = { clipPath, imagePath, wordClip, hira, bump, better, merge, mergeWrite, same, wholeCategories };
+  // A word's English with its descriptor in brackets, for places with room for one line [召し上がる: to eat or drink (honorific)].
+  const meaningOf = (w) => (w.d ? `${w.m} (${w.d})` : w.m);
+
+  const api = { clipPath, imagePath, wordClip, hira, bump, better, merge, mergeWrite, same, wholeCategories, meaningOf };
   if (typeof module !== "undefined") module.exports = api;
   else root.HiraSync = api;
 })(this);
