@@ -166,3 +166,13 @@ test("a real word's forms nobody says give no question, and くれる's imperati
   assert.deepEqual(forms(listed("くれる"), ["masu", "te", "imperative", "potential"]), ["くれます", "くれて", "くれ", undefined]);
   assert.equal(conjugate(listed("すっと"), "masu"), null, "an adverb isn't drilled as a する verb");
 });
+
+// N3 brought classes the N5 and N4 rules never met, graded with a green tick once met [問う: とって for とうて; 愛する: あいできる].
+test("問う keeps its う before て and た, and a one-kanji する verb has no できる potential", () => {
+  assert.deepEqual(forms(listed("問う"), ["te", "ta", "tara", "masu", "nai"]), ["とうて", "とうた", "とうたら", "といます", "とわない"]);
+  assert.deepEqual(forms(listed("愛する"), ["potential", "masu", "passive"]), [undefined, "あいします", "あいされる"]);
+  assert.deepEqual(forms(listed("達する"), ["potential", "te"]), [undefined, "たっして"]);
+  assert.deepEqual(forms(listed("注"), ["potential", "ta"]), [undefined, "ちゅうした"]);
+  assert.deepEqual(forms(listed("勉強する"), ["potential"]), ["べんきょうできる"]);
+  for (const w of ["関する", "対する", "適する"]) assert.deepEqual(forms(listed(w), ["volitional", "imperative", "passive", "causative", "masu"]).slice(0, 4), [undefined, undefined, undefined, undefined], w);
+});

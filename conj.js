@@ -18,7 +18,8 @@
     const [a, i, , e, o] = ROWS[k];
     // ございます-type verbs take い where others take り [いらっしゃる: いらっしゃいます, いらっしゃい].
     const stem = cls === "v5aru" ? "い" : i;
-    const te = cls === "v5k-s" ? "って" : TE[k];
+    // 行く and 問う keep their own て [行って; 問うて, not 問って].
+    const te = cls === "v5k-s" ? "って" : cls === "v5u-s" ? "うて" : TE[k];
     return {
       masu: stem + "ます", masen: stem + "ません", mashita: stem + "ました", masendeshita: stem + "ませんでした",
       te, ta: past(te), nai: a + "ない", nakatta: a + "なかった",
@@ -51,6 +52,7 @@
   const ALL = ["potential", "passive", "causative", "imperative", "volitional"];
   const UNSAID = {
     "できる|できる": ALL, "見える|みえる": ALL, "聞こえる|きこえる": ALL, "暮れる|くれる": ALL, "要る|いる": ALL, "おる|おる": ALL,
+    "関する|かんする": ALL, "対する|たいする": ALL, "適する|てきする": ALL,
     "分かる|わかる": ["potential", "passive", "imperative", "volitional"], "くれる|くれる": ["potential", "passive", "causative", "volitional"],
     "すっと|すっと": FORMS.map((f) => f.id), "しばらく|しばらく": FORMS.map((f) => f.id),
   };
@@ -67,6 +69,8 @@
     // くれる is ichidan but for its imperative [くれ, not くれろ].
     if (cls === "v1-s") return swap(1, form === "imperative" ? "" : ICHIDAN[form]);
     if (cls === "vk") return { w: w.slice(0, 1) + KURU[form].slice(1), r: KURU[form] };
+    // A one-kanji する verb's potential isn't できる [愛する: 愛せる, never 愛できる], so it isn't asked.
+    if ((cls === "vs-i" || cls === "vs") && form === "potential" && /^[一-鿿]する$/.test(w)) return null;
     if (cls === "vs-i" || cls === "vs") return swap(2, SURU[form]);
     if (cls === "v5r-i") {
       if (form === "nai" || form === "nakatta") return { w: form === "nai" ? "ない" : "なかった", r: form === "nai" ? "ない" : "なかった" };
