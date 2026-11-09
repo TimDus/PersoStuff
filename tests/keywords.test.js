@@ -6,7 +6,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const kanji = require("../data/kanji.json");
 const koohii = require("../content/koohii.json");
-const { PLAIN, keywordOf } = require("../keywords.js");
+const { PLAIN, keywordOf, CONTEXT } = require("../keywords.js");
 
 const keyword = (c) => keywordOf(c, koohii, kanji);
 
@@ -23,4 +23,32 @@ test("no plain keyword shares a sense with another kanji's keyword, brackets, ar
   const all = Object.keys(kanji).map((c) => [c, senses(c)]);
   const hits = Object.keys(PLAIN).flatMap((c) => [...senses(c)].flatMap((s) => all.filter(([d, ss]) => d !== c && ss.has(s)).map(([d]) => `${s}: ${c}${d}`)));
   assert.deepEqual(hits, []);
+});
+
+// A context line sits under a keyword that alone doesn't say how its words use the kanji, and the review front shows it while the kanji is recalled.
+test("勢 has a context line, the ask's own case [forces: momentum in 勢い, a crowd in 大勢]", () => {
+  assert.equal(typeof CONTEXT, "object", "keywords.js exports CONTEXT");
+  assert.equal(typeof CONTEXT["勢"], "string");
+});
+
+// English only, the user's pick: kana or a kanji on the review front would give the answer away [勢い in the line names 勢].
+test("every context line is for a deck kanji, in English only, and not its keyword said again", () => {
+  assert.equal(typeof CONTEXT, "object", "keywords.js exports CONTEXT");
+  const bad = Object.entries(CONTEXT).filter(([c, s]) => !kanji[c] || typeof s !== "string" || !s.trim() || s !== s.trim()
+    || /[\u3000-\u30ff\u3400-\u9fff\uff00-\uffef々]/.test(s) || s.toLowerCase() === keyword(c).toLowerCase());
+  assert.deepEqual(bad.map(([c, s]) => `${c} ${s}`), []);
+});
+
+// The line sits right under the keyword, so a part of it said again is a wasted half-line [縦 vertical: not "vertical; piloting"].
+test("no context line repeats a part of its keyword as a whole word [縦 vertical; 札 tag]", () => {
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const repeats = ([c, s]) => keyword(c).toLowerCase().split(/,\s*/).filter((p) => p.length > 2)
+    .some((p) => new RegExp(`(^|[^a-z])${esc(p)}([^a-z]|$)`).test(s.toLowerCase()));
+  assert.deepEqual(Object.entries(CONTEXT).filter(repeats).map(([c, s]) => `${c} ${s}`), []);
+});
+
+// A small line: 80 characters wrap to 2 lines under the keyword on a 360 px review front, 40 fit on one.
+test("no context line runs past 80 characters", () => {
+  assert.equal(typeof CONTEXT, "object", "keywords.js exports CONTEXT");
+  assert.deepEqual(Object.entries(CONTEXT).filter(([, s]) => s.length > 80).map(([c, s]) => `${c} ${s.length}`), []);
 });

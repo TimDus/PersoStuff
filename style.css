@@ -361,6 +361,8 @@ footer .credits[open] summary { margin-bottom: .3rem; }
 .kanji-family a { margin-right: .25rem; }
 .kanji-big { font-family: var(--jp); font-size: 5rem; line-height: 1.1; }
 .kanji-kw { font-size: 1.3rem; font-weight: 600; }
+/* Room under a keyword's context line, so it doesn't run into the grey line below [勢's line, then "Write it on paper"]. */
+.kanji-context { margin-bottom: 0.5rem; }
 .kanji-words { margin-top: .8rem; display: grid; gap: .35rem; text-align: left; }
 .kw-row .jp { font-size: 1.4rem; }
 .kw-row.unmet { color: var(--muted); }

@@ -469,6 +469,64 @@ test("a part's Heisig keyword is named over the stories only when they use it", 
   await page.close();
 });
 
+// 勢's keyword "forces" didn't say it is momentum in 勢い and a crowd in 大勢, so a kanji whose keyword alone is unclear gets a line under it.
+const { CONTEXT } = require("../keywords.js");
+const forces = { 勢: { kw: "forces", frame: 1633, mine: null, stories: [] } };
+const forcesDue = (over = {}) => ({ ...deckWith({}), kanji: { cards: { 勢: reviewed({ first: day - 5, last: day - 1, due: day }) }, settings: { newPerDay: 5, at: 0 } }, ...over });
+test("a review front shows a kanji's context line under its keyword, in Paper and Draw mode, the keyword itself unchanged [勢 forces]", async () => {
+  assert.ok(CONTEXT?.["勢"], "keywords.js has a context line for 勢");
+  for (const mode of ["paper", "draw"]) {
+    const page = await open({ ...listed, koohii: { ...koohii, ...forces }, local: { "study.user": "u1", "kanji.mode": mode, study: forcesDue() } }, "#kanji/review");
+    await page.locator(".face.front .kanji-prompt").waitFor();
+    assert.equal(await page.textContent(".face.front .kanji-prompt"), "forces");
+    assert.deepEqual(await page.locator(".face.front .kanji-prompt + .kanji-context").allTextContents(), [CONTEXT["勢"]], mode);
+    assert.equal(await page.locator(".face.front .kanji-context").count(), 1, mode);
+    await page.close();
+  }
+});
+
+// The line is ours, so it shows under KANJIDIC's meaning when Koohii's file has no keyword for the kanji [勢 "forces, energy"].
+test("a kanji's page shows its context line under the keyword whatever the keyword's source, and a kanji without one shows none [勢; 火 fire]", async () => {
+  assert.ok(CONTEXT?.["勢"], "keywords.js has a context line for 勢");
+  assert.equal(CONTEXT["火"], undefined, "火 fire needs no line; pick another kanji without one if it got one");
+  const page = await open({ ...listed, koohii, local: { "study.user": "u1", study: deckWith({}) } }, "#kanji/勢");
+  await page.locator(".kanji-page[data-c='勢'] .kanji-kw").waitFor({ timeout: 3000 });
+  assert.equal(await page.textContent(".kanji-page .kanji-kw"), "forces, energy");
+  assert.deepEqual(await page.locator(".kanji-page .kanji-kw + .kanji-context").allTextContents(), [CONTEXT["勢"]]);
+  await page.goto("#kanji/火");
+  await page.locator(".kanji-page[data-c='火'] .kanji-kw").waitFor({ timeout: 3000 });
+  assert.equal(await page.locator(".kanji-page .kanji-context").count(), 0);
+  await page.close();
+});
+
+// Koohii's late redraw rebuilds the popup's head, so a line drawn outside it, or added to it on each redraw, would go or double.
+test("a popup shows the context line before Koohii's file lands and once after it redraws the head [勢 in 大勢]", async () => {
+  assert.ok(CONTEXT?.["勢"], "keywords.js has a context line for 勢");
+  const study = deckWith({ "大勢|おおぜい#r": reviewed({ first: day - 3, last: day - 3, due: day - 1 }) });
+  const page = await open({ ...listed, koohii: { ...koohii, ...forces }, koohiiHold: true, local: { "study.user": "u1", study } }, "#words/review");
+  await page.locator(".face.front").waitFor();
+  await page.click("#card");
+  await page.click(".kn-k[data-kanji='勢']");
+  await page.locator(".modal .kanji-kw").waitFor();
+  assert.equal(await page.textContent(".modal .kanji-kw"), "forces, energy");
+  assert.deepEqual(await page.locator(".modal .kanji-kw + .kanji-context").allTextContents(), [CONTEXT["勢"]]);
+  await page.evaluate(() => window.__releaseKoohii());
+  await page.waitForFunction(() => document.querySelector(".modal .kanji-kw")?.textContent === "forces", null, { timeout: 3000 });
+  assert.deepEqual(await page.locator(".modal .kanji-context").allTextContents(), [CONTEXT["勢"]]);
+  await page.close();
+});
+
+// With no keyword to ask, the front asks a word with the kanji blanked, and a line written against "forces" would sit under a word it doesn't describe.
+test("a review front that asks a word with the kanji blanked shows no context line [no kanji.json, no Koohii: 大＿ · great number of people]", async () => {
+  const page = await open({ ...listed, local: { "study.user": "u1", study: forcesDue() } });
+  await page.route("**/data/kanji.json", (r) => r.fulfill({ status: 404 }));
+  await page.goto("#kanji/review");
+  await page.locator(".face.front .kanji-prompt").waitFor({ timeout: 6000 });
+  assert.equal(await page.textContent(".face.front .kanji-prompt"), "大＿ · great number of people");
+  assert.equal(await page.locator(".face.front .kanji-context").count(), 0);
+  await page.close();
+});
+
 test("the new-a-day choice caps the day's new kanji and is kept in the deck", async () => {
   const page = await open({ ...listed, local: { "study.user": "u1", study: kanjiDeck() } }, "#kanji");
   await page.locator("#k-new").waitFor();

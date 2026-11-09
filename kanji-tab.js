@@ -38,11 +38,13 @@
   }
   // The list's kanji sharing its sound part and an on'yomi, each a link on its page and plain in a popup [晴: Same sound セイ: 青 静].
   const fam = (c, page) => family(c, study.kanjiInfo() || {}).map(({ r, cs }) => `<div class="kanji-family small">Same sound <span class="jp">${r.map(esc).join(" · ")}</span>: ${listed(cs, page)}</div>`).join("");
+  // The context line under a keyword, none where the front falls back to a blanked word [勢 forces: momentum, and a crowd; 火: none].
+  const context = (c) => (study.keyword(c) && window.HiraKeywords.CONTEXT[c] ? `<div class="kanji-context muted small">${esc(window.HiraKeywords.CONTEXT[c])}</div>` : "");
   // The parts Koohii's data decides, drawn from whatever has arrived [before it lands: a plain keyword or KANJIDIC's meaning, no frame, no stories].
   function head(c, page) {
     const info = study.kanjiInfo()?.[c] || {}, k = study.koohii(c);
     return `
-      <div class="kanji-kw">${esc(study.keyword(c))}</div>
+      <div class="kanji-kw">${esc(study.keyword(c))}</div>${context(c)}
       <div class="muted small kanji-meta">${[info.sc && `${info.sc} strokes`, info.lv > 0 && `N${info.lv}`, k?.frame && `RTK ${k.frame}`].filter(Boolean).join(" · ")}</div>
       ${k && study.keyword(c) === k.kw ? `<div class="muted small">Keyword from Remembering the Kanji © James W. Heisig</div>` : ""}
       ${parts(c, page)}`;
@@ -227,7 +229,7 @@
     return w ? `${w.w.replaceAll(c, "＿")} · ${w.m}` : "?";
   }
   function faces(c, words, draw) {
-    const front = `<div class="kanji-prompt">${esc(prompt(c, words))}</div>${draw
+    const front = `<div class="kanji-prompt">${esc(prompt(c, words))}</div>${context(c)}${draw
       ? `<div class="kpad" data-noflip><svg viewBox="0 0 109 109" aria-label="Drawing pad"></svg><button class="ghost small" type="button" data-clear>Clear</button></div>`
       : `<div class="muted small">Write it on paper, then turn the card</div>`}`;
     const rs = readings(c, words);
