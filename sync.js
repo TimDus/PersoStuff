@@ -76,8 +76,13 @@
 
   // A word's English with its descriptor in brackets, for places with room for one line [召し上がる: to eat or drink (honorific)].
   const meaningOf = (w) => (w.d ? `${w.m} (${w.d})` : w.m);
+  // The part of a meaning a learner reads as the answer, articles and brackets aside ["a picture; a photograph" and "picture, painting" both "picture"; "(sigh)" stays "(sigh)"].
+  const firstSense = (m) => {
+    const head = m.split(/[,;]/)[0].trim().toLowerCase();
+    return head.replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim().replace(/^(a|an|the) /, "") || head;
+  };
 
-  const api = { clipPath, imagePath, wordClip, hira, bump, better, merge, mergeWrite, same, wholeCategories, meaningOf };
+  const api = { clipPath, imagePath, wordClip, hira, bump, better, merge, mergeWrite, same, wholeCategories, meaningOf, firstSense };
   if (typeof module !== "undefined") module.exports = api;
   else root.HiraSync = api;
 })(this);

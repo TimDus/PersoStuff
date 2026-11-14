@@ -1,6 +1,6 @@
 // The Listening round: a met word's recording, its meaning picked from four [はな → flower, with no nose beside it].
 (function (root) {
-  const { hira, meaningOf } = typeof module !== "undefined" ? require("./sync.js") : root.HiraSync;
+  const { hira, meaningOf, firstSense } = typeof module !== "undefined" ? require("./sync.js") : root.HiraSync;
   // A reading as it sounds, katakana as hiragana and a suffix's ～ dropped [ペン = ぺん, ～だい = だい].
   const sound = (r) => hira(r.replace(/～/g, ""));
   // The group a word's wrong choices come from [suru verb = verb, pre-noun adjective = adjective, number = noun, adverb alone].
@@ -13,8 +13,6 @@
   const shape = (m) => (/^to /.test(m) ? "to" : /^--/.test(m) ? "--" : "plain");
   // Whether a line names the word heard, by spelling or by a reading of two kana or more [なぜ's "why (same as どうして)" names どう].
   const names = (m, w) => m.includes(w.w) || (w.r.length > 1 && m.includes(w.r));
-  // A line's first sense, the part a learner reads as the answer [男 "man, male" and 男の人 "man" both "man"].
-  const firstSense = (m) => m.split(/[,;]/)[0].trim().toLowerCase();
   // The words a wrong choice may come from: its shape and kind, topped up from its shape in any kind, never sounding like it, naming it or sharing its first sense [花: 804 nouns; 男: never 男の人's man].
   function candidates(word, words) {
     const fair = words.filter((w) => shape(w.m) === shape(word.m) && sound(w.r) !== sound(word.r) && !names(w.m, word)

@@ -9,7 +9,7 @@ const { sound, pool, candidates, options } = require("../listen.js");
 
 // A choice as Listening shows it, its descriptor in brackets [召し上がる: to eat or drink (honorific)].
 const label = (w) => (w.d ? `${w.m} (${w.d})` : w.m);
-const first = (m) => m.split(/[,;]/)[0].trim().toLowerCase();
+const first = require("../sync.js").firstSense;
 const byLabel = new Map(WORDS.map((w) => [label(w), w]));
 const word = (k) => WORDS.find((w) => w.k === k);
 const rands = fc.infiniteStream(fc.double({ min: 0, max: 0.9999, noNaN: true }));

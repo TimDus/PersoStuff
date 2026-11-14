@@ -56,7 +56,7 @@ test("the list's dated spellings are written as today, and a second spelling of 
 // The English side asks for a word from its meaning, so two words with one first sense both look right ["red": 赤 and 赤い];
 // rewording 875 of them away was the other way, and a small line under the meaning keeps the plain word as the headline.
 test("words sharing a first sense each carry a descriptor, no two alike and none in Japanese, and every rewrite names a listed word", () => {
-  const first = (m) => m.split(/[,;]/)[0].trim().toLowerCase();
+  const first = require("../sync.js").firstSense;
   const groups = new Map();
   for (const w of vocab) groups.set(first(w.m), [...(groups.get(first(w.m)) || []), w]);
   const shared = [...groups.values()].filter((ws) => ws.length > 1);
@@ -65,6 +65,14 @@ test("words sharing a first sense each carry a descriptor, no two alike and none
   assert.deepEqual(shared.filter((ws) => new Set(ws.map((w) => w.d.trim().toLowerCase())).size < ws.length).map((ws) => ws.map((w) => `${w.k} ${w.d}`)), []);
   assert.deepEqual(vocab.filter((w) => "d" in w && (typeof w.d !== "string" || !w.d.trim() || /[぀-ヿ㐀-鿿々]/.test(w.d))).map((w) => w.k), []);
   assert.deepEqual(Object.keys(require("../tools/meanings.js")).filter((k) => !by(k)), []);
+});
+
+// 写真 "a picture" and 絵画 "picture" read as one answer but compared unalike, so neither card got a descriptor.
+test("a first sense ignores articles and brackets, and a meaning all in brackets keeps its own [写真 and 絵画 both picture; はあ (sigh)]", () => {
+  const { firstSense } = require("../sync.js");
+  assert.deepEqual(["写真|しゃしん", "絵画|かいが", "子供|こども", "立てる|たてる"].map((k) => firstSense(by(k).m)), ["picture", "picture", "child", "to stand up"]);
+  assert.deepEqual([firstSense("(my) father"), firstSense("the earth")], ["father", "earth"]);
+  assert.notEqual(firstSense(by("はあ|はあ").m), firstSense(by("ことによると|ことによると").m));
 });
 
 // "red (the colour)" and "who (polite)" told words apart inside the meaning; those notes moved to the descriptor line,
